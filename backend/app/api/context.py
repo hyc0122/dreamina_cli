@@ -1,0 +1,131 @@
+"""即梦 API 共享上下文。
+
+这里集中管理路由层共用的 Store、异常转换、序列化和轻量工具函数，避免已拆分接口继续依赖旧的
+`jimeng_api.py` 大文件。
+"""
+
+import os
+import re
+from collections.abc import Callable
+from dataclasses import asdict, is_dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from fastapi import HTTPException
+from pydantic import BaseModel
+
+from ..jimeng_cli import DreaminaCli
+from ..jimeng_storage import JimengStore
+
+
+_store: JimengStore | None = None
+_runtime_settings: dict[str, Any] = {
+    "dreamina_executable": "dreamina",
+    "model_version": "seedance2.0fast",
+    "poll_seconds": 30,
+    "duration": 5,
+    "ratio": "9:16",
+    "video_resolution": "720p",
+}
+
+
+def get_store() -> JimengStore:
+    global _store
+    if _store is None:
+        base_dir = Path(__file__).resolve().parents[2]
+        project_dir = base_dir.parent
+        data_dir = Path(os.getenv("DREAMINA_CLI_DATA_DIR", project_dir / "runtime_data")).resolve()
+        _store = JimengStore(db_path=data_dir / "jimeng.sqlite3", output_root=data_dir / "output")
+    return _store
+
+
+def set_jimeng_store_for_tests(store: JimengStore) -> None:
+    global _store
+    _store = store
+
+
+def reset_jimeng_store_for_tests() -> None:
+    global _store
+    _store = None
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def call_store(fn: Callable[[], Any]) -> Any:
+    try:
+        return fn()
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+async def async_call_store(fn: Callable[[], Any]) -> Any:
+    try:
+        return await fn()
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def runtime_settings() -> dict[str, Any]:
+    return _runtime_settings
+
+
+def dreamina_cli(timeout: float | None = None) -> DreaminaCli:
+    return DreaminaCli(executable=str(_runtime_settings.get("dreamina_executable") or "dreamina"), timeout=timeout)
+
+
+def dump_api(value: Any) -> Any:
+    if isinstance(value, list):
+        return [dump_api(item) for item in value]
+    if isinstance(value, dict):
+        return {key: dump_api(item) for key, item in value.items()}
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if hasattr(value, "dict"):
+        return value.dict()
+    if is_dataclass(value):
+        return asdict(value)
+    return value
+
+
+def model_data(value: BaseModel, exclude_unset: bool = False) -> dict[str, Any]:
+    if hasattr(value, "model_dump"):
+        return value.model_dump(exclude_unset=exclude_unset)
+    return value.dict(exclude_unset=exclude_unset)
+
+
+_DURATION_PATTERNS = [
+    re.compile(r"(?:总时长|时长|镜头时长)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:秒|s|S)"),
+    re.compile(r"\bduration\s*[:=]\s*(\d+(?:\.\d+)?)\s*s?\b", re.IGNORECASE),
+]
+
+
+def detect_duration_seconds(text: str) -> int | None:
+    for pattern in _DURATION_PATTERNS:
+        match = pattern.search(text)
+        if not match:
+            continue
+        try:
+            value = float(match.group(1))
+        except ValueError:
+            continue
+        duration = int(round(value))
+        return duration if duration > 0 else None
+    return None
+
+
+# 兼容旧模块内部命名，后续迁移完毕后再统一改成非下划线名称。
+_call = call_store
+_async_call = async_call_store
+_cli = dreamina_cli
+_detect_duration_seconds = detect_duration_seconds
+_dump = dump_api
+_model_data = model_data
+_now = now_iso
+_settings = _runtime_settings
