@@ -26,7 +26,15 @@ from ..jimeng_matching import calculate_highlights, match_assets_for_prompt, par
 
 
 router = APIRouter(prefix="/jimeng", tags=["jimeng-shots"])
+MIN_VIDEO_DURATION_SECONDS = 4
+MAX_VIDEO_DURATION_SECONDS = 15
 DEFAULT_DURATION_WHEN_UNDETECTED = 15
+
+
+def _normalize_detected_duration(duration: int | None) -> int:
+    if duration is None:
+        return DEFAULT_DURATION_WHEN_UNDETECTED
+    return min(MAX_VIDEO_DURATION_SECONDS, max(MIN_VIDEO_DURATION_SECONDS, duration))
 
 
 @router.get("/projects/{project_id}/shots")
@@ -104,8 +112,7 @@ def detect_shot_duration(project_id: str, shot_id: str):
         shot = get_store().get_shot(project_id, shot_id)
         duration = _detect_duration_seconds(shot.prompt)
         detected = duration is not None
-        if duration is None:
-            duration = DEFAULT_DURATION_WHEN_UNDETECTED
+        duration = _normalize_detected_duration(duration)
         updated = get_store().update_shot(shot_id, default_duration=duration)
         return {"duration": duration, "detected": detected, "shot": _dump(updated)}
 
@@ -121,8 +128,7 @@ def batch_detect_project_durations(project_id: str):
         for shot in get_store().list_shots(project_id):
             duration = _detect_duration_seconds(shot.prompt)
             detected = duration is not None
-            if duration is None:
-                duration = DEFAULT_DURATION_WHEN_UNDETECTED
+            duration = _normalize_detected_duration(duration)
             updated = get_store().update_shot(shot.id, default_duration=duration)
             updated_count += 1
             results.append(
