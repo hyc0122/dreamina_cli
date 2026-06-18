@@ -1,260 +1,351 @@
-# Dreamina CLI 即梦批量生产独立项目
+# Dreamina CLI 即梦批量生产工具
 
-这个目录是从 LumenX 主项目中拆出来的独立即梦批量生产工具。以后即梦 CLI 批量分镜生成相关的开发、启动、数据和文档都看这里：
+[![说明文档](https://img.shields.io/badge/说明文档-README-0ea5e9)](https://github.com/hyc0122/dreamina_cli#readme)
 
-```text
-G:\漫剧\LumenX\dreamina_cli
-```
+这是一个独立的即梦 CLI 批量分镜生产工具，用于管理剧本、分镜提示词、角色/场景/道具资产、即梦 CLI 视频生成队列、候选视频回收和本地导出。
 
-不要再使用旧入口：
+> 当前 GitHub 仓库只上传源码、脚本和文档，不包含测试目录、本地运行数据、生成视频、打包产物和依赖缓存。
 
-```text
-http://127.0.0.1:62073/#/jimeng
-```
+## 主要功能
 
-旧入口属于 LumenX 主项目的 Next 开发服务，可能出现 CSS/JS 没加载、按钮无反应、页面不是即梦工作台等问题。新的独立前端入口是：
+- 剧本项目管理：创建、选择和管理多个剧本项目。
+- 分镜工作台：批量导入分镜提示词、编辑分镜、移动顺序、检测默认时长。
+- 资产管理：管理角色、场景、道具、角色音色，支持批量上传和同名覆盖。
+- 大模型资产生图：独立“大模型设置”模块，支持通过大模型接口做资产纯文本生图。
+- 资产匹配：根据分镜提示词中的角色、场景、道具名称做本地匹配和高亮。
+- 即梦 CLI 队列：提交、暂停、重试、取消、持续轮询、失败跳过和候选视频回收。
+- 生成记录：查看每个分镜的视频候选，设置默认视频和锁定结果。
+- 本地导出：把选中分镜的视频复制到指定目录，并按 `分镜1.mp4`、`分镜2.mp4` 命名。
+- 打包支持：提供 PowerShell 脚本将工具打包成 Windows EXE。
 
-```text
-http://127.0.0.1:62100
-```
-
-## 目录结构
-
-```text
-dreamina_cli
-├─ backend
-│  ├─ app
-│  │  ├─ main.py              # 独立 FastAPI 入口
-│  │  ├─ jimeng_api.py        # 即梦批量接口
-│  │  ├─ jimeng_cli.py        # 即梦 CLI 调用封装
-│  │  ├─ jimeng_queue.py      # 队列 worker
-│  │  ├─ jimeng_storage.py    # SQLite 存储
-│  │  ├─ jimeng_models.py     # 数据模型
-│  │  ├─ jimeng_matching.py   # 资产名称匹配和高亮
-│  │  └─ jimeng_prompting.py  # 全局提示词渲染
-│  ├─ data                    # 独立数据目录
-│  ├─ requirements.txt
-│  └─ start_backend.ps1
-├─ frontend
-│  ├─ src
-│  │  ├─ components/jimeng    # 即梦 UI
-│  │  ├─ lib                  # 前端 API
-│  │  └─ store                # Zustand 状态
-│  ├─ package.json
-│  └─ start_frontend.ps1
-├─ docs/development           # 迁移前的设计/实施归档
-├─ start_backend.ps1
-├─ start_frontend.ps1
-└─ 启动说明.md
-```
-
-## 启动方式
-
-推荐一次启动 API、独立队列 worker 和前端：
-
-```powershell
-cd G:\漫剧\LumenX\dreamina_cli
-.\scripts\start_local.ps1
-```
-
-脚本会隐藏启动三个本地进程并打开网页。队列页可查看 worker 在线状态和心跳。
-
-需要逐个调试时，先启动后端：
-
-```powershell
-cd G:\漫剧\LumenX\dreamina_cli
-.\start_backend.ps1
-```
-
-后端地址：
+## 仓库地址
 
 ```text
-http://127.0.0.1:18177
+https://github.com/hyc0122/dreamina_cli
 ```
 
-健康检查：
+## 环境要求
 
-```text
-http://127.0.0.1:18177/health
-```
+建议使用 Windows 环境运行。
 
-再启动前端：
+必需环境：
 
-```powershell
-cd G:\漫剧\LumenX\dreamina_cli
-.\start_frontend.ps1
-```
+- Git
+- Python 3.11 或 3.12
+- Node.js 20+
+- npm
+- PowerShell 5+ 或 PowerShell 7+
 
-同时还要启动独立队列 worker，否则任务只会留在等待状态：
+即梦生成相关：
 
-```powershell
-cd G:\漫剧\LumenX\dreamina_cli
-python -m backend.app.queue_worker
-```
-
-前端地址：
-
-```text
-http://127.0.0.1:62100
-```
-
-第一次运行前端时，如果还没有安装依赖：
-
-```powershell
-cd G:\漫剧\LumenX\dreamina_cli\frontend
-npm install
-```
-
-## 数据位置
-
-所有即梦批量数据默认保存在：
-
-```text
-G:\漫剧\LumenX\dreamina_cli\backend\data
-```
-
-包括：
-
-- `jimeng.sqlite3`：项目、分镜、资产、队列、候选视频记录
-- `output`：上传资产、音色、生成视频、下载结果
-
-如需自定义数据目录，可在启动后端前设置：
-
-```powershell
-$env:DREAMINA_CLI_DATA_DIR="D:\your\data\dir"
-```
-
-## 功能范围
-
-当前版本已经覆盖：
-
-- 剧本列表：创建、选择和管理多个剧本项目。
-- 分镜工作台：导入分镜、手动新增分镜、删除分镜、移动顺序、编辑分镜提示词。
-- 资产管理：角色、场景、道具、角色音色的手动上传和管理。
-- 批量导入：可按文件名批量导入角色、场景、道具图片；角色音色按同名音频绑定。
-- 覆盖规则：同类型同名资产以后上传为准，例如先上传 `许禾.png`，再上传 `许禾.jpg`，旧文件会被替换，前端显示 `许禾.jpg`；音色同理。
-- 命名规则：资产发送给即梦时使用资产管理里的名称，例如 `许禾.png`、`许禾.mp3`、`老许农资.png`。
-- 手动匹配资产：根据每个分镜提示词中的关键词匹配资产名称或别名，不使用 AI 分析。
-- 资产高亮：分镜提示词中命中的角色、场景、道具会用不同颜色标出。
-- 手动绑定：每个分镜可单独调整角色、场景、道具绑定。
-- 缺失道具确认：道具可以缺失，但提交前会弹窗确认。
-- 批量操作：批量文本替换、批量下载分镜默认视频、批量提交选中分镜。
-- 队列管理：手动提交、手动开始/暂停、取消、重试、调整顺序。
-- 失败处理：失败后自动跳过下一个，队列和项目分镜中红色提示。
-- 视频候选：同一个分镜可多次生成多个视频候选，用于对比、设为默认、锁定。
-- 全局视频生成模板：可创建多个命名模板，提交分镜视频到即梦时作为前置提示词。
-- 图片指令模板：在资产管理的“生图设置”中配置，支持人物、场景、道具三套前缀，资产生图时会拼在资产详情描述前。
-- 即梦设置：CLI 路径、一键安装 CLI、单账号登录/退出、积分检查、能力检测、队列调度和全局视频生成模板说明。
-- 提交参数：视频模型、时长、画幅、分辨率、轮询秒数都在提交位置设置；单独提交在右侧视频预览上方，批量提交在批量参数弹窗中设置。
-- 独立队列 worker：默认每 3 秒提交一条，最多 10 条在途任务，同时持续轮询未回传结果。
-- 分镜时长检测：可一键从分镜提示词中识别“时长/总时长/duration”等描述，写入该分镜默认时长。
-- 模型设置：默认 `seedance2.0fast`，已增加 `seedance2.0mini` 选项。
-- 默认分辨率：`720p`。
-- 全能参考限制：本地提交前限制图片最多 9 张、视频最多 3 段、音频最多 3 段；至少需要 1 个图片或视频；音频限制 2-15 秒。
-
-## 基本使用流程
-
-1. 打开前端 `http://127.0.0.1:62100`。
-2. 在“即梦设置”中确认 CLI 路径；如果没有安装 CLI，先点击“一键安装 CLI”或按官方命令手动安装。
-3. 在“即梦设置”中点击登录并完成即梦授权，再查询积分。
-4. 在“全局视频生成模板”中创建或选择一个分镜视频前置模板。
-5. 在“剧本列表”中新建项目。
-6. 进入“分镜工作台”，按示例格式批量导入分镜。
-7. 在“资产管理”上传角色、场景、道具和角色音色；如需生图，先配置人物/场景/道具图片指令前缀。
-8. 回到“分镜工作台”，点击匹配资产，检查高亮和绑定结果。
-9. 如果分镜提示词里写了时长，点击“检测”把它写入该分镜默认时长。
-10. 单独提交可在右侧预览面板设置本次参数后提交当前分镜；批量提交先勾选分镜，再打开“批量参数”确认本次生成参数并加入队列。
-11. 进入“即梦排队”，手动开始队列。
-12. 生成完成后，在“生成记录”或分镜右侧预览里比较候选视频，选择默认视频。
-
-## 全局视频生成模板与图片指令模板
-
-全局视频生成模板入口在顶部菜单“即梦设置”页面下方的“全局视频生成模板 / 视频指令模板”区域。
-
-它的作用是给即梦 CLI 提交视频生成任务时增加前置提示词，不会单独生成内容。实际提交时，系统会先把当前剧本绑定的全局视频生成模板渲染成前置提示词，再拼接每条分镜提示词，一起发送给即梦 CLI。
-
-使用方式：
-
-1. 在“即梦设置”里新建或选择一个全局视频生成模板。
-2. 可插入变量：`{{style}}`、`{{camera}}`、`{{era}}`、`{{roles}}`、`{{scene}}`、`{{props}}`、`{{shot_prompt}}`。
-3. 点击“保存”只保存模板；点击“保存并用于当前项目”才会把模板绑定到当前剧本。
-4. 绑定成功后，在“分镜工作台”顶部的“视频模板”标签可以看到当前剧本正在使用的模板。
-5. 单独提交当前分镜或批量提交选中分镜时，该模板才会随分镜一起进入即梦队列。
-
-图片指令模板入口在“资产管理”页面右上角“生图设置”。它只用于角色、场景、道具的资产图片生成，可分别配置人物、场景、道具前缀。实际发送给 `dreamina text2image` 的顺序是：
-
-```text
-对应类型图片指令前缀 + 资产详情描述/生图提示词 + 资产参数配置
-```
-
-图片指令模板不参与分镜视频生成，所以不和全局视频生成模板冲突。
-
-## 即梦 CLI 安装
-
-即梦官方安装命令：
+- 需要安装并登录即梦官方 CLI。
+- 如果没有安装，可在应用的“即梦设置”里使用一键安装，也可以使用官方安装命令。
 
 ```bash
 curl -s https://jimeng.jianying.com/cli | bash
 ```
 
-安装完成后，在“即梦设置”中执行：
+说明：
 
-- 检测 CLI
-- 一键安装 CLI：检测失败时可直接使用官方安装命令安装
-- 登录
-- 登录调试
+- 后端使用 FastAPI。
+- 前端使用 Vite + React + TypeScript。
+- 本地数据默认保存在项目运行目录下的 `runtime_data/`，该目录不会上传到 GitHub。
+
+## 从 GitHub 拉取项目
+
+1. 安装 Git 后，打开 PowerShell。
+
+2. 选择一个工作目录，例如：
+
+```powershell
+cd D:\projects
+```
+
+3. 克隆仓库：
+
+```powershell
+git clone https://github.com/hyc0122/dreamina_cli.git
+```
+
+4. 进入项目目录：
+
+```powershell
+cd dreamina_cli
+```
+
+5. 后续更新代码：
+
+```powershell
+git pull origin main
+```
+
+## 安装 Python 依赖
+
+在项目根目录执行：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r backend\requirements.txt
+```
+
+如果 PowerShell 阻止激活脚本，可以临时允许当前进程执行脚本：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+## 安装前端依赖
+
+```powershell
+cd frontend
+npm install
+cd ..
+```
+
+## 一键本地启动
+
+推荐使用项目提供的本地启动脚本：
+
+```powershell
+.\scripts\start_local.ps1
+```
+
+脚本会启动：
+
+- 后端 API
+- 独立队列 worker
+- 前端页面
+
+默认访问地址：
+
+```text
+http://127.0.0.1:62100
+```
+
+后端健康检查：
+
+```text
+http://127.0.0.1:18177/health
+```
+
+## 手动启动
+
+如果需要分开调试，可以分别启动。
+
+后端 API：
+
+```powershell
+.\start_backend.ps1
+```
+
+前端：
+
+```powershell
+.\start_frontend.ps1
+```
+
+队列 worker：
+
+```powershell
+python -m backend.app.queue_worker
+```
+
+注意：如果没有启动队列 worker，加入队列的任务不会持续提交和轮询。
+
+## 数据目录
+
+本地运行数据默认放在：
+
+```text
+runtime_data/
+```
+
+通常包括：
+
+- SQLite 数据库
+- 上传的资产图片和音频
+- 即梦生成的视频候选
+- 导出结果
+- 运行日志和缓存
+
+这些内容属于本地数据，不应该提交到 GitHub。
+
+如需自定义数据目录，可以在启动后端前设置环境变量：
+
+```powershell
+$env:DREAMINA_CLI_DATA_DIR="D:\dreamina-data"
+.\start_backend.ps1
+```
+
+## 基本使用流程
+
+1. 打开 `http://127.0.0.1:62100`。
+2. 进入“即梦设置”，检查 CLI 路径。
+3. 登录即梦 CLI，并确认积分可查询。
+4. 进入“大模型设置”，配置资产纯文本生图使用的模型供应商和 API Key。
+5. 在“剧本列表”中新建项目。
+6. 进入“分镜工作台”，批量导入分镜提示词。
+7. 在“资产管理”中上传或生成角色、场景、道具和音色。
+8. 回到“分镜工作台”，匹配资产并检查绑定结果。
+9. 设置每条分镜的视频参数，或使用批量参数提交。
+10. 进入“即梦排队”，启动队列并等待生成结果。
+11. 在“生成记录”或分镜预览里查看候选视频。
+12. 选择默认视频后，可批量导出到指定目录。
+
+## 大模型设置
+
+大模型能力是独立模块，不混在即梦 CLI 设置里。
+
+当前用途：
+
+- 只接资产图片生成。
+- 支持角色、场景、道具的纯文本生图。
+- 生成结果写回资产图片字段，继续复用资产预览、绑定和管理流程。
+
+配置入口：
+
+```text
+顶部菜单 -> 大模型设置
+```
+
+默认预留兼容 OpenAI 接口风格的供应商配置，可填写：
+
+- API 地址
+- API Key
+- 默认模型
+- 模型列表
+
+## 即梦 CLI 设置
+
+即梦设置只负责即梦 CLI 和视频生成相关参数：
+
+- CLI 路径检测
+- CLI 安装
+- 登录/退出
+- 手动导入登录 JSON
 - 查询积分
-- 查看能力
+- 全局视频参数
+- 队列调度参数
+- 视频提示词模板
 
-## 登录和积分
+手动导入登录 JSON 时，可打开官方 CLI 登录接口复制数据：
 
-稳定版只使用即梦官方 CLI 的当前 Windows 单账号登录态。设置页可登录授权、手动导入官方登录 JSON、检测登录、查询积分和退出登录。项目队列和生成记录保存在本工具自己的 SQLite 数据库中，不依赖官方 CLI 的任务数据库。
+```text
+https://jimeng.jianying.com/dreamina/cli/v1/dreamina_cli_login
+```
 
 ## 打包成 EXE
 
-项目已经提供一键打包脚本：
+项目提供一键打包脚本：
 
 ```powershell
-cd G:\漫剧\LumenX\dreamina_cli
-.\scripts\build_exe.ps1 -AppName "即梦cli批量工具"
+.\scripts\build_exe.ps1
 ```
 
-脚本默认会使用 `build_exe\.venv` 隔离构建环境，避免把当前电脑全局 Python 环境里的 torch、transformers、pandas 等无关包打进程序。
-
-如果前端依赖已经安装，可以跳过 npm install：
+如果依赖已经安装过，可以跳过依赖安装：
 
 ```powershell
-.\scripts\build_exe.ps1 -AppName "即梦cli批量工具" -SkipNpmInstall
+.\scripts\build_exe.ps1 -SkipNpmInstall -SkipPythonInstall
 ```
 
-如果你明确想使用当前 Python 环境打包，可以加：
+打包过程会生成构建缓存和发布目录，例如：
+
+- `build_cache/`
+- `frontend/dist/`
+- `releases/`
+
+这些都是构建产物，不应该提交到 GitHub。
+
+## 常用脚本
 
 ```powershell
-.\scripts\build_exe.ps1 -AppName "即梦cli批量工具" -UseCurrentPython
+.\scripts\start_local.ps1
 ```
 
-输出位置：
+启动本地开发环境。
+
+```powershell
+.\scripts\verify_all.ps1
+```
+
+运行项目验证脚本。
+
+```powershell
+.\scripts\build_exe.ps1
+```
+
+打包 Windows EXE。
+
+```powershell
+.\scripts\clean_runtime_cache.ps1
+```
+
+清理运行缓存和构建产物。使用前请确认是否需要保留本地数据。
+
+## GitHub 上传范围
+
+应该上传：
+
+- `backend/`
+- `frontend/` 源码
+- `packaging/`
+- `scripts/`
+- `docs/`
+- `README.md`
+- `pyproject.toml`
+- 启动脚本和配置文件
+
+不应该上传：
+
+- `tests/`
+- `frontend/src/**/__tests__/`
+- `runtime_data/`
+- `build_cache/`
+- `releases/`
+- `frontend/dist/`
+- `frontend/node_modules/`
+- `.pytest_cache/`
+- `__pycache__/`
+- 本地生成的视频、图片、音频和数据库
+
+## 目录结构
 
 ```text
-G:\漫剧\LumenX\dreamina_cli\dist_exe\即梦cli批量工具\即梦cli批量工具.exe
+dreamina_cli/
+├─ backend/                  # FastAPI 后端、存储、队列、即梦 CLI 调用
+├─ frontend/                 # Vite + React 前端
+├─ packaging/                # 桌面启动器和打包入口
+├─ scripts/                  # 启动、验证、打包和清理脚本
+├─ docs/                     # 使用说明、开发记录和设计文档
+├─ README.md
+├─ pyproject.toml
+├─ start_backend.ps1
+└─ start_frontend.ps1
 ```
 
-EXE 运行时会在 EXE 同级目录创建 `data` 目录，用来保存数据库、上传资产、生成视频、账号 profile 和缓存文件。升级程序时不要删除这个 `data` 目录。
+## 更新说明
 
-## 旧 LumenX 主项目关系
+如果你是从 GitHub 拉取后继续开发，建议每次开发前先更新：
 
-根目录 LumenX 主项目现在不再挂载即梦批量入口；即梦批量源码已经迁移到 `dreamina_cli` 内。
-
-日常使用只需要关注：
-
-```text
-G:\漫剧\LumenX\dreamina_cli
+```powershell
+git pull origin main
 ```
 
-归档文档位于：
+修改后检查状态：
 
-```text
-G:\漫剧\LumenX\dreamina_cli\docs\development
+```powershell
+git status
 ```
 
-这些归档文档记录的是迁移前的设计和实施过程，里面可能出现旧路径或旧端口，仅用于追溯，不作为当前启动说明。
+提交源码：
+
+```powershell
+git add backend frontend packaging scripts docs README.md pyproject.toml start_backend.ps1 start_frontend.ps1
+git commit -m "Update source"
+git push origin main
+```
+
+提交前请确认没有把本地数据或构建产物加入 Git。
