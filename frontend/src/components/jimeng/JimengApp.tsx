@@ -42,7 +42,7 @@ interface JimengPageConfig {
 
 const THEME_STORAGE_KEY = "dreamina_cli_theme";
 const LOGIN_CACHE_KEY = "dreamina_cli_login_snapshot";
-const HELP_URL = "https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink";
+const HELP_URL = "https://github.com/hyc0122/dreamina_cli#readme";
 const FEEDBACK_URL = "https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvMLycffc";
 
 const JIMENG_PAGES: JimengPageConfig[] = [
