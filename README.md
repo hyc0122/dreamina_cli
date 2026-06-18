@@ -2,6 +2,10 @@
 
 [![说明文档](https://img.shields.io/badge/说明文档-README-0ea5e9)](https://github.com/hyc0122/dreamina_cli#readme)
 
+当前版本：`v0.1.1`
+
+更新日志：[CHANGELOG.md](./CHANGELOG.md)
+
 这是一个独立的即梦 CLI 批量分镜生产工具，用于管理剧本、分镜提示词、角色/场景/道具资产、即梦 CLI 视频生成队列、候选视频回收和本地导出。
 
 ## 主要功能
