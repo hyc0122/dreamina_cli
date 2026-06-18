@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import {
+  clampJimengVideoDuration,
   jimengApi,
   type JimengAsset,
   type JimengAssetBinding,
@@ -112,7 +113,7 @@ const buildQueueItemsForShots = async (
       const shot = knownShots.find((item) => item.id === shotId);
       const perShotSettings =
         generationSettings && shot?.default_duration
-          ? { ...generationSettings, duration: shot.default_duration }
+          ? { ...generationSettings, duration: clampJimengVideoDuration(shot.default_duration) }
           : generationSettings;
       const preview = await jimengApi.renderPromptPreview(project.id, shotId, {
         prompt_preset_id: project.prompt_preset_id,
