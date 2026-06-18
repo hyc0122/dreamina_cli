@@ -388,6 +388,15 @@ export const JIMENG_VIDEO_MODELS = [
 ] as const;
 
 export const JIMENG_VIDEO_RATIOS = ["1:1", "3:4", "16:9", "4:3", "9:16", "21:9"] as const;
+export const JIMENG_VIDEO_DURATION_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 4);
+
+export const clampJimengVideoDuration = (value: unknown): number => {
+  const duration = Number(value);
+  if (!Number.isFinite(duration)) {
+    return 5;
+  }
+  return Math.min(15, Math.max(4, Math.round(duration)));
+};
 
 export const DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS: JimengVideoGenerationSettings = {
   provider: "dreamina_cli",

@@ -10,6 +10,7 @@ import ShotProductionTable from "@/components/jimeng/workbench/ShotProductionTab
 import { buildLlmModelOptions, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import {
   DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
+  clampJimengVideoDuration,
   jimengApi,
   type JimengAssetType,
   type JimengSettings,
@@ -29,7 +30,7 @@ const settingsToGenerationSettings = (
   provider: "dreamina_cli",
   account_id: "",
   model_version: settings.model_version || current.model_version,
-  duration: Number(settings.duration) > 0 ? Number(settings.duration) : current.duration,
+  duration: settings.duration === undefined ? current.duration : clampJimengVideoDuration(settings.duration),
   ratio: projectRatio || settings.ratio || current.ratio,
   video_resolution: settings.video_resolution || current.video_resolution,
   poll_seconds: Number(settings.poll_seconds) > 0 ? Number(settings.poll_seconds) : current.poll_seconds,
@@ -157,7 +158,7 @@ export default function JimengWorkbenchPage() {
     syncedDurationKeyRef.current = syncKey;
     setGenerationSettings((settings) => ({
       ...settings,
-      duration: focusedShot.default_duration ?? settings.duration,
+      duration: focusedShot.default_duration === null ? settings.duration : clampJimengVideoDuration(focusedShot.default_duration),
     }));
   }, [focusedShot?.default_duration, focusedShot?.id]);
 

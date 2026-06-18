@@ -23,8 +23,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import PromptPresetManager from "@/components/jimeng/PromptPresetManager";
 import { buildLlmModelOptions, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import {
+  JIMENG_VIDEO_DURATION_OPTIONS,
   JIMENG_VIDEO_MODELS,
   JIMENG_VIDEO_RATIOS,
+  clampJimengVideoDuration,
   jimengApi,
   type JimengCheckLoginResponse,
   type JimengCliCapabilities,
@@ -101,6 +103,7 @@ const normalizeSettings = (value: JimengSettings = {}): Required<JimengSettings>
   ...DEFAULT_SETTINGS,
   ...value,
   generation_provider: "dreamina_cli",
+  duration: clampJimengVideoDuration(value.duration ?? DEFAULT_SETTINGS.duration),
 });
 
 const statusMeta: Record<LoginStatus, { label: string; className: string; icon: LucideIcon }> = {
@@ -391,7 +394,11 @@ export default function JimengSettingsPage() {
     setNotice(null);
     setError(null);
     try {
-      const saved = await jimengApi.updateSettings({ ...settings, generation_provider: "dreamina_cli" });
+      const saved = await jimengApi.updateSettings({
+        ...settings,
+        generation_provider: "dreamina_cli",
+        duration: clampJimengVideoDuration(settings.duration),
+      });
       const normalized = normalizeSettings(saved);
       setSettings(normalized);
       setNotice("即梦设置已保存");
@@ -806,14 +813,17 @@ export default function JimengSettingsPage() {
             </label>
             <label className="space-y-2">
               <span className="text-xs font-medium text-text-muted">默认时长（秒）</span>
-              <input
-                type="number"
-                min={1}
-                max={60}
+              <select
                 value={settings.duration}
-                onChange={(event) => setSettings((state) => ({ ...state, duration: Number(event.target.value) || 5 }))}
+                onChange={(event) => setSettings((state) => ({ ...state, duration: Number(event.target.value) }))}
                 className="glass-input h-10 w-full text-sm text-foreground"
-              />
+              >
+                {JIMENG_VIDEO_DURATION_OPTIONS.map((duration) => (
+                  <option key={duration} value={duration}>
+                    {duration} 秒
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="space-y-2">
               <span className="text-xs font-medium text-text-muted">回传轮询（秒）</span>
