@@ -20,14 +20,36 @@ from ..jimeng_storage import JimengStore
 
 
 _store: JimengStore | None = None
-_runtime_settings: dict[str, Any] = {
+_DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     "dreamina_executable": "dreamina",
+    "generation_provider": "dreamina_cli",
     "model_version": "seedance2.0fast",
     "poll_seconds": 30,
     "duration": 5,
     "ratio": "9:16",
     "video_resolution": "720p",
+    "submit_interval_seconds": 3,
+    "max_in_flight": 10,
+    "result_poll_interval_seconds": 30,
+    "cli_initial_poll_seconds": 3,
+    "max_retry_attempts": 5,
+    "retry_base_seconds": 30,
+    "queue_enabled": False,
 }
+_STABLE_RUNTIME_SETTING_KEYS = set(_DEFAULT_RUNTIME_SETTINGS)
+_REMOVED_RUNTIME_SETTING_KEYS = {
+    "jimeng_api_base_url",
+    "jimeng_api_model",
+    "jimeng_api_generation_mode",
+    "jimeng_api_ratio",
+    "jimeng_api_duration",
+    "jimeng_api_concurrency",
+    "jimeng_api_sessions",
+    "llm_default_provider_id",
+    "llm_default_model_id",
+    "llm_providers",
+}
+_runtime_settings: dict[str, Any] = dict(_DEFAULT_RUNTIME_SETTINGS)
 
 
 def get_store() -> JimengStore:
@@ -74,6 +96,27 @@ async def async_call_store(fn: Callable[[], Any]) -> Any:
 
 def runtime_settings() -> dict[str, Any]:
     return _runtime_settings
+
+
+def _sanitize_runtime_settings(values: dict[str, Any]) -> dict[str, Any]:
+    cleaned = {key: value for key, value in values.items() if key in _STABLE_RUNTIME_SETTING_KEYS and value is not None}
+    cleaned["generation_provider"] = "dreamina_cli"
+    return cleaned
+
+
+def load_runtime_settings() -> dict[str, Any]:
+    persisted = get_store().get_runtime_settings()
+    _runtime_settings.clear()
+    _runtime_settings.update(_DEFAULT_RUNTIME_SETTINGS)
+    _runtime_settings.update(_sanitize_runtime_settings(persisted))
+    return _runtime_settings
+
+
+def save_runtime_settings(updates: dict[str, Any]) -> dict[str, Any]:
+    cleaned = _sanitize_runtime_settings(updates)
+    removed = {key: None for key in _REMOVED_RUNTIME_SETTING_KEYS}
+    get_store().update_runtime_settings({**cleaned, **removed})
+    return load_runtime_settings()
 
 
 def dreamina_cli(timeout: float | None = None) -> DreaminaCli:

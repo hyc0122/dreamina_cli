@@ -123,6 +123,79 @@ class QueueReorder(BaseModel):
     queue_item_ids: list[str]
 
 
+class SettingsUpdate(BaseModel):
+    dreamina_executable: Optional[str] = None
+    generation_provider: Optional[str] = None
+    model_version: Optional[str] = None
+    poll_seconds: Optional[int] = None
+    duration: Optional[int] = None
+    ratio: Optional[str] = None
+    video_resolution: Optional[str] = None
+    submit_interval_seconds: Optional[int] = Field(default=None, ge=1, le=300)
+    max_in_flight: Optional[int] = Field(default=None, ge=1, le=50)
+    result_poll_interval_seconds: Optional[int] = Field(default=None, ge=5, le=300)
+    cli_initial_poll_seconds: Optional[int] = Field(default=None, ge=1, le=60)
+    max_retry_attempts: Optional[int] = Field(default=None, ge=0, le=20)
+    retry_base_seconds: Optional[int] = Field(default=None, ge=5, le=600)
+    jimeng_api_base_url: Optional[str] = None
+    jimeng_api_model: Optional[str] = None
+    jimeng_api_generation_mode: Optional[str] = None
+    jimeng_api_ratio: Optional[str] = None
+    jimeng_api_duration: Optional[int] = None
+    jimeng_api_concurrency: Optional[int] = None
+    jimeng_api_sessions: Optional[list[dict[str, Any]]] = None
+
+
+class CliAccountCreate(BaseModel):
+    label: str
+
+
+class CliAccountUpdate(BaseModel):
+    label: Optional[str] = None
+
+
+class CliAccountLoginJson(BaseModel):
+    credential_json: Any
+
+
+class LoginSessionStart(BaseModel):
+    mode: str = "login"
+    open_browser: bool = True
+    account_id: Optional[str] = None
+
+
+class BindingCreate(BaseModel):
+    asset_id: str
+    asset_type: JimengAssetType
+    source: str = "manual"
+    locked: bool = False
+    slot_order: Optional[int] = None
+
+
+class BindingUpdate(BaseModel):
+    locked: Optional[bool] = None
+    voice_enabled: Optional[bool] = None
+    slot_order: Optional[int] = None
+
+
+class BindingReorder(BaseModel):
+    binding_ids: list[str]
+
+
+class CandidateLock(BaseModel):
+    locked: bool = True
+
+
+class CandidateBatchDownload(BaseModel):
+    target_dir: str = ""
+    shot_ids: list[str] = Field(default_factory=list)
+
+
+class CandidateExport(BaseModel):
+    target_dir: str
+    overwrite: bool = False
+
+
 class PromptPresetCreate(BaseModel):
     name: str
     scope: JimengPromptScope = JimengPromptScope.user

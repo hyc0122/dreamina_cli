@@ -3,25 +3,31 @@
 import clsx from "clsx";
 import {
   BadgeDollarSign,
+  BookOpen,
+  Bot,
+  ExternalLink,
   Film,
   FolderOpen,
   History,
   Image as ImageIcon,
   ListChecks,
+  MessageSquare,
   Moon,
   Settings,
   Sun,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import JimengAssetManagerPage from "@/components/jimeng/JimengAssetManagerPage";
-import JimengGenerationHistoryPage from "@/components/jimeng/JimengGenerationHistoryPage";
-import JimengProjectListPage from "@/components/jimeng/JimengProjectListPage";
-import JimengQueuePage from "@/components/jimeng/JimengQueuePage";
-import JimengSettingsPage from "@/components/jimeng/JimengSettingsPage";
-import JimengWorkbenchPage from "@/components/jimeng/JimengWorkbenchPage";
+import JimengLauncherPage from "@/components/jimeng/pages/JimengLauncherPage";
+import JimengAssetManagerPage from "@/components/jimeng/pages/JimengAssetManagerPage";
+import JimengGenerationHistoryPage from "@/components/jimeng/pages/JimengGenerationHistoryPage";
+import JimengProjectListPage from "@/components/jimeng/pages/JimengProjectListPage";
+import JimengQueuePage from "@/components/jimeng/pages/JimengQueuePage";
+import JimengSettingsPage from "@/components/jimeng/pages/JimengSettingsPage";
+import JimengWorkbenchPage from "@/components/jimeng/pages/JimengWorkbenchPage";
+import LlmSettingsPage from "@/components/jimeng/llm/LlmSettingsPage";
 import { jimengApi } from "@/lib/jimengApi";
-import type { JimengPageMode } from "@/lib/jimengApi";
+import type { JimengCliResult, JimengPageMode, JimengRuntimeInfo } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
 
 type ThemeMode = "dark" | "light";
@@ -36,6 +42,8 @@ interface JimengPageConfig {
 
 const THEME_STORAGE_KEY = "dreamina_cli_theme";
 const LOGIN_CACHE_KEY = "dreamina_cli_login_snapshot";
+const HELP_URL = "https://github.com/hyc0122/dreamina_cli#readme";
+const FEEDBACK_URL = "https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvMLycffc";
 
 const JIMENG_PAGES: JimengPageConfig[] = [
   {
@@ -74,6 +82,13 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     icon: History,
   },
   {
+    id: "llm",
+    label: "大模型设置",
+    placeholderTitle: "大模型设置",
+    placeholderText: "配置资产图片纯文本生图使用的大模型供应商。",
+    icon: Bot,
+  },
+  {
     id: "settings",
     label: "即梦设置",
     placeholderTitle: "即梦设置",
@@ -90,6 +105,13 @@ const getInitialTheme = (): ThemeMode => {
   return stored === "light" ? "light" : "dark";
 };
 
+const getShellRoute = (): "launcher" | "app" => {
+  if (typeof window === "undefined") {
+    return "app";
+  }
+  return window.location.hash === "#/launcher" ? "launcher" : "app";
+};
+
 const readCachedTotalCredit = (): string | null => {
   if (typeof window === "undefined") {
     return null;
@@ -100,6 +122,41 @@ const readCachedTotalCredit = (): string | null => {
   } catch {
     return null;
   }
+};
+
+const parseJsonObject = (text: string | null | undefined): Record<string, unknown> | null => {
+  if (!text) {
+    return null;
+  }
+  try {
+    const value = JSON.parse(text);
+    return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+};
+
+const valueToString = (value: unknown): string | null => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  return String(value);
+};
+
+const extractLineValue = (text: string, key: string): string | null => {
+  const match = text.match(new RegExp(`${key}\\s*[:=]\\s*([^\\n\\r]+)`, "i"));
+  return match?.[1]?.trim() || null;
+};
+
+const readCreditFromCliResult = (result: JimengCliResult): string | null => {
+  const data = parseJsonObject(result.raw_output);
+  const rawOutput = result.raw_output || result.error_message || "";
+  return data
+    ? valueToString(data.total_credit) ?? valueToString(data.credit) ?? valueToString(data.balance) ?? valueToString(data.remaining_credit)
+    : extractLineValue(rawOutput, "total_credit") ??
+        extractLineValue(rawOutput, "credit") ??
+        extractLineValue(rawOutput, "balance") ??
+        extractLineValue(rawOutput, "remaining_credit");
 };
 
 function PlaceholderPage({ page }: { page: JimengPageConfig }) {
@@ -119,7 +176,9 @@ export default function JimengApp() {
   const activePage = useJimengStore((state) => state.activePage);
   const setActivePage = useJimengStore((state) => state.setActivePage);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const [shellRoute, setShellRoute] = useState<"launcher" | "app">(getShellRoute);
   const [totalCredit, setTotalCredit] = useState<string | null>(null);
+  const [runtimeInfo, setRuntimeInfo] = useState<JimengRuntimeInfo | null>(null);
   const activeConfig = JIMENG_PAGES.find((page) => page.id === activePage) ?? JIMENG_PAGES[0];
   const activeIndex = JIMENG_PAGES.findIndex((page) => page.id === activeConfig.id) + 1;
 
@@ -130,10 +189,24 @@ export default function JimengApp() {
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
+  useEffect(() => {
+    const syncRoute = () => setShellRoute(getShellRoute());
+    window.addEventListener("hashchange", syncRoute);
+    syncRoute();
+    return () => window.removeEventListener("hashchange", syncRoute);
+  }, []);
+
+  const openMainApp = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.location.hash = "#/app";
+    }
+    setShellRoute("app");
+  }, []);
+
   const refreshTotalCredit = useCallback(async () => {
     try {
-      const response = await jimengApi.listCliAccounts();
-      setTotalCredit(response.total_credit ?? readCachedTotalCredit());
+      const response = await jimengApi.queryCredit();
+      setTotalCredit(readCreditFromCliResult(response) ?? readCachedTotalCredit());
     } catch {
       setTotalCredit(readCachedTotalCredit());
     }
@@ -142,6 +215,25 @@ export default function JimengApp() {
   useEffect(() => {
     void refreshTotalCredit();
   }, [activePage, refreshTotalCredit]);
+
+  useEffect(() => {
+    let mounted = true;
+    void jimengApi
+      .getRuntimeInfo()
+      .then((info) => {
+        if (mounted) {
+          setRuntimeInfo(info);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setRuntimeInfo(null);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const renderPage = () => {
     if (activePage === "projects") {
@@ -159,11 +251,18 @@ export default function JimengApp() {
     if (activePage === "history") {
       return <JimengGenerationHistoryPage />;
     }
+    if (activePage === "llm") {
+      return <LlmSettingsPage />;
+    }
     if (activePage === "settings") {
       return <JimengSettingsPage />;
     }
     return <PlaceholderPage page={activeConfig} />;
   };
+
+  if (shellRoute === "launcher") {
+    return <JimengLauncherPage onOpenApp={openMainApp} />;
+  }
 
   return (
     <div className="h-screen w-screen overflow-hidden px-3 py-2 sm:px-4">
@@ -173,8 +272,38 @@ export default function JimengApp() {
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className="font-display text-lg font-bold text-foreground">小狼专用-即梦CLI</h1>
             <span className="rounded-md border border-glass-border bg-surface-inset px-2 py-1 text-xs text-text-muted">面向分镜批量生成</span>
+            {runtimeInfo?.project_dir && (
+              <span
+                className="inline-flex max-w-full items-center gap-1 rounded-md border border-glass-border bg-surface-inset px-2 py-1 text-xs text-text-muted sm:max-w-[520px]"
+                title={`项目根目录：${runtimeInfo.project_dir}\n数据目录：${runtimeInfo.data_dir}\n输出目录：${runtimeInfo.output_dir}`}
+              >
+                <FolderOpen size={13} className="shrink-0 text-primary" />
+                <span className="shrink-0 text-text-secondary">根目录</span>
+                <span className="truncate font-mono text-foreground">{runtimeInfo.project_dir}</span>
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={HELP_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-3 text-sm font-semibold text-cyan-300 transition-colors hover:bg-cyan-400/15"
+            >
+              <BookOpen size={15} />
+              使用说明
+              <ExternalLink size={12} />
+            </a>
+            <a
+              href={FEEDBACK_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 text-sm font-semibold text-amber-200 transition-colors hover:bg-amber-400/15"
+            >
+              <MessageSquare size={15} />
+              问题反馈
+              <ExternalLink size={12} />
+            </a>
             <div className="flex h-9 items-center gap-2 rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-3 text-sm text-emerald-300">
               <BadgeDollarSign size={15} />
               <span className="text-xs text-emerald-200">积分总额</span>

@@ -17,20 +17,30 @@ const JIMENG_ASSET_TYPE_ICONS: Record<JimengAssetType, LucideIcon> = {
   prop: Package,
 };
 
-export function jimengMediaUrl(path: string | null | undefined): string {
+const appendMediaVersion = (url: string, version?: string | null): string => {
+  if (!version) {
+    return url;
+  }
+  return `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
+};
+
+export function jimengMediaUrl(path: string | null | undefined, version?: string | null): string {
   if (!path) {
     return "";
   }
-  if (/^(https?:|blob:|data:)/.test(path)) {
+  if (/^(blob:|data:)/.test(path)) {
     return path;
+  }
+  if (/^https?:/.test(path)) {
+    return appendMediaVersion(path, version);
   }
 
   const normalized = path.replace(/\\/g, "/");
   if (normalized.startsWith("/files/")) {
-    return `${API_URL}${normalized}`;
+    return appendMediaVersion(`${API_URL}${normalized}`, version);
   }
   if (normalized.startsWith("files/")) {
-    return `${API_URL}/${normalized}`;
+    return appendMediaVersion(`${API_URL}/${normalized}`, version);
   }
 
   const outputMarker = "/output/";
@@ -42,7 +52,7 @@ export function jimengMediaUrl(path: string | null | undefined): string {
         ? normalized.slice("output/".length)
         : normalized.replace(/^\/+/, "");
 
-  return `${API_URL}/files/${relativePath}`;
+  return appendMediaVersion(`${API_URL}/files/${relativePath}`, version);
 }
 
 interface AssetMiniCardProps {
@@ -68,7 +78,7 @@ export default function AssetMiniCard({
 }: AssetMiniCardProps) {
   const resolvedType = asset?.type ?? binding?.asset_type ?? assetType ?? "prop";
   const Icon = JIMENG_ASSET_TYPE_ICONS[resolvedType];
-  const imageUrl = jimengMediaUrl(asset?.image_path);
+  const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
   const hasVoice = resolvedType === "character" && Boolean(asset?.audio_path);
   const voiceEnabled = binding?.voice_enabled ?? true;
 

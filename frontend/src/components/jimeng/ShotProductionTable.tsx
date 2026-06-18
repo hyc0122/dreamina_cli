@@ -18,14 +18,16 @@ import {
   Square,
   Timer,
   Trash2,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import AssetSlotCell from "@/components/jimeng/AssetSlotCell";
-import BatchReplaceModal from "@/components/jimeng/BatchReplaceModal";
+import AssetSlotCell from "@/components/jimeng/assets/AssetSlotCell";
+import BatchReplaceModal from "@/components/jimeng/workbench/BatchReplaceModal";
 import ImportShotsModal from "@/components/jimeng/ImportShotsModal";
 import OperationOverlay from "@/components/jimeng/OperationOverlay";
-import ShotPromptCell from "@/components/jimeng/ShotPromptCell";
+import ShotPromptCell from "@/components/jimeng/workbench/ShotPromptCell";
+import { summarizeJimengError } from "@/components/jimeng/jimengUiHelpers";
 import {
   jimengApi,
   type JimengAsset,
@@ -103,6 +105,7 @@ interface ShotProductionTableProps {
   onPreviewShot: (shotId: string) => void;
   onOpenAssetPicker: (shot: JimengShot, assetType: JimengAssetType, assetId?: string) => void;
   onOpenBatchSettings: () => void;
+  onBatchSubmit: () => void;
 }
 
 export default function ShotProductionTable({
@@ -118,6 +121,7 @@ export default function ShotProductionTable({
   onPreviewShot,
   onOpenAssetPicker,
   onOpenBatchSettings,
+  onBatchSubmit,
 }: ShotProductionTableProps) {
   const loading = useJimengStore((state) => state.loading);
   const toggleShotSelection = useJimengStore((state) => state.toggleShotSelection);
@@ -206,7 +210,7 @@ export default function ShotProductionTable({
     runOperation("批量检测分镜时长中", async () => {
       const response = await jimengApi.batchDetectShotDurations(project.id);
       await refreshProject();
-      setNotice(`批量检测完成：已设置 ${response.updated_count} 条，跳过 ${response.skipped_count} 条未识别时长的分镜`);
+      setNotice(`批量检测完成：已设置 ${response.updated_count} 条；未识别时长的分镜已默认按 15 秒处理`);
     });
 
   const updateDuration = (shot: JimengShot, value: string) =>
@@ -226,8 +230,23 @@ export default function ShotProductionTable({
 
   const batchDownload = () =>
     runOperation("批量下载视频素材中", async () => {
-      const response = await jimengApi.batchDownloadCandidates(project.id);
-      setNotice(`已请求下载 ${response.candidates.length} 个候选视频素材`);
+      if (selectedShotIds.length === 0) {
+        setOperationError("请先选择要下载默认视频的分镜");
+        return;
+      }
+      const { path: targetDir } = await jimengApi.selectDirectory();
+      if (!targetDir) {
+        return;
+      }
+      const response = await jimengApi.batchDownloadCandidates(project.id, {
+        target_dir: targetDir,
+        shot_ids: selectedShotIds,
+      });
+      if ("export_dir" in response) {
+        setNotice(`已导出 ${response.files.length} 个视频到：${response.export_dir}${response.skipped.length ? `；跳过 ${response.skipped.length} 个` : ""}`);
+        return;
+      }
+      setNotice(`已找到 ${response.candidates.length} 个候选视频素材`);
     });
 
   const exportShots = (format: "txt" | "csv") => {
@@ -291,10 +310,10 @@ export default function ShotProductionTable({
         <ToolbarButton icon={Download} onClick={() => exportShots("csv")} disabled={shots.length === 0}>
           导出分镜CSV
         </ToolbarButton>
-        <ToolbarButton icon={Settings2} onClick={onOpenBatchSettings} disabled={selectedShotIds.length === 0 || submitting} tone="primary">
-          批量参数
+        <ToolbarButton icon={Settings2} onClick={onOpenBatchSettings} disabled={submitting} tone="primary">
+          参数设置
         </ToolbarButton>
-        <ToolbarButton icon={Send} onClick={onOpenBatchSettings} disabled={selectedShotIds.length === 0 || submitting} tone="primary">
+        <ToolbarButton icon={Send} onClick={onBatchSubmit} disabled={selectedShotIds.length === 0 || submitting} tone="primary">
           {submitting ? "提交中..." : "批量提交"}
         </ToolbarButton>
         <span className="w-full rounded border border-glass-border bg-black/20 px-2 py-1 text-right font-mono text-xs text-text-muted sm:ml-auto sm:w-auto">
@@ -326,6 +345,12 @@ export default function ShotProductionTable({
             const hasFailure = shot.status === "failed" || Boolean(shot.last_error);
             const isFocused = focusedShotId === shot.id;
             const isSelected = selectedShotSet.has(shot.id);
+            const hasVideo = Boolean(shot.locked_video_candidate_id || shot.default_video_candidate_id);
+            const videoStateLabel = hasVideo
+              ? shot.locked_video_candidate_id
+                ? "已有锁定视频"
+                : "已有默认视频"
+              : "暂无视频";
 
             return (
               <article
@@ -413,6 +438,22 @@ export default function ShotProductionTable({
                     <div className="flex min-w-0 flex-row items-start gap-1 xl:flex-col">
                       <button
                         type="button"
+                        title={`${videoStateLabel}，点击查看视频预览`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onPreviewShot(shot.id);
+                        }}
+                        className={clsx(
+                          "grid h-10 w-full place-items-center rounded-md border transition-colors xl:h-12",
+                          hasVideo
+                            ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
+                            : "border-glass-border bg-surface-inset text-text-muted hover:bg-hover-bg hover:text-foreground",
+                        )}
+                      >
+                        <Video size={16} />
+                      </button>
+                      <button
+                        type="button"
                         title="查看预览"
                         onClick={(event) => {
                           event.stopPropagation();
@@ -494,7 +535,11 @@ export default function ShotProductionTable({
                         锁定 {shot.locked_video_candidate_id.slice(0, 8)}
                       </span>
                     ) : null}
-                    {shot.last_error ? <span className="min-w-0 flex-1 text-red-300">{shot.last_error}</span> : null}
+                    {shot.last_error ? (
+                      <span title={shot.last_error} className="min-w-0 flex-1 text-red-300">
+                        {summarizeJimengError(shot.last_error)}
+                      </span>
+                    ) : null}
                   </div>
                 )}
               </article>

@@ -37,6 +37,26 @@ _IMAGE_MODELS = {"3.0", "3.1", "4.0", "4.1", "4.5", "4.6", "4.7", "5.0"}
 _IMAGE_RESOLUTION_TYPES = {"1k", "2k", "4k"}
 
 
+def hidden_subprocess_kwargs() -> dict[str, Any]:
+    """Windows GUI 版程序调用控制台 CLI 时，避免弹出新的黑色命令行窗口。"""
+    if os.name != "nt":
+        return {}
+
+    kwargs: dict[str, Any] = {}
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if creationflags:
+        kwargs["creationflags"] = creationflags
+
+    startup_info_cls = getattr(subprocess, "STARTUPINFO", None)
+    if startup_info_cls is not None:
+        startup_info = startup_info_cls()
+        startup_info.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+        startup_info.wShowWindow = 0
+        kwargs["startupinfo"] = startup_info
+
+    return kwargs
+
+
 class DreaminaCli:
     def __init__(
         self,
@@ -56,12 +76,14 @@ class DreaminaCli:
     def _default_runner(args: Sequence[str], timeout: Optional[float], env: Optional[Dict[str, str]] = None) -> DreaminaResult:
         completed = subprocess.run(
             list(args),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=timeout,
             encoding="utf-8",
             errors="replace",
             env=env,
+            **hidden_subprocess_kwargs(),
         )
         return DreaminaResult(
             returncode=completed.returncode,
@@ -87,6 +109,10 @@ class DreaminaCli:
         if debug:
             args.append("--debug")
         return self._run_and_parse(args)
+
+    def login_with_json(self, credential_json: dict[str, Any] | str) -> DreaminaTaskResult:
+        payload = _normalize_login_json_payload(credential_json)
+        return self._run_and_parse([self.executable, "login", "--json", payload])
 
     def relogin(self) -> DreaminaTaskResult:
         return self._run_and_parse([self.executable, "relogin"])
@@ -364,6 +390,28 @@ def _extend_model_version(args: list[str], model_version: str) -> None:
         args.extend(["--model_version", model_version])
 
 
+def _normalize_login_json_payload(credential_json: dict[str, Any] | str) -> str:
+    if isinstance(credential_json, str):
+        payload = credential_json.strip()
+        if not payload:
+            raise ValueError("login json cannot be empty")
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError("login json must be a valid JSON object") from exc
+    elif isinstance(credential_json, dict):
+        parsed = credential_json
+        payload = json.dumps(credential_json, ensure_ascii=False, separators=(",", ":"))
+    else:
+        raise ValueError("login json must be a JSON object or string")
+
+    if not isinstance(parsed, dict):
+        raise ValueError("login json must be a JSON object")
+    if not str(parsed.get("sessionid") or "").strip():
+        raise ValueError("login json must contain sessionid")
+    return payload
+
+
 def _validate_video_ratio(ratio: str) -> None:
     if ratio and ratio not in _VIDEO_RATIOS:
         raise ValueError(f"unsupported video ratio: {ratio}")
@@ -415,11 +463,13 @@ def _probe_audio_duration(path: Path) -> Optional[float]:
                 "default=noprint_wrappers=1:nokey=1",
                 str(path),
             ],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=10,
             encoding="utf-8",
             errors="replace",
+            **hidden_subprocess_kwargs(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return None

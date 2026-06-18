@@ -1,10 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { Loader2, RefreshCw, Send, Upload, Video } from "lucide-react";
+import { Download, Loader2, RefreshCw, Send, Upload, Video } from "lucide-react";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { jimengMediaUrl } from "@/components/jimeng/AssetMiniCard";
-import GenerationSettingsControl from "@/components/jimeng/GenerationSettingsControl";
+import { jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
+import GenerationSettingsControl from "@/components/jimeng/workbench/GenerationSettingsControl";
+import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import { jimengApi, type JimengProject, type JimengShot, type JimengVideoCandidate, type JimengVideoGenerationSettings } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
 
@@ -15,6 +16,7 @@ interface ShotDetailPanelProps {
   selectedCount: number;
   submitting: boolean;
   generationSettings: JimengVideoGenerationSettings;
+  videoModelOptions?: LlmModelOption[];
   onGenerationSettingsChange: (settings: JimengVideoGenerationSettings) => void;
   onSubmitCurrent: () => void;
 }
@@ -36,6 +38,7 @@ export default function ShotDetailPanel({
   selectedCount,
   submitting,
   generationSettings,
+  videoModelOptions = [],
   onGenerationSettingsChange,
   onSubmitCurrent,
 }: ShotDetailPanelProps) {
@@ -44,6 +47,7 @@ export default function ShotDetailPanel({
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const requestIdRef = useRef(0);
@@ -129,9 +133,30 @@ export default function ShotDetailPanel({
   );
   const videoUrl = jimengMediaUrl(activeCandidate?.video_path);
 
+  const exportActiveCandidate = async () => {
+    if (!shot || !activeCandidate || exporting) {
+      return;
+    }
+    setExporting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { path: targetDir } = await jimengApi.selectDirectory();
+      if (!targetDir) {
+        return;
+      }
+      const result = await jimengApi.exportCandidate(project.id, shot.id, activeCandidate.id, { target_dir: targetDir });
+      setNotice(`视频已保存：${result.path}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "视频导出失败");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-glass-border px-4 py-4">
+      <div className="border-b border-glass-border px-3 py-2.5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="font-display text-base font-semibold text-foreground">视频预览</p>
@@ -151,8 +176,8 @@ export default function ShotDetailPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <div className="aspect-video overflow-hidden rounded-lg border border-glass-border bg-black/40">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="mx-auto aspect-video max-h-[230px] w-full overflow-hidden rounded-lg border border-glass-border bg-black/40">
           {videoUrl ? (
             <video key={videoUrl} src={videoUrl} controls className="h-full w-full object-contain" />
           ) : (
@@ -171,18 +196,29 @@ export default function ShotDetailPanel({
           onChange={uploadLocalVideo}
           disabled={!shot || uploading}
         />
-        <div className="mt-4 grid gap-2">
+        <div className="mt-3 grid gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => uploadInputRef.current?.click()}
             disabled={!shot || uploading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-glass-border bg-black/20 px-4 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-glass-border bg-black/20 px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
           >
             {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
             {uploading ? "本地视频上传中..." : "上传本地视频"}
           </button>
-          <div className="rounded-lg border border-glass-border bg-surface-inset p-3">
-            <div className="mb-3 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={exportActiveCandidate}
+            disabled={!shot || !activeCandidate || exporting}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-glass-border bg-black/20 px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+            {exporting ? "保存中..." : "下载当前视频"}
+          </button>
+          </div>
+          <div className="rounded-lg border border-glass-border bg-surface-inset p-2.5">
+            <div className="mb-2 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-foreground">本次提交参数</p>
                 <p className="mt-1 text-xs leading-5 text-text-muted">只影响当前点击提交的分镜，不会写回即梦设置页。</p>
@@ -191,13 +227,18 @@ export default function ShotDetailPanel({
                 {generationSettings.video_resolution}
               </span>
             </div>
-            <GenerationSettingsControl compact value={generationSettings} onChange={onGenerationSettingsChange} />
+            <GenerationSettingsControl
+              compact
+              value={generationSettings}
+              videoModelOptions={videoModelOptions}
+              onChange={onGenerationSettingsChange}
+            />
           </div>
           <button
             type="button"
             onClick={onSubmitCurrent}
             disabled={!shot || submitting}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:border-glass-border disabled:bg-black/20 disabled:text-text-muted"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:border-glass-border disabled:bg-black/20 disabled:text-text-muted"
           >
             <Send size={15} />
             {submitting ? "提交中..." : shot ? `提交当前分镜${shot.shot_index}` : "请选择分镜"}
@@ -212,14 +253,14 @@ export default function ShotDetailPanel({
           <p className="mt-3 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{notice}</p>
         ) : null}
 
-        <div className="mt-5">
+        <div className="mt-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium text-text-secondary">候选视频</p>
             <span className="font-mono text-xs text-text-muted">{candidates.length}</span>
           </div>
 
           {candidates.length > 0 ? (
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-2 2xl:grid-cols-2">
               {candidates.map((candidate, index) => {
                 const thumbnailUrl = jimengMediaUrl(candidate.thumbnail_path);
                 const isActive = candidate.id === activeCandidate?.id;
@@ -229,20 +270,20 @@ export default function ShotDetailPanel({
                     type="button"
                     onClick={() => setActiveCandidateId(candidate.id)}
                     className={clsx(
-                      "flex w-full items-center gap-3 rounded-md border px-2 py-2 text-left transition-colors",
+                      "min-w-0 rounded-md border p-1.5 text-left transition-colors",
                       isActive
                         ? "border-primary/50 bg-primary/10"
                         : "border-glass-border bg-black/20 hover:border-white/20 hover:bg-hover-bg",
                     )}
                   >
-                    <div className="flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded bg-black/30">
+                    <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded bg-black/30">
                       {thumbnailUrl ? (
                         <img src={thumbnailUrl} alt={candidate.video_filename} className="h-full w-full object-cover" />
                       ) : (
                         <Video size={18} className="text-text-muted" />
                       )}
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div className="mt-1.5 min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">{candidateLabel(candidate, index)}</p>
                       <p className="mt-1 truncate font-mono text-[10px] text-text-muted">{candidate.video_filename}</p>
                       <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-text-muted">

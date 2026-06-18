@@ -52,6 +52,14 @@ const downloadTextFile = (filename: string, content: string) => {
   URL.revokeObjectURL(url);
 };
 
+const requestErrorMessage = (error: unknown): string => {
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+  return error instanceof Error ? error.message : "导入资产描述失败";
+};
+
 export default function AssetMetadataImportModal({ projectId, open, onClose, onImported }: AssetMetadataImportModalProps) {
   const [format, setFormat] = useState<"json" | "csv">("json");
   const [text, setText] = useState(JSON_SAMPLE);
@@ -102,6 +110,14 @@ export default function AssetMetadataImportModal({ projectId, open, onClose, onI
       setError("请先粘贴或导入资产描述清单");
       return;
     }
+    if (format === "json") {
+      try {
+        JSON.parse(text);
+      } catch (caught) {
+        setError(`JSON 格式错误：${caught instanceof Error ? caught.message : "无法解析 JSON"}`);
+        return;
+      }
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -109,7 +125,7 @@ export default function AssetMetadataImportModal({ projectId, open, onClose, onI
       await onImported();
       onClose();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "导入资产描述失败");
+      setError(requestErrorMessage(caught));
     } finally {
       setSubmitting(false);
     }

@@ -331,7 +331,7 @@ def _split_aliases(value: Any) -> list[str]:
     return [item.strip() for item in text.split(",") if item.strip()]
 
 
-def _asset_create_from_mapping(item: Mapping[str, Any]) -> AssetCreate:
+def _asset_create_from_mapping(item: Mapping[str, Any], index: int | None = None) -> AssetCreate:
     data = dict(item)
     if "asset_type" in data and "type" not in data:
         data["type"] = data["asset_type"]
@@ -344,7 +344,11 @@ def _asset_create_from_mapping(item: Mapping[str, Any]) -> AssetCreate:
     if "model" in data and "image_model" not in data:
         data["image_model"] = data["model"]
     data["aliases"] = _split_aliases(data.get("aliases"))
-    return AssetCreate(**data)
+    try:
+        return AssetCreate(**data)
+    except (TypeError, ValueError, ValidationError) as exc:
+        prefix = f"第 {index} 条资产描述无效" if index is not None else "资产描述无效"
+        raise ValueError(f"{prefix}: {exc}") from exc
 
 
 def _parse_asset_metadata_import(request: AssetMetadataImport) -> list[AssetCreate]:
@@ -353,16 +357,27 @@ def _parse_asset_metadata_import(request: AssetMetadataImport) -> list[AssetCrea
         raise ValueError("asset metadata import text cannot be empty")
     import_format = request.format.strip().lower()
     if import_format == "json":
-        data = json.loads(text)
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"资产描述 JSON 格式错误：{exc.msg}，位置 {exc.pos}") from exc
         items = data.get("assets") if isinstance(data, dict) else data
         if not isinstance(items, list):
             raise ValueError("asset metadata JSON must be a list or {assets: [...]}")
-        return [_asset_create_from_mapping(item) for item in items if isinstance(item, Mapping)]
+        parsed: list[AssetCreate] = []
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, Mapping):
+                raise ValueError(f"第 {index} 条资产描述必须是对象")
+            parsed.append(_asset_create_from_mapping(item, index))
+        return parsed
     if import_format == "csv":
         reader = csv.DictReader(io.StringIO(text))
         if not reader.fieldnames:
             raise ValueError("asset metadata CSV header is required")
-        return [_asset_create_from_mapping(row) for row in reader]
+        parsed = []
+        for index, row in enumerate(reader, start=1):
+            parsed.append(_asset_create_from_mapping(row, index))
+        return parsed
     raise ValueError("asset metadata format must be json or csv")
 
 
@@ -450,9 +465,12 @@ def _generate_asset_image(project_id: str, asset_id: str, request: AssetImageGen
     )
     final_result = submit_result
     if submit_result.submit_id:
-        queried_result = cli.query_result(submit_result.submit_id, download_dir=generated_dir)
-        if queried_result.local_paths or queried_result.result_url or queried_result.error_message:
-            final_result = queried_result
+        for _ in range(3):
+            queried_result = cli.query_result(submit_result.submit_id, download_dir=generated_dir)
+            if queried_result.local_paths or queried_result.result_url or queried_result.error_message:
+                final_result = queried_result
+            if _first_existing_image_path(queried_result) or queried_result.result_url or queried_result.error_message:
+                break
 
     if final_result.error_message:
         raw = (final_result.raw_output or "").strip()

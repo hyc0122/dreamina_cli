@@ -29,8 +29,11 @@ class JimengAssetType(str, Enum):
 
 class JimengQueueStatus(str, Enum):
     waiting = "waiting"
+    submitting = "submitting"
     running = "running"
     polling = "polling"
+    retry_wait = "retry_wait"
+    blocked = "blocked"
     completed = "completed"
     failed = "failed"
     canceled = "canceled"
@@ -122,6 +125,11 @@ class JimengQueueItem(BaseModel):
     local_video_path: Optional[str] = None
     cli_raw_output: Optional[str] = None
     error_message: Optional[str] = None
+    attempt_count: int = 0
+    next_attempt_at: Optional[str] = None
+    last_polled_at: Optional[str] = None
+    lease_owner: Optional[str] = None
+    lease_expires_at: Optional[str] = None
     submitted_at: Optional[str] = None
     finished_at: Optional[str] = None
     created_at: str

@@ -125,7 +125,7 @@ export default function ImportShotsModal({ open, projectId, onClose, onImported 
         title={submitting ? "导入分镜中，请等待..." : "读取分镜文件中，请等待..."}
         subtitle="正在解析分镜文本并写入项目，分镜较多时会稍微久一点。"
       />
-      <div className="glass-panel flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-elevated shadow-2xl">
+      <div className="modal-panel flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl">
         <div className="flex items-center justify-between border-b border-glass-border px-5 py-4">
           <div className="flex items-center gap-2">
             <FileInput size={18} className="text-primary" />

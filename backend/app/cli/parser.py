@@ -15,6 +15,12 @@ def classify_dreamina_error(output: str) -> Optional[DreaminaErrorCategory]:
     text = output.lower()
     if not text.strip():
         return None
+    if "队列已满" in output or "queue is full" in text or "queue full" in text:
+        return DreaminaErrorCategory.QUEUE_FULL
+    if "too many requests" in text or "rate limit" in text or "请求过于频繁" in output:
+        return DreaminaErrorCategory.RATE_LIMITED
+    if "server busy" in text or "provider busy" in text or "服务繁忙" in output or "系统繁忙" in output:
+        return DreaminaErrorCategory.PROVIDER_BUSY
     if "not found" in text or "不是内部或外部命令" in text or "no such file" in text:
         return DreaminaErrorCategory.CLI_NOT_FOUND
     if "login" in text or "登录" in output or "token" in text or "oauth" in text:

@@ -112,7 +112,10 @@ def list_queue(store: Any, project_id: str | None = None) -> list[JimengQueueIte
     with store._connect() as conn:
         if project_id is None:
             rows = conn.execute(
-                "SELECT * FROM queue_items ORDER BY position ASC, created_at ASC, id ASC"
+                """
+                SELECT * FROM queue_items
+                ORDER BY position ASC, created_at ASC, id ASC
+                """
             ).fetchall()
         else:
             rows = conn.execute(
@@ -167,6 +170,102 @@ def count_queue(store: Any, status: JimengQueueStatus | str | None = None) -> in
     return int(row["count"])
 
 
+def count_in_flight_queue_items(store: Any) -> int:
+    with store._connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS count FROM queue_items WHERE status IN (?, ?, ?)",
+            (
+                JimengQueueStatus.submitting.value,
+                JimengQueueStatus.running.value,
+                JimengQueueStatus.polling.value,
+            ),
+        ).fetchone()
+    return int(row["count"])
+
+
+def latest_queue_submission_at(store: Any) -> str | None:
+    with store._connect() as conn:
+        row = conn.execute(
+            "SELECT MAX(submitted_at) AS submitted_at FROM queue_items WHERE submitted_at IS NOT NULL"
+        ).fetchone()
+    return row["submitted_at"] if row else None
+
+
+def claim_next_waiting_item(
+    store: Any,
+    worker_id: str,
+    now: str,
+    lease_expires_at: str,
+) -> JimengQueueItem | None:
+    with store._connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT id FROM queue_items
+            WHERE (
+                status = ?
+                OR (status = ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
+            )
+              AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+            ORDER BY position ASC, created_at ASC, id ASC
+            LIMIT 1
+            """,
+            (
+                JimengQueueStatus.waiting.value,
+                JimengQueueStatus.retry_wait.value,
+                now,
+                now,
+            ),
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            """
+            UPDATE queue_items
+            SET status = ?, lease_owner = ?, lease_expires_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (JimengQueueStatus.submitting.value, worker_id, lease_expires_at, now, row["id"]),
+        )
+        item_id = row["id"]
+    return get_queue_item(store, item_id)
+
+
+def claim_next_polling_item(
+    store: Any,
+    worker_id: str,
+    now: str,
+    due_before: str,
+    lease_expires_at: str,
+) -> JimengQueueItem | None:
+    with store._connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT id FROM queue_items
+            WHERE status = ?
+              AND submit_id IS NOT NULL
+              AND (last_polled_at IS NULL OR last_polled_at <= ?)
+              AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+            ORDER BY COALESCE(last_polled_at, submitted_at, created_at) ASC, position ASC, id ASC
+            LIMIT 1
+            """,
+            (JimengQueueStatus.polling.value, due_before, now),
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            """
+            UPDATE queue_items
+            SET lease_owner = ?, lease_expires_at = ?, last_polled_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (worker_id, lease_expires_at, now, now, row["id"]),
+        )
+        item_id = row["id"]
+    return get_queue_item(store, item_id)
+
+
 def update_queue_item(store: Any, item_id: str, **updates: Any) -> JimengQueueItem:
     allowed = {
         "status",
@@ -181,6 +280,11 @@ def update_queue_item(store: Any, item_id: str, **updates: Any) -> JimengQueueIt
         "local_video_path",
         "cli_raw_output",
         "error_message",
+        "attempt_count",
+        "next_attempt_at",
+        "last_polled_at",
+        "lease_owner",
+        "lease_expires_at",
         "submitted_at",
         "finished_at",
     }
@@ -202,7 +306,7 @@ def update_queue_item(store: Any, item_id: str, **updates: Any) -> JimengQueueIt
 def recover_interrupted_queue_items(store: Any) -> dict[str, list[str]]:
     recovered = {"polling": [], "orphaned": []}
     for item in list_queue(store):
-        if item.status != JimengQueueStatus.running:
+        if item.status not in {JimengQueueStatus.running, JimengQueueStatus.submitting}:
             continue
         if item.submit_id:
             update_queue_item(
@@ -286,6 +390,11 @@ def queue_item_from_row(row: sqlite3.Row) -> JimengQueueItem:
         local_video_path=row["local_video_path"],
         cli_raw_output=row["cli_raw_output"],
         error_message=row["error_message"],
+        attempt_count=row["attempt_count"],
+        next_attempt_at=row["next_attempt_at"],
+        last_polled_at=row["last_polled_at"],
+        lease_owner=row["lease_owner"],
+        lease_expires_at=row["lease_expires_at"],
         submitted_at=row["submitted_at"],
         finished_at=row["finished_at"],
         created_at=row["created_at"],

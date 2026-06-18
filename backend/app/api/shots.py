@@ -17,17 +17,16 @@ from .context import (
 from .schemas import (
     BatchReplaceRequest,
     MoveRequest,
-    RenderPromptPreviewRequest,
     ShotBatchDelete,
     ShotCreate,
     ShotImport,
     ShotUpdate,
 )
 from ..jimeng_matching import calculate_highlights, match_assets_for_prompt, parse_csv_shots, parse_plain_text_shots
-from ..jimeng_prompting import render_prompt_preset
 
 
 router = APIRouter(prefix="/jimeng", tags=["jimeng-shots"])
+DEFAULT_DURATION_WHEN_UNDETECTED = 15
 
 
 @router.get("/projects/{project_id}/shots")
@@ -104,10 +103,11 @@ def detect_shot_duration(project_id: str, shot_id: str):
     def detect():
         shot = get_store().get_shot(project_id, shot_id)
         duration = _detect_duration_seconds(shot.prompt)
+        detected = duration is not None
         if duration is None:
-            raise ValueError("未在分镜提示词中识别到时长描述")
+            duration = DEFAULT_DURATION_WHEN_UNDETECTED
         updated = get_store().update_shot(shot_id, default_duration=duration)
-        return {"duration": duration, "shot": _dump(updated)}
+        return {"duration": duration, "detected": detected, "shot": _dump(updated)}
 
     return _call(detect)
 
@@ -120,10 +120,9 @@ def batch_detect_project_durations(project_id: str):
         skipped_count = 0
         for shot in get_store().list_shots(project_id):
             duration = _detect_duration_seconds(shot.prompt)
+            detected = duration is not None
             if duration is None:
-                skipped_count += 1
-                results.append({"shot_id": shot.id, "shot_index": shot.shot_index, "duration": None, "updated": False})
-                continue
+                duration = DEFAULT_DURATION_WHEN_UNDETECTED
             updated = get_store().update_shot(shot.id, default_duration=duration)
             updated_count += 1
             results.append(
@@ -132,6 +131,7 @@ def batch_detect_project_durations(project_id: str):
                     "shot_index": shot.shot_index,
                     "duration": duration,
                     "updated": True,
+                    "detected": detected,
                     "shot": _dump(updated),
                 }
             )
@@ -153,27 +153,3 @@ def batch_delete_shots(project_id: str, request: ShotBatchDelete):
 @router.post("/projects/{project_id}/shots/{shot_id}/move")
 def move_shot(project_id: str, shot_id: str, request: MoveRequest):
     return _call(lambda: _dump(get_store().move_shot(project_id, shot_id, request.direction)))
-
-
-@router.post("/projects/{project_id}/shots/{shot_id}/render_prompt_preview")
-def render_prompt_preview(project_id: str, shot_id: str, request: RenderPromptPreviewRequest = RenderPromptPreviewRequest()):
-    def render():
-        project = get_store().get_project(project_id)
-        shot = get_store().get_shot(project_id, shot_id)
-        template = request.content
-        if template is None:
-            preset_id = request.prompt_preset_id or project.prompt_preset_id
-            template = get_store()._get_prompt_preset(preset_id).content if preset_id else ""
-        result = render_prompt_preset(
-            template=template,
-            project=project,
-            shot=shot,
-            bindings=get_store().list_bindings(project_id, shot_id),
-            assets=get_store().list_assets(project_id),
-            camera=request.camera,
-            era=request.era,
-            style_prompt=get_store().style_prompt_for(project.style, scope="video"),
-        )
-        return _dump(result)
-
-    return _call(render)

@@ -28,6 +28,10 @@ from .storage import shots as shot_storage
 from .storage import assets as asset_storage
 from .storage import accounts as account_storage
 from .storage import queue as queue_storage
+from .storage import bindings as binding_storage
+from .storage import candidates as candidate_storage
+from .storage import presets as preset_storage
+from .storage import settings as settings_storage
 
 
 _ASSET_DIRS = {
@@ -74,8 +78,10 @@ class JimengStore:
         self.init_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
@@ -177,6 +183,11 @@ class JimengStore:
                     local_video_path TEXT,
                     cli_raw_output TEXT,
                     error_message TEXT,
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TEXT,
+                    last_polled_at TEXT,
+                    lease_owner TEXT,
+                    lease_expires_at TEXT,
                     submitted_at TEXT,
                     finished_at TEXT,
                     created_at TEXT NOT NULL,
@@ -244,6 +255,12 @@ class JimengStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS runtime_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             self._ensure_columns(
@@ -276,6 +293,17 @@ class JimengStore:
                 "asset_bindings",
                 {
                     "voice_enabled": "INTEGER NOT NULL DEFAULT 1",
+                },
+            )
+            self._ensure_columns(
+                conn,
+                "queue_items",
+                {
+                    "attempt_count": "INTEGER NOT NULL DEFAULT 0",
+                    "next_attempt_at": "TEXT",
+                    "last_polled_at": "TEXT",
+                    "lease_owner": "TEXT",
+                    "lease_expires_at": "TEXT",
                 },
             )
             self._ensure_columns(
@@ -319,6 +347,12 @@ class JimengStore:
 
     def delete_cli_account(self, account_id: str) -> None:
         return account_storage.delete_cli_account(self, account_id)
+
+    def get_runtime_settings(self) -> dict[str, Any]:
+        return settings_storage.get_runtime_settings(self)
+
+    def update_runtime_settings(self, values: dict[str, Any]) -> dict[str, Any]:
+        return settings_storage.update_runtime_settings(self, values)
 
     def create_project(self, name: str, style: str = "", description: str = "", default_ratio: str = "9:16") -> JimengProject:
         return project_storage.create_project(self, name, style, description, default_ratio)
@@ -445,87 +479,16 @@ class JimengStore:
         locked: bool = False,
         slot_order: int | None = None,
     ) -> JimengAssetBinding:
-        stamp = _now()
-        asset_type = JimengAssetType(asset_type)
-        with self._connect() as conn:
-            self._validate_project_membership(conn, project_id=project_id, shot_id=shot_id, asset_id=asset_id)
-            asset_row = conn.execute("SELECT type FROM assets WHERE id = ?", (asset_id,)).fetchone()
-            if asset_row is None:
-                raise KeyError(f"Jimeng asset not found: {asset_id}")
-            if asset_row["type"] != asset_type.value:
-                raise ValueError("asset type does not match asset")
-            if slot_order is None:
-                row = conn.execute(
-                    "SELECT COALESCE(MAX(slot_order), 0) + 1 AS next_order FROM asset_bindings WHERE shot_id = ?",
-                    (shot_id,),
-                ).fetchone()
-                slot_order = int(row["next_order"])
-            binding_id = _id("jimeng_binding")
-            conn.execute(
-                """
-                INSERT INTO asset_bindings (
-                    id, project_id, shot_id, asset_id, asset_type, source, locked,
-                    voice_enabled, slot_order, created_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    binding_id,
-                    project_id,
-                    shot_id,
-                    asset_id,
-                    asset_type.value,
-                    source,
-                    int(locked),
-                    1,
-                    slot_order,
-                    stamp,
-                    stamp,
-                ),
-            )
-        return self._get_binding(binding_id)
+        return binding_storage.create_binding(self, project_id, shot_id, asset_id, asset_type, source, locked, slot_order)
 
     def list_bindings(self, project_id: str, shot_id: str | None = None) -> list[JimengAssetBinding]:
-        if shot_id is None:
-            shot_id = project_id
-            project_id = ""
-        with self._connect() as conn:
-            if project_id:
-                self._validate_project_membership(conn, project_id=project_id, shot_id=shot_id)
-                rows = conn.execute(
-                    """
-                    SELECT * FROM asset_bindings
-                    WHERE project_id = ? AND shot_id = ?
-                    ORDER BY slot_order ASC
-                    """,
-                    (project_id, shot_id),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM asset_bindings WHERE shot_id = ? ORDER BY slot_order ASC", (shot_id,)
-                ).fetchall()
-        return [self._binding_from_row(row) for row in rows]
+        return binding_storage.list_bindings(self, project_id, shot_id)
 
     def update_binding(self, binding_id: str, **updates: Any) -> JimengAssetBinding:
-        allowed = {"locked", "voice_enabled", "slot_order"}
-        values = {key: value for key, value in updates.items() if key in allowed}
-        if values:
-            if "locked" in values:
-                values["locked"] = int(bool(values["locked"]))
-            if "voice_enabled" in values:
-                values["voice_enabled"] = int(bool(values["voice_enabled"]))
-            values["updated_at"] = _now()
-            assignments = ", ".join(f"{key} = ?" for key in values)
-            with self._connect() as conn:
-                row = conn.execute("SELECT id FROM asset_bindings WHERE id = ?", (binding_id,)).fetchone()
-                if row is None:
-                    raise KeyError(f"Jimeng binding not found: {binding_id}")
-                conn.execute(f"UPDATE asset_bindings SET {assignments} WHERE id = ?", (*values.values(), binding_id))
-        return self._get_binding(binding_id)
+        return binding_storage.update_binding(self, binding_id, **updates)
 
     def delete_binding(self, binding_id: str) -> None:
-        with self._connect() as conn:
-            conn.execute("DELETE FROM asset_bindings WHERE id = ?", (binding_id,))
+        return binding_storage.delete_binding(self, binding_id)
 
     def create_queue_item(
         self,
@@ -569,6 +532,29 @@ class JimengStore:
     def count_queue(self, status: JimengQueueStatus | str | None = None) -> int:
         return queue_storage.count_queue(self, status)
 
+    def count_in_flight_queue_items(self) -> int:
+        return queue_storage.count_in_flight_queue_items(self)
+
+    def latest_queue_submission_at(self) -> str | None:
+        return queue_storage.latest_queue_submission_at(self)
+
+    def claim_next_waiting_item(
+        self,
+        worker_id: str,
+        now: str,
+        lease_expires_at: str,
+    ) -> JimengQueueItem | None:
+        return queue_storage.claim_next_waiting_item(self, worker_id, now, lease_expires_at)
+
+    def claim_next_polling_item(
+        self,
+        worker_id: str,
+        now: str,
+        due_before: str,
+        lease_expires_at: str,
+    ) -> JimengQueueItem | None:
+        return queue_storage.claim_next_polling_item(self, worker_id, now, due_before, lease_expires_at)
+
     def update_queue_item(self, item_id: str, **updates: Any) -> JimengQueueItem:
         return queue_storage.update_queue_item(self, item_id, **updates)
 
@@ -590,58 +576,21 @@ class JimengStore:
         is_default: bool = False,
         is_locked: bool = False,
     ) -> JimengVideoCandidate:
-        candidate_id = _id("jimeng_video")
-        stamp = _now()
-        with self._connect() as conn:
-            self._validate_project_membership(
-                conn,
-                project_id=project_id,
-                shot_id=shot_id,
-                queue_item_id=queue_item_id,
-            )
-            if is_default:
-                conn.execute(
-                    "UPDATE video_candidates SET is_default = 0 WHERE shot_id = ?", (shot_id,)
-                )
-            if is_locked:
-                conn.execute("UPDATE video_candidates SET is_locked = 0 WHERE shot_id = ?", (shot_id,))
-            conn.execute(
-                """
-                INSERT INTO video_candidates (
-                    id, project_id, shot_id, queue_item_id, video_filename, video_path,
-                    thumbnail_path, duration, ratio, resolution, source_url, is_default,
-                    is_locked, created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    candidate_id,
-                    project_id,
-                    shot_id,
-                    queue_item_id,
-                    video_filename,
-                    video_path,
-                    thumbnail_path,
-                    duration,
-                    ratio,
-                    resolution,
-                    source_url,
-                    int(is_default),
-                    int(is_locked),
-                    stamp,
-                ),
-            )
-            if is_default:
-                conn.execute(
-                    "UPDATE shots SET default_video_candidate_id = ?, updated_at = ? WHERE id = ?",
-                    (candidate_id, stamp, shot_id),
-                )
-            if is_locked:
-                conn.execute(
-                    "UPDATE shots SET locked_video_candidate_id = ?, status = ?, updated_at = ? WHERE id = ?",
-                    (candidate_id, JimengShotStatus.locked.value, stamp, shot_id),
-                )
-        return self._get_candidate(candidate_id)
+        return candidate_storage.create_video_candidate(
+            self,
+            project_id,
+            shot_id,
+            queue_item_id,
+            video_filename,
+            video_path,
+            thumbnail_path,
+            duration,
+            ratio,
+            resolution,
+            source_url,
+            is_default,
+            is_locked,
+        )
 
     def create_uploaded_video_candidate(
         self,
@@ -654,174 +603,26 @@ class JimengStore:
         resolution: str | None = None,
         make_default: bool = True,
     ) -> JimengVideoCandidate:
-        if not content:
-            raise ValueError("video file cannot be empty")
-
-        shot = self.get_shot(project_id, shot_id)
-        safe_filename = Path(video_filename).name
-        if not safe_filename:
-            raise ValueError("video filename cannot be empty")
-
-        upload_dir = self._safe_project_root(project_id) / "videos" / "uploads" / shot_id
-        self._assert_under_output_root(upload_dir)
-        upload_dir.mkdir(parents=True, exist_ok=True)
-
-        stored_filename = f"{uuid.uuid4().hex[:8]}-{safe_filename}"
-        target_path = upload_dir / stored_filename
-        self._assert_under_output_root(target_path)
-        temp_path = target_path.with_name(f".{target_path.name}.{uuid.uuid4().hex}.tmp")
-        self._assert_under_output_root(temp_path)
-
-        try:
-            temp_path.write_bytes(content)
-            os.replace(temp_path, target_path)
-        except Exception:
-            temp_path.unlink(missing_ok=True)
-            target_path.unlink(missing_ok=True)
-            raise
-
-        candidate_id = _id("jimeng_video")
-        queue_item_id = _id("jimeng_queue")
-        stamp = _now()
-        set_as_default = make_default and shot.locked_video_candidate_id is None
-
-        try:
-            with self._connect() as conn:
-                self._validate_project_membership(conn, project_id=project_id, shot_id=shot_id)
-                row = conn.execute("SELECT COALESCE(MAX(position), 0) + 1 AS next_position FROM queue_items").fetchone()
-                position = int(row["next_position"])
-                conn.execute(
-                    """
-                    INSERT INTO queue_items (
-                        id, project_id, shot_id, status, position, prompt_snapshot,
-                        prompt_preset_id, prefix_prompt_snapshot, final_prompt_snapshot,
-                        asset_snapshot, cli_command, poll_seconds, download_dir,
-                        submit_id, gen_status, result_url, local_video_path,
-                        cli_raw_output, error_message, submitted_at, finished_at,
-                        created_at, updated_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        queue_item_id,
-                        project_id,
-                        shot_id,
-                        JimengQueueStatus.completed.value,
-                        position,
-                        shot.prompt,
-                        None,
-                        "",
-                        shot.prompt,
-                        _json(self._asset_snapshot(conn, shot_id)),
-                        "local_upload",
-                        0,
-                        str(upload_dir),
-                        None,
-                        "completed",
-                        None,
-                        str(target_path),
-                        "local video upload",
-                        None,
-                        stamp,
-                        stamp,
-                        stamp,
-                        stamp,
-                    ),
-                )
-                if set_as_default:
-                    conn.execute("UPDATE video_candidates SET is_default = 0 WHERE shot_id = ?", (shot_id,))
-                conn.execute(
-                    """
-                    INSERT INTO video_candidates (
-                        id, project_id, shot_id, queue_item_id, video_filename, video_path,
-                        thumbnail_path, duration, ratio, resolution, source_url, is_default,
-                        is_locked, created_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        candidate_id,
-                        project_id,
-                        shot_id,
-                        queue_item_id,
-                        safe_filename,
-                        str(target_path),
-                        None,
-                        duration,
-                        ratio,
-                        resolution,
-                        "local_upload",
-                        int(set_as_default),
-                        0,
-                        stamp,
-                    ),
-                )
-                conn.execute(
-                    """
-                    UPDATE shots
-                    SET status = ?, default_video_candidate_id = COALESCE(?, default_video_candidate_id),
-                        last_error = NULL, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        JimengShotStatus.locked.value if shot.locked_video_candidate_id else JimengShotStatus.completed.value,
-                        candidate_id if set_as_default else None,
-                        stamp,
-                        shot_id,
-                    ),
-                )
-                self._touch_project(conn, project_id, stamp)
-        except Exception:
-            target_path.unlink(missing_ok=True)
-            raise
-
-        return self._get_candidate(candidate_id)
+        return candidate_storage.create_uploaded_video_candidate(
+            self,
+            project_id,
+            shot_id,
+            video_filename,
+            content,
+            duration,
+            ratio,
+            resolution,
+            make_default,
+        )
 
     def list_candidates(self, project_id: str, shot_id: str | None = None) -> list[JimengVideoCandidate]:
-        if shot_id is None:
-            shot_id = project_id
-            project_id = ""
-        with self._connect() as conn:
-            if project_id:
-                self._validate_project_membership(conn, project_id=project_id, shot_id=shot_id)
-            rows = conn.execute(
-                "SELECT * FROM video_candidates WHERE shot_id = ? ORDER BY created_at ASC", (shot_id,)
-            ).fetchall()
-        return [self._candidate_from_row(row) for row in rows]
+        return candidate_storage.list_candidates(self, project_id, shot_id)
 
     def set_default_candidate(self, shot_id: str, candidate_id: str) -> JimengVideoCandidate:
-        stamp = _now()
-        candidate = self._get_candidate(candidate_id)
-        if candidate.shot_id != shot_id:
-            raise ValueError("candidate does not belong to shot")
-        with self._connect() as conn:
-            conn.execute("UPDATE video_candidates SET is_default = 0 WHERE shot_id = ?", (shot_id,))
-            conn.execute("UPDATE video_candidates SET is_default = 1 WHERE id = ?", (candidate_id,))
-            conn.execute(
-                "UPDATE shots SET default_video_candidate_id = ?, updated_at = ? WHERE id = ?",
-                (candidate_id, stamp, shot_id),
-            )
-        return self._get_candidate(candidate_id)
+        return candidate_storage.set_default_candidate(self, shot_id, candidate_id)
 
     def lock_candidate(self, shot_id: str, candidate_id: str, locked: bool = True) -> JimengVideoCandidate:
-        stamp = _now()
-        candidate = self._get_candidate(candidate_id)
-        if candidate.shot_id != shot_id:
-            raise ValueError("candidate does not belong to shot")
-        with self._connect() as conn:
-            if locked:
-                conn.execute("UPDATE video_candidates SET is_locked = 0 WHERE shot_id = ?", (shot_id,))
-            conn.execute("UPDATE video_candidates SET is_locked = ? WHERE id = ?", (int(locked), candidate_id))
-            conn.execute(
-                "UPDATE shots SET locked_video_candidate_id = ?, status = ?, updated_at = ? WHERE id = ?",
-                (
-                    candidate_id if locked else None,
-                    JimengShotStatus.locked.value if locked else JimengShotStatus.completed.value,
-                    stamp,
-                    shot_id,
-                ),
-            )
-        return self._get_candidate(candidate_id)
+        return candidate_storage.lock_candidate(self, shot_id, candidate_id, locked)
 
     def create_prompt_preset(
         self,
@@ -832,133 +633,28 @@ class JimengStore:
         is_default: bool = False,
         enabled: bool = True,
     ) -> JimengPromptPreset:
-        preset_id = _id("jimeng_preset")
-        stamp = _now()
-        scope = JimengPromptScope(scope)
-        with self._connect() as conn:
-            if is_default:
-                conn.execute("UPDATE prompt_presets SET is_default = 0")
-            conn.execute(
-                """
-                INSERT INTO prompt_presets (
-                    id, name, scope, content, variables, is_default, enabled, created_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    preset_id,
-                    name,
-                    scope.value,
-                    content,
-                    _json(variables or []),
-                    int(is_default),
-                    int(enabled),
-                    stamp,
-                    stamp,
-                ),
-            )
-        return self._get_prompt_preset(preset_id)
+        return preset_storage.create_prompt_preset(self, name, content, scope, variables, is_default, enabled)
 
     def list_prompt_presets(self, enabled_only: bool = False) -> list[JimengPromptPreset]:
-        with self._connect() as conn:
-            if enabled_only:
-                rows = conn.execute(
-                    "SELECT * FROM prompt_presets WHERE enabled = 1 ORDER BY created_at ASC"
-                ).fetchall()
-            else:
-                rows = conn.execute("SELECT * FROM prompt_presets ORDER BY created_at ASC").fetchall()
-        return [self._prompt_preset_from_row(row) for row in rows]
+        return preset_storage.list_prompt_presets(self, enabled_only)
 
     def set_default_prompt_preset(self, preset_id: str) -> JimengPromptPreset:
-        stamp = _now()
-        self._get_prompt_preset(preset_id)
-        with self._connect() as conn:
-            conn.execute("UPDATE prompt_presets SET is_default = 0, updated_at = ?", (stamp,))
-            conn.execute(
-                "UPDATE prompt_presets SET is_default = 1, updated_at = ? WHERE id = ?",
-                (stamp, preset_id),
-            )
-        return self._get_prompt_preset(preset_id)
+        return preset_storage.set_default_prompt_preset(self, preset_id)
 
     def create_style_preset(self, name: str, prompt: str = "", scope: str = "video", accent: str = "#6478ff") -> JimengStylePreset:
-        name = name.strip()
-        prompt = prompt.strip()
-        scope = self._validate_style_scope(scope)
-        accent = self._normalize_style_accent(accent)
-        if not name:
-            raise ValueError("style name cannot be empty")
-        preset_id = _id("jimeng_style")
-        stamp = _now()
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    """
-                    INSERT INTO style_presets (id, name, scope, prompt, accent, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (preset_id, name, scope, prompt, accent, stamp, stamp),
-                )
-        except sqlite3.IntegrityError as exc:
-            raise ValueError("style preset with same scope and name already exists") from exc
-        return self._get_style_preset(preset_id)
+        return preset_storage.create_style_preset(self, name, prompt, scope, accent)
 
     def list_style_presets(self, scope: str | None = None) -> list[JimengStylePreset]:
-        with self._connect() as conn:
-            if scope:
-                normalized_scope = self._validate_style_scope(scope)
-                rows = conn.execute("SELECT * FROM style_presets WHERE scope = ? ORDER BY created_at ASC", (normalized_scope,)).fetchall()
-            else:
-                rows = conn.execute("SELECT * FROM style_presets ORDER BY scope ASC, created_at ASC").fetchall()
-        return [self._style_preset_from_row(row) for row in rows]
+        return preset_storage.list_style_presets(self, scope)
 
     def update_style_preset(self, preset_id: str, **updates: Any) -> JimengStylePreset:
-        allowed = {"name", "prompt", "scope", "accent"}
-        values = {key: value for key, value in updates.items() if key in allowed}
-        if values:
-            if "name" in values:
-                values["name"] = str(values["name"]).strip()
-                if not values["name"]:
-                    raise ValueError("style name cannot be empty")
-            if "prompt" in values:
-                values["prompt"] = str(values["prompt"]).strip()
-            if "scope" in values:
-                values["scope"] = self._validate_style_scope(str(values["scope"]))
-            if "accent" in values:
-                values["accent"] = self._normalize_style_accent(str(values["accent"]))
-            stamp = _now()
-            values["updated_at"] = stamp
-            with self._connect() as conn:
-                current = conn.execute("SELECT * FROM style_presets WHERE id = ?", (preset_id,)).fetchone()
-                if current is None:
-                    raise KeyError(f"Jimeng style preset not found: {preset_id}")
-                assignments = ", ".join(f"{key} = ?" for key in values)
-                try:
-                    conn.execute(f"UPDATE style_presets SET {assignments} WHERE id = ?", (*values.values(), preset_id))
-                except sqlite3.IntegrityError as exc:
-                    raise ValueError("style preset with same scope and name already exists") from exc
-                if "name" in values and values["name"] != current["name"] and str(values.get("scope", current["scope"])) == "video":
-                    conn.execute(
-                        "UPDATE projects SET style = ?, updated_at = ? WHERE style = ?",
-                        (values["name"], stamp, current["name"]),
-                    )
-        return self._get_style_preset(preset_id)
+        return preset_storage.update_style_preset(self, preset_id, **updates)
 
     def delete_style_preset(self, preset_id: str) -> None:
-        self._get_style_preset(preset_id)
-        with self._connect() as conn:
-            conn.execute("DELETE FROM style_presets WHERE id = ?", (preset_id,))
+        return preset_storage.delete_style_preset(self, preset_id)
 
     def style_prompt_for(self, style_name: str, scope: str = "video") -> str:
-        style_name = (style_name or "").strip()
-        if not style_name:
-            return ""
-        scope = self._validate_style_scope(scope)
-        with self._connect() as conn:
-            row = conn.execute("SELECT prompt FROM style_presets WHERE scope = ? AND name = ?", (scope, style_name)).fetchone()
-        if row is None:
-            return style_name
-        prompt = str(row["prompt"] or "").strip()
-        return prompt or style_name
+        return preset_storage.style_prompt_for(self, style_name, scope)
 
     def _project_root(self, project_id: str) -> Path:
         return self.output_root / "jimeng" / "projects" / project_id
@@ -1096,92 +792,31 @@ class JimengStore:
         return asset_storage.get_asset(self, asset_id)
 
     def _binding_from_row(self, row: sqlite3.Row) -> JimengAssetBinding:
-        return JimengAssetBinding(
-            id=row["id"],
-            project_id=row["project_id"],
-            shot_id=row["shot_id"],
-            asset_id=row["asset_id"],
-            asset_type=JimengAssetType(row["asset_type"]),
-            source=row["source"],
-            locked=bool(row["locked"]),
-            voice_enabled=bool(row["voice_enabled"]),
-            slot_order=row["slot_order"],
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
+        return binding_storage.binding_from_row(row)
 
     def _get_binding(self, binding_id: str) -> JimengAssetBinding:
-        with self._connect() as conn:
-            row = conn.execute("SELECT * FROM asset_bindings WHERE id = ?", (binding_id,)).fetchone()
-        if row is None:
-            raise KeyError(f"Jimeng binding not found: {binding_id}")
-        return self._binding_from_row(row)
+        return binding_storage.get_binding(self, binding_id)
 
     def _queue_item_from_row(self, row: sqlite3.Row) -> JimengQueueItem:
         return queue_storage.queue_item_from_row(row)
 
     def _candidate_from_row(self, row: sqlite3.Row) -> JimengVideoCandidate:
-        return JimengVideoCandidate(
-            id=row["id"],
-            project_id=row["project_id"],
-            shot_id=row["shot_id"],
-            queue_item_id=row["queue_item_id"],
-            video_filename=row["video_filename"],
-            video_path=row["video_path"],
-            thumbnail_path=row["thumbnail_path"],
-            duration=row["duration"],
-            ratio=row["ratio"],
-            resolution=row["resolution"],
-            source_url=row["source_url"],
-            is_default=bool(row["is_default"]),
-            is_locked=bool(row["is_locked"]),
-            created_at=row["created_at"],
-        )
+        return candidate_storage.candidate_from_row(row)
 
     def _get_candidate(self, candidate_id: str) -> JimengVideoCandidate:
-        with self._connect() as conn:
-            row = conn.execute("SELECT * FROM video_candidates WHERE id = ?", (candidate_id,)).fetchone()
-        if row is None:
-            raise KeyError(f"Jimeng video candidate not found: {candidate_id}")
-        return self._candidate_from_row(row)
+        return candidate_storage.get_candidate(self, candidate_id)
 
     def _prompt_preset_from_row(self, row: sqlite3.Row) -> JimengPromptPreset:
-        return JimengPromptPreset(
-            id=row["id"],
-            name=row["name"],
-            scope=JimengPromptScope(row["scope"]),
-            content=row["content"],
-            variables=_loads(row["variables"], []),
-            is_default=bool(row["is_default"]),
-            enabled=bool(row["enabled"]),
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
+        return preset_storage.prompt_preset_from_row(row)
 
     def _style_preset_from_row(self, row: sqlite3.Row) -> JimengStylePreset:
-        return JimengStylePreset(
-            id=row["id"],
-            name=row["name"],
-            scope=row["scope"],
-            prompt=row["prompt"],
-            accent=row["accent"],
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
+        return preset_storage.style_preset_from_row(row)
 
     def _cli_account_from_row(self, row: sqlite3.Row) -> JimengCliAccount:
         return account_storage.cli_account_from_row(row)
 
     def _get_prompt_preset(self, preset_id: str) -> JimengPromptPreset:
-        with self._connect() as conn:
-            row = conn.execute("SELECT * FROM prompt_presets WHERE id = ?", (preset_id,)).fetchone()
-        if row is None:
-            raise KeyError(f"Jimeng prompt preset not found: {preset_id}")
-        return self._prompt_preset_from_row(row)
+        return preset_storage.get_prompt_preset(self, preset_id)
 
     def _get_style_preset(self, preset_id: str) -> JimengStylePreset:
-        with self._connect() as conn:
-            row = conn.execute("SELECT * FROM style_presets WHERE id = ?", (preset_id,)).fetchone()
-        if row is None:
-            raise KeyError(f"Jimeng style preset not found: {preset_id}")
-        return self._style_preset_from_row(row)
+        return preset_storage.get_style_preset(self, preset_id)

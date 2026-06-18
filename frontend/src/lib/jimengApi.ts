@@ -4,9 +4,19 @@ import { API_URL } from "@/lib/api";
 export type JimengProjectStatus = "draft" | "working" | "has_failed" | "completed";
 export type JimengShotStatus = "draft" | "asset_missing" | "queued" | "running" | "failed" | "completed" | "locked";
 export type JimengAssetType = "character" | "scene" | "prop";
-export type JimengQueueStatus = "waiting" | "running" | "completed" | "failed" | "canceled";
+export type JimengQueueStatus =
+  | "waiting"
+  | "submitting"
+  | "running"
+  | "polling"
+  | "retry_wait"
+  | "blocked"
+  | "completed"
+  | "failed"
+  | "canceled"
+  | "orphaned";
 export type JimengPromptScope = "system" | "user";
-export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "settings";
+export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "settings";
 export type JimengRightPanelMode = "preview" | "asset_picker";
 export type JimengShotMoveDirection = "up" | "down";
 export type JimengShotImportFormat = "plain" | "csv";
@@ -43,6 +53,7 @@ export interface JimengDurationDetectionResult {
   shot_index: number;
   duration: number | null;
   updated: boolean;
+  detected?: boolean;
   shot?: JimengShot;
 }
 
@@ -105,6 +116,11 @@ export interface JimengQueueItem {
   local_video_path: string | null;
   cli_raw_output: string | null;
   error_message: string | null;
+  attempt_count?: number;
+  next_attempt_at?: string | null;
+  last_polled_at?: string | null;
+  lease_owner?: string | null;
+  lease_expires_at?: string | null;
   submitted_at: string | null;
   finished_at: string | null;
   created_at: string;
@@ -127,6 +143,36 @@ export interface JimengVideoCandidate {
   is_locked: boolean;
   created_at: string;
 }
+
+export interface JimengBatchDownloadExportFile {
+  shot_id: string;
+  shot_index: number;
+  candidate_id: string;
+  filename: string;
+  path: string;
+}
+
+export interface JimengBatchDownloadExportResult {
+  export_dir: string;
+  files: JimengBatchDownloadExportFile[];
+  skipped: Array<{
+    shot_id: string;
+    shot_index: number;
+    reason: string;
+  }>;
+}
+
+export interface JimengCandidateExportResult {
+  shot_id: string;
+  shot_index: number;
+  candidate_id: string;
+  filename: string;
+  path: string;
+}
+
+export type JimengBatchDownloadResponse =
+  | { candidates: JimengVideoCandidate[] }
+  | JimengBatchDownloadExportResult;
 
 export interface JimengPromptPreset {
   id: string;
@@ -169,6 +215,39 @@ export interface JimengCliAccount {
 export interface JimengCliAccountsEnvelope {
   accounts: JimengCliAccount[];
   total_credit: string | null;
+  raw_total_credit?: string | null;
+  duplicate_user_ids?: string[];
+  total_credit_note?: string | null;
+}
+
+export interface JimengCliAccountIsolationDiagnostics {
+  supported: boolean | null;
+  status: "global_credentials_detected" | "empty_profile_logged_out" | "unknown" | string;
+  message: string;
+  empty_profile_user_id: string | null;
+  empty_profile_total_credit: string | null;
+  raw_output: string;
+}
+
+export interface JimengRuntimeInfo {
+  ok: boolean;
+  app: string;
+  pid: number;
+  host: string;
+  port: number;
+  started_at: string;
+  project_dir: string;
+  data_dir: string;
+  output_dir: string;
+  is_current?: boolean;
+}
+
+export interface JimengRuntimeInstancesEnvelope {
+  instances: JimengRuntimeInfo[];
+  scan_range: {
+    start: number;
+    end: number;
+  };
 }
 
 export interface JimengHighlightSpan {
@@ -209,21 +288,89 @@ export interface JimengQueueEnvelope {
   status: {
     started: boolean;
     paused: boolean;
+    worker_online: boolean;
+    worker_id: string | null;
+    worker_heartbeat_at: string | null;
+    in_flight_count: number;
     running_item: JimengQueueItem | null;
     waiting_count: number;
+    last_error: string | null;
   };
 }
 
 export interface JimengSettings {
   dreamina_executable?: string;
+  generation_provider?: "dreamina_cli" | "jimeng_api" | string;
   model_version?: string;
   poll_seconds?: number;
   duration?: number;
   ratio?: string;
   video_resolution?: string;
+  submit_interval_seconds?: number;
+  max_in_flight?: number;
+  result_poll_interval_seconds?: number;
+  max_retry_attempts?: number;
+  retry_base_seconds?: number;
+  jimeng_api_base_url?: string;
+  jimeng_api_model?: string;
+  jimeng_api_generation_mode?: string;
+  jimeng_api_ratio?: string;
+  jimeng_api_duration?: number;
+  jimeng_api_concurrency?: number;
+  jimeng_api_sessions?: JimengApiSessionSetting[];
+}
+
+export interface JimengApiSessionSetting {
+  label: string;
+  sessionid: string;
+  enabled: boolean;
+}
+
+export interface JimengLlmModelSetting {
+  id: string;
+  name: string;
+  type: "text" | "image" | "video" | "audio" | string;
+  enabled: boolean;
+}
+
+export interface JimengLlmProviderSetting {
+  id: string;
+  name: string;
+  kind: "openai_compatible" | "anthropic_compatible" | "gemini_compatible" | string;
+  enabled: boolean;
+  base_url: string;
+  api_key: string;
+  models: JimengLlmModelSetting[];
+}
+
+export interface JimengLlmAssetImageSettings {
+  global_prompt: string;
+  character_prefix: string;
+  scene_prefix: string;
+  prop_prefix: string;
+  size: string;
+}
+
+export interface JimengLlmSettings {
+  default_provider_id: string;
+  default_model_id: string;
+  providers: JimengLlmProviderSetting[];
+  asset_image: JimengLlmAssetImageSettings;
+}
+
+export interface JimengLlmAssetImageGenerationResponse {
+  asset: JimengAsset;
+  provider: JimengLlmProviderSetting;
+  model: JimengLlmModelSetting;
+  prompt: string;
+  source_path: string;
+  result: Record<string, unknown>;
+  message: string;
 }
 
 export interface JimengVideoGenerationSettings {
+  provider: "dreamina_cli" | "jimeng_api" | string;
+  generation_mode: "auto" | "multimodal2video" | "text2video";
   model_version: string;
   duration: number;
   ratio: string;
@@ -243,6 +390,8 @@ export const JIMENG_VIDEO_MODELS = [
 export const JIMENG_VIDEO_RATIOS = ["1:1", "3:4", "16:9", "4:3", "9:16", "21:9"] as const;
 
 export const DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS: JimengVideoGenerationSettings = {
+  provider: "dreamina_cli",
+  generation_mode: "auto",
   model_version: "seedance2.0fast",
   duration: 5,
   ratio: "9:16",
@@ -376,6 +525,14 @@ const formDataWithFile = (file: File): FormData => {
 };
 
 export const jimengApi = {
+  getRuntimeInfo: () =>
+    axios.get<JimengRuntimeInfo>(`${API_URL}/health`).then((res) => res.data),
+  listRuntimeInstances: () =>
+    axios.get<JimengRuntimeInstancesEnvelope>(`${API_URL}/runtime/instances`).then((res) => res.data),
+  shutdownRuntime: () =>
+    axios.post<{ ok: boolean; message: string }>(`${API_URL}/runtime/shutdown`).then((res) => res.data),
+  selectDirectory: () =>
+    axios.post<{ path: string | null }>(`${API_URL}/runtime/select-directory`).then((res) => res.data),
   listProjects: () =>
     axios.get<JimengProject[]>(`${API_URL}/jimeng/projects`).then((res) => res.data),
   createProject: (data: { name: string; style?: string; description?: string; default_ratio?: string }) =>
@@ -398,7 +555,7 @@ export const jimengApi = {
   updateShot: (projectId: string, shotId: string, data: Partial<Pick<JimengShot, "prompt" | "default_duration" | "status" | "default_video_candidate_id" | "locked_video_candidate_id" | "last_error">>) =>
     axios.put<JimengShot>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}`, data).then((res) => res.data),
   detectShotDuration: (projectId: string, shotId: string) =>
-    axios.post<{ duration: number; shot: JimengShot }>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/detect_duration`).then((res) => res.data),
+    axios.post<{ duration: number; detected?: boolean; shot: JimengShot }>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/detect_duration`).then((res) => res.data),
   batchDetectShotDurations: (projectId: string) =>
     axios.post<JimengBatchDurationDetectionResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/batch_detect_duration`).then((res) => res.data),
   deleteShot: (projectId: string, shotId: string) =>
@@ -441,6 +598,14 @@ export const jimengApi = {
     axios.post<JimengAsset>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}/image`, formDataWithFile(file), multipartHeaders).then((res) => res.data),
   generateAssetImage: (projectId: string, assetId: string, data: { resolution_type?: "2k" | "4k"; poll_seconds?: number; extra_prompt?: string } = {}) =>
     axios.post<JimengAssetImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}/image/generate`, data).then((res) => res.data),
+  generateAssetImageWithLlm: (
+    projectId: string,
+    assetId: string,
+    data: { provider_id?: string; model_id?: string; size?: string; extra_prompt?: string } = {},
+  ) =>
+    axios
+      .post<JimengLlmAssetImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}/llm_image/generate`, data)
+      .then((res) => res.data),
   batchGenerateAssetImages: (
     projectId: string,
     data: { resolution_type?: "2k" | "4k"; poll_seconds?: number; extra_prompt?: string; asset_ids?: string[]; asset_type?: JimengAssetType } = {},
@@ -489,15 +654,23 @@ export const jimengApi = {
     axios.post<JimengVideoCandidate>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/candidates/${candidateId}/lock`, { locked }).then((res) => res.data),
   downloadCandidate: (projectId: string, shotId: string, candidateId: string) =>
     axios.get<Blob>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/candidates/${candidateId}/download`, { responseType: "blob" }).then((res) => res.data),
-  batchDownloadCandidates: (projectId: string) =>
-    axios.post<{ candidates: JimengVideoCandidate[] }>(`${API_URL}/jimeng/projects/${projectId}/shots/batch_download`).then((res) => res.data),
+  exportCandidate: (projectId: string, shotId: string, candidateId: string, data: { target_dir: string; overwrite?: boolean }) =>
+    axios.post<JimengCandidateExportResult>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/candidates/${candidateId}/export`, data).then((res) => res.data),
+  batchDownloadCandidates: (projectId: string, data: { target_dir?: string; shot_ids?: string[] } = {}) =>
+    axios.post<JimengBatchDownloadResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/batch_download`, data).then((res) => res.data),
 
   getSettings: () =>
     axios.get<JimengSettings>(`${API_URL}/jimeng/settings`).then((res) => res.data),
   updateSettings: (settings: JimengSettings) =>
     axios.put<JimengSettings>(`${API_URL}/jimeng/settings`, settings).then((res) => res.data),
+  getLlmSettings: () =>
+    axios.get<JimengLlmSettings>(`${API_URL}/jimeng/llm/settings`).then((res) => res.data),
+  updateLlmSettings: (settings: JimengLlmSettings) =>
+    axios.put<JimengLlmSettings>(`${API_URL}/jimeng/llm/settings`, settings).then((res) => res.data),
   listCliAccounts: () =>
     axios.get<JimengCliAccountsEnvelope>(`${API_URL}/jimeng/settings/accounts`).then((res) => res.data),
+  getCliAccountIsolationDiagnostics: () =>
+    axios.get<JimengCliAccountIsolationDiagnostics>(`${API_URL}/jimeng/settings/accounts/isolation_diagnostics`).then((res) => res.data),
   createCliAccount: (data: { label: string }) =>
     axios.post<JimengCliAccount>(`${API_URL}/jimeng/settings/accounts`, data).then((res) => res.data),
   updateCliAccount: (accountId: string, data: { label?: string }) =>
@@ -512,6 +685,20 @@ export const jimengApi = {
     axios.post<{ account: JimengCliAccount; result: JimengCliResult }>(`${API_URL}/jimeng/settings/accounts/${accountId}/query_credit`).then((res) => res.data),
   logoutCliAccount: (accountId: string) =>
     axios.post<{ account: JimengCliAccount; result: JimengCliResult }>(`${API_URL}/jimeng/settings/accounts/${accountId}/logout`).then((res) => res.data),
+  importCliAccountLoginJson: (accountId: string, credentialJson: Record<string, unknown> | string) =>
+    axios
+      .post<{ account: JimengCliAccount; result: JimengCliResult; credit_result: JimengCliResult | null }>(
+        `${API_URL}/jimeng/settings/accounts/${accountId}/login_json`,
+        { credential_json: credentialJson },
+      )
+      .then((res) => res.data),
+  importLoginJson: (credentialJson: Record<string, unknown> | string) =>
+    axios
+      .post<{ result: JimengCliResult; credit_result: JimengCliResult | null }>(
+        `${API_URL}/jimeng/settings/login_json`,
+        { credential_json: credentialJson },
+      )
+      .then((res) => res.data),
   startCliAccountLoginSession: (accountId: string, mode: JimengLoginMode = "login", openBrowser = true) =>
     axios.post<JimengLoginSession>(`${API_URL}/jimeng/settings/accounts/${accountId}/login/start`, { mode, open_browser: openBrowser }).then((res) => res.data),
   checkCli: () =>

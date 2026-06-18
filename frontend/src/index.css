@@ -157,6 +157,13 @@ body {
   .glass-button {
     @apply bg-hover-bg hover:bg-glass backdrop-blur-sm border border-glass-border rounded-md px-4 py-2 transition-all active:scale-95;
   }
+
+  .modal-panel {
+    background-color: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-default);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    backdrop-filter: none;
+  }
 }
 
 /* Fast tooltip via data-tip attribute — zero extra DOM, ~200ms delay */

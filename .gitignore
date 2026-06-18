@@ -2,6 +2,7 @@ runtime_data/
 build_cache/
 releases/
 backend/data/
+backend/1/
 build_exe/
 dist_exe/
 frontend/dist/

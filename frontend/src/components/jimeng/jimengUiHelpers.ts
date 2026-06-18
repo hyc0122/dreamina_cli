@@ -1,11 +1,12 @@
 import type { JimengQueueItem, JimengQueueStatus, JimengVideoCandidate } from "@/lib/jimengApi";
 
 export type JimengGenerationLockFilter = "all" | "locked" | "unlocked";
+export type JimengQueueFilterStatus = "waiting" | "running" | "completed" | "failed" | "canceled";
 
 export interface JimengGenerationCandidateFilters {
   projectId?: string;
   shotId?: string;
-  queueStatus?: JimengQueueStatus | "all";
+  queueStatus?: JimengQueueStatus | JimengQueueFilterStatus | "all";
   lockState?: JimengGenerationLockFilter;
   queueStatusById?: Record<string, JimengQueueStatus | undefined>;
 }
@@ -18,16 +19,23 @@ export interface JimengQueueStatusMeta {
   detail: string;
 }
 
-const QUEUE_STATUS_LABELS: Record<JimengQueueStatus, string> = {
+const RUNNING_QUEUE_STATUSES = new Set<JimengQueueStatus>(["submitting", "running", "polling"]);
+const WAITING_QUEUE_STATUSES = new Set<JimengQueueStatus>(["waiting", "retry_wait", "blocked"]);
+const FAILED_QUEUE_STATUSES = new Set<JimengQueueStatus>(["failed", "orphaned"]);
+const RUNNING_GEN_STATUSES = new Set(["querying", "running", "pending", "processing"]);
+const SUCCESS_GEN_STATUSES = new Set(["success", "completed", "complete"]);
+const FAILED_GEN_STATUSES = new Set(["failed", "fail", "error", "canceled", "cancelled"]);
+
+const QUEUE_STATUS_LABELS: Record<JimengQueueFilterStatus, string> = {
   waiting: "等待中",
-  running: "生成中",
+  running: "在途中",
   completed: "已完成",
   failed: "失败",
   canceled: "已取消",
 };
 
 const QUEUE_STATUS_CLASSES: Record<
-  JimengQueueStatus,
+  JimengQueueFilterStatus,
   Pick<JimengQueueStatusMeta, "dotClassName" | "badgeClassName" | "rowClassName">
 > = {
   waiting: {
@@ -57,16 +65,91 @@ const QUEUE_STATUS_CLASSES: Record<
   },
 };
 
+const compact = (value: string, max = 120): string => (value.length > max ? `${value.slice(0, max)}...` : value);
+
+function firstJsonMessage(value: string): string | null {
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    for (const key of ["fail_reason", "error_message", "message", "detail", "raw_output"]) {
+      const message = parsed[key];
+      if (typeof message === "string" && message.trim()) {
+        return message.trim();
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function summarizeJimengError(value: string | null | undefined): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return "暂无错误详情。";
+  }
+  const message = firstJsonMessage(raw) ?? raw;
+  const lower = message.toLowerCase();
+
+  if (lower.includes("exceededconcurrencylimit") || lower.includes("concurrency") || message.includes("并发")) {
+    return "即梦并发或队列达到上限，这条任务没有下发成功，稍后重试即可。";
+  }
+  if (lower.includes("queue full") || message.includes("队列已满")) {
+    return "即梦队列已满，这条任务暂时没有下发成功，稍后重试即可。";
+  }
+  if (lower.includes("session") || lower.includes("credential") || message.includes("登录") || message.includes("凭证")) {
+    return "即梦登录凭证不可用，请在即梦设置里重新检测或登录。";
+  }
+  if (lower.includes("http 599") || lower.includes("10061") || lower.includes("timeout") || message.includes("无法连接")) {
+    return "即梦接口连接失败，当前网络或官方接口暂时不可用。";
+  }
+  if (lower.includes("failed") || lower.includes("error") || message.includes("失败")) {
+    if (message.startsWith("即梦返回失败")) {
+      return compact(message, 90);
+    }
+    return `即梦返回失败：${compact(message, 80)}`;
+  }
+  return compact(message, 90);
+}
+
+export function getQueueFilterStatus(item: JimengQueueItem): JimengQueueFilterStatus {
+  const genStatus = item.gen_status?.toLowerCase() ?? "";
+  const hasError = Boolean(item.error_message?.trim());
+  const rawOutput = `${item.cli_raw_output ?? ""} ${item.error_message ?? ""}`.toLowerCase();
+
+  if (item.status === "canceled" || genStatus === "canceled" || genStatus === "cancelled") {
+    return "canceled";
+  }
+  if (item.status === "completed" || SUCCESS_GEN_STATUSES.has(genStatus) || item.local_video_path) {
+    return "completed";
+  }
+  if (
+    FAILED_QUEUE_STATUSES.has(item.status) ||
+    FAILED_GEN_STATUSES.has(genStatus) ||
+    hasError ||
+    rawOutput.includes("fail_reason") ||
+    rawOutput.includes("exceededconcurrencylimit")
+  ) {
+    return "failed";
+  }
+  if (RUNNING_QUEUE_STATUSES.has(item.status) || RUNNING_GEN_STATUSES.has(genStatus) || item.submit_id) {
+    return "running";
+  }
+  if (WAITING_QUEUE_STATUSES.has(item.status)) {
+    return "waiting";
+  }
+  return "failed";
+}
+
 export function getQueueStatusMeta(item: JimengQueueItem): JimengQueueStatusMeta {
-  const classes = QUEUE_STATUS_CLASSES[item.status];
+  const displayStatus = getQueueFilterStatus(item);
+  const classes = QUEUE_STATUS_CLASSES[displayStatus];
   const detail =
-    item.error_message ||
-    item.gen_status ||
-    item.submit_id ||
-    (item.status === "waiting" ? `队列位置 #${item.position}` : "");
+    displayStatus === "failed"
+      ? summarizeJimengError(item.error_message || item.cli_raw_output || item.gen_status)
+      : item.gen_status || item.submit_id || (displayStatus === "waiting" ? `队列位置 #${item.position}` : QUEUE_STATUS_LABELS[displayStatus]);
 
   return {
-    label: QUEUE_STATUS_LABELS[item.status],
+    label: QUEUE_STATUS_LABELS[displayStatus],
     ...classes,
     detail,
   };
@@ -90,7 +173,11 @@ export function filterGenerationCandidates(
       return false;
     }
     if (filters.queueStatus && filters.queueStatus !== "all") {
-      return filters.queueStatusById?.[candidate.queue_item_id] === filters.queueStatus;
+      const rawStatus = filters.queueStatusById?.[candidate.queue_item_id];
+      if (!rawStatus) {
+        return false;
+      }
+      return getQueueFilterStatus({ status: rawStatus } as JimengQueueItem) === filters.queueStatus;
     }
     return true;
   });

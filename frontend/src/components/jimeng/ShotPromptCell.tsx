@@ -7,9 +7,9 @@ import { jimengApi, type JimengHighlightSpan, type JimengShot } from "@/lib/jime
 import { buildPromptSegments } from "./promptHighlight";
 
 const HIGHLIGHT_CLASS = {
-  character: "border-sky-400/25 bg-sky-400/10 text-sky-200",
-  scene: "border-emerald-400/25 bg-emerald-400/10 text-emerald-200",
-  prop: "border-amber-400/25 bg-amber-400/10 text-amber-200",
+  character: "border-sky-300 bg-sky-100 text-sky-800 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-200",
+  scene: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-200",
+  prop: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-200",
 } as const;
 
 interface ShotPromptCellProps {

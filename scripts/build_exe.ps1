@@ -115,5 +115,15 @@ if (-not (Test-Path -LiteralPath $OutputExe)) {
   throw "打包完成但没有找到 EXE：$OutputExe"
 }
 
+$DocsSource = Join-Path $Root "docs"
+$DocsTarget = Join-Path $AppDistPath "docs"
+if (Test-Path -LiteralPath $DocsSource) {
+  Write-Host "== copy docs ==" -ForegroundColor Cyan
+  if (Test-Path -LiteralPath $DocsTarget) {
+    Remove-Item -LiteralPath $DocsTarget -Recurse -Force
+  }
+  Copy-Item -LiteralPath $DocsSource -Destination $DocsTarget -Recurse -Force
+}
+
 Write-Host "== build complete ==" -ForegroundColor Green
 Write-Host "EXE: $OutputExe"

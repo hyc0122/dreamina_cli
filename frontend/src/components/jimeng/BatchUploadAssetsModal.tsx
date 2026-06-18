@@ -71,7 +71,7 @@ export default function BatchUploadAssetsModal({ projectId, open, defaultImageRa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4 py-6 backdrop-blur-sm" {...backdropProps}>
       <OperationOverlay open={submitting} title="上传处理中，请等待..." subtitle="正在保存图片、音色和资产信息，完成后会自动刷新资产库。" />
-      <div className="glass-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-glass-border bg-elevated p-4 shadow-2xl sm:p-5">
+      <div className="modal-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-lg p-4 sm:p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Batch Upload</p>
