@@ -4,8 +4,6 @@
 
 这是一个独立的即梦 CLI 批量分镜生产工具，用于管理剧本、分镜提示词、角色/场景/道具资产、即梦 CLI 视频生成队列、候选视频回收和本地导出。
 
-> 当前 GitHub 仓库只上传源码、脚本和文档，不包含测试目录、本地运行数据、生成视频、打包产物和依赖缓存。
-
 ## 主要功能
 
 - 剧本项目管理：创建、选择和管理多个剧本项目。
@@ -49,7 +47,7 @@ curl -s https://jimeng.jianying.com/cli | bash
 
 - 后端使用 FastAPI。
 - 前端使用 Vite + React + TypeScript。
-- 本地数据默认保存在项目运行目录下的 `runtime_data/`，该目录不会上传到 GitHub。
+- 本地数据默认保存在项目运行目录下的 `runtime_data/`。
 
 ## 从 GitHub 拉取项目
 
@@ -284,32 +282,6 @@ https://jimeng.jianying.com/dreamina/cli/v1/dreamina_cli_login
 ```
 
 清理运行缓存和构建产物。使用前请确认是否需要保留本地数据。
-
-## GitHub 上传范围
-
-应该上传：
-
-- `backend/`
-- `frontend/` 源码
-- `packaging/`
-- `scripts/`
-- `docs/`
-- `README.md`
-- `pyproject.toml`
-- 启动脚本和配置文件
-
-不应该上传：
-
-- `tests/`
-- `frontend/src/**/__tests__/`
-- `runtime_data/`
-- `build_cache/`
-- `releases/`
-- `frontend/dist/`
-- `frontend/node_modules/`
-- `.pytest_cache/`
-- `__pycache__/`
-- 本地生成的视频、图片、音频和数据库
 
 ## 目录结构
 
