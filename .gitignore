@@ -1,0 +1,15 @@
+runtime_data/
+build_cache/
+releases/
+backend/data/
+build_exe/
+dist_exe/
+frontend/dist/
+frontend/node_modules/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.superpowers/
