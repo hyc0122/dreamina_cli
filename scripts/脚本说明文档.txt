@@ -1,0 +1,39 @@
+`scripts` 里面四个脚本用途如下：
+
+1. [build_exe.ps1](G:/漫剧/LumenX/dreamina_cli/scripts/build_exe.ps1)  
+一键打包 EXE 用的脚本。会先构建前端 `frontend/dist`，再用 PyInstaller 打包 `packaging/dreamina_desktop.py`，最终输出到 `releases/即梦cli批量工具/即梦cli批量工具.exe`。  
+运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build_exe.ps1
+```
+
+2. [start_local.ps1](G:/漫剧/LumenX/dreamina_cli/scripts/start_local.ps1)  
+本地开发启动脚本。会启动三个进程：后端 API、队列 worker、前端网页，并自动打开 `#/jimeng` 页面。它会把进程 PID 写到：
+
+```text
+runtime_data/runtime/local-processes.json
+```
+
+3. [verify_all.ps1](G:/漫剧/LumenX/dreamina_cli/scripts/verify_all.ps1)  
+测试验证脚本。会跑后端测试、前端测试和前端构建：
+
+```powershell
+python -m pytest tests -q
+npm run test
+npm run build
+```
+
+用于检查项目有没有明显坏掉。
+
+4. [clean_runtime_cache.ps1](G:/漫剧/LumenX/dreamina_cli/scripts/clean_runtime_cache.ps1)  
+清理缓存脚本。它会删除：
+
+```text
+runtime_data
+build_cache
+frontend/dist
+frontend/tsconfig.tsbuildinfo
+```
+
+如果加 `-IncludeReleases`，还会删除 `releases`。这个脚本要谨慎用，因为 `runtime_data` 里面可能有本地运行数据、缓存、生成结果、项目数据等。现在建议先不要随便运行它。
