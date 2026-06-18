@@ -12,7 +12,9 @@ from .context import (
     _detect_duration_seconds,
     _dump,
     _model_data,
+    clamp_video_duration_seconds,
     get_store,
+    normalize_optional_video_duration_seconds,
 )
 from .schemas import (
     BatchReplaceRequest,
@@ -26,15 +28,11 @@ from ..jimeng_matching import calculate_highlights, match_assets_for_prompt, par
 
 
 router = APIRouter(prefix="/jimeng", tags=["jimeng-shots"])
-MIN_VIDEO_DURATION_SECONDS = 4
-MAX_VIDEO_DURATION_SECONDS = 15
 DEFAULT_DURATION_WHEN_UNDETECTED = 15
 
 
 def _normalize_detected_duration(duration: int | None) -> int:
-    if duration is None:
-        return DEFAULT_DURATION_WHEN_UNDETECTED
-    return min(MAX_VIDEO_DURATION_SECONDS, max(MIN_VIDEO_DURATION_SECONDS, duration))
+    return clamp_video_duration_seconds(duration, default=DEFAULT_DURATION_WHEN_UNDETECTED)
 
 
 @router.get("/projects/{project_id}/shots")
@@ -103,7 +101,14 @@ def match_assets(project_id: str):
 
 @router.put("/projects/{project_id}/shots/{shot_id}")
 def update_shot(project_id: str, shot_id: str, request: ShotUpdate):
-    return _call(lambda: (get_store().get_shot(project_id, shot_id), _dump(get_store().update_shot(shot_id, **_model_data(request, exclude_unset=True))))[1])
+    def update():
+        get_store().get_shot(project_id, shot_id)
+        updates = _model_data(request, exclude_unset=True)
+        if "default_duration" in updates:
+            updates["default_duration"] = normalize_optional_video_duration_seconds(updates["default_duration"])
+        return _dump(get_store().update_shot(shot_id, **updates))
+
+    return _call(update)
 
 
 @router.post("/projects/{project_id}/shots/{shot_id}/detect_duration")
