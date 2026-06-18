@@ -148,7 +148,7 @@ export default function JimengWorkbenchPage() {
   }, [focusedShotId, selectedShotId, selectedShotIds, shots]);
 
   useEffect(() => {
-    if (!focusedShot?.default_duration) {
+    if (focusedShot?.default_duration == null) {
       return;
     }
     const syncKey = `${focusedShot.id}:${focusedShot.default_duration}`;

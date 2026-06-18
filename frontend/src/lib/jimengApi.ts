@@ -391,6 +391,9 @@ export const JIMENG_VIDEO_RATIOS = ["1:1", "3:4", "16:9", "4:3", "9:16", "21:9"]
 export const JIMENG_VIDEO_DURATION_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 4);
 
 export const clampJimengVideoDuration = (value: unknown): number => {
+  if (value === null || value === undefined || value === "") {
+    return 5;
+  }
   const duration = Number(value);
   if (!Number.isFinite(duration)) {
     return 5;
