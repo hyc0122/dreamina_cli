@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import clsx from "clsx";
-import { Ban, Download, Image as ImageIcon, Lock, LockOpen, PlaySquare, RefreshCw, ShieldCheck, Trash2, Users, Video } from "lucide-react";
+import { Ban, CheckSquare, Download, Image as ImageIcon, Lock, LockOpen, PlaySquare, RefreshCw, ShieldCheck, Square, Trash2, Users, Video } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { jimengMediaUrl, JIMENG_ASSET_TYPE_LABELS } from "@/components/jimeng/assets/AssetMiniCard";
 import { formatUpdatedAt } from "@/components/jimeng/assets/assetManagerShared";
@@ -86,6 +86,11 @@ const llmRecordStatusClass = (status: string): string => {
   return "border-amber-400/30 bg-amber-500/10 text-amber-200";
 };
 
+const llmRecordSubmittedAt = (record: JimengLlmAssetImageRecord): string => record.created_at || record.updated_at || "";
+
+const sortLlmRecordsBySubmittedAt = (records: JimengLlmAssetImageRecord[]): JimengLlmAssetImageRecord[] =>
+  [...records].sort((left, right) => llmRecordSubmittedAt(right).localeCompare(llmRecordSubmittedAt(left)));
+
 export default function JimengGenerationHistoryPage() {
   const projects = useJimengStore((state) => state.projects);
   const currentProject = useJimengStore((state) => state.currentProject);
@@ -104,6 +109,7 @@ export default function JimengGenerationHistoryPage() {
   const [queueStatus, setQueueStatus] = useState<JimengQueueStatus | "all">("all");
   const [lockState, setLockState] = useState<LockFilter>("all");
   const [llmRecordStatus, setLlmRecordStatus] = useState<LlmRecordStatusFilter>("all");
+  const [selectedLlmRecordIds, setSelectedLlmRecordIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -147,6 +153,10 @@ export default function JimengGenerationHistoryPage() {
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    setSelectedLlmRecordIds((ids) => ids.filter((id) => llmImageRecords.some((record) => record.id === id)));
+  }, [llmImageRecords]);
 
   const projectById = useMemo(() => {
     const entries = currentProject ? [...projects, currentProject] : projects;
@@ -208,9 +218,11 @@ export default function JimengGenerationHistoryPage() {
           }
           return record.status === llmRecordStatus;
         })
-        .sort((left, right) => right.updated_at.localeCompare(left.updated_at)),
+        .sort((left, right) => llmRecordSubmittedAt(right).localeCompare(llmRecordSubmittedAt(left))),
     [llmImageRecords, llmRecordStatus, projectId],
   );
+  const allFilteredLlmSelected =
+    filteredLlmRecords.length > 0 && filteredLlmRecords.every((record) => selectedLlmRecordIds.includes(record.id));
 
   const activeCount =
     historyMode === "video" ? filteredCandidates.length : historyMode === "asset" ? filteredAssetRecords.length : filteredLlmRecords.length;
@@ -224,7 +236,7 @@ export default function JimengGenerationHistoryPage() {
       for (const record of records) {
         next.set(record.id, record);
       }
-      return Array.from(next.values()).sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+      return sortLlmRecordsBySubmittedAt(Array.from(next.values()));
     });
   }, []);
 
@@ -301,6 +313,39 @@ export default function JimengGenerationHistoryPage() {
       setNotice(`已删除生图记录：${record.asset_name}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "删除大模型生图记录失败");
+    }
+  };
+
+  const toggleLlmRecordSelection = (recordId: string) => {
+    setSelectedLlmRecordIds((ids) => (ids.includes(recordId) ? ids.filter((id) => id !== recordId) : [...ids, recordId]));
+  };
+
+  const toggleAllFilteredLlmRecords = () => {
+    const filteredIds = filteredLlmRecords.map((record) => record.id);
+    if (allFilteredLlmSelected) {
+      setSelectedLlmRecordIds((ids) => ids.filter((id) => !filteredIds.includes(id)));
+      return;
+    }
+    setSelectedLlmRecordIds((ids) => [...ids, ...filteredIds.filter((id) => !ids.includes(id))]);
+  };
+
+  const batchDeleteLlmRecords = async () => {
+    if (selectedLlmRecordIds.length === 0) {
+      return;
+    }
+    if (!window.confirm(`批量删除选中的 ${selectedLlmRecordIds.length} 条大模型生图记录？本地已保存的资产图片不会删除。`)) {
+      return;
+    }
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await jimengApi.batchDeleteLlmAssetImageRecords(selectedLlmRecordIds);
+      const deletedIds = new Set(response.deleted);
+      setLlmImageRecords((items) => items.filter((item) => !deletedIds.has(item.id)));
+      setSelectedLlmRecordIds((ids) => ids.filter((id) => !deletedIds.has(id)));
+      setNotice(`已删除 ${response.deleted.length} 条大模型生图记录`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "批量删除大模型生图记录失败");
     }
   };
 
@@ -499,6 +544,25 @@ export default function JimengGenerationHistoryPage() {
                   <RefreshCw size={14} />
                   继续获取全部
                 </button>
+                <button
+                  type="button"
+                  onClick={toggleAllFilteredLlmRecords}
+                  disabled={filteredLlmRecords.length === 0}
+                  className="inline-flex items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {allFilteredLlmSelected ? <CheckSquare size={14} className="text-primary" /> : <Square size={14} />}
+                  {allFilteredLlmSelected ? "取消全选当前" : "全选当前"}
+                  <span className="rounded border border-glass-border bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{selectedLlmRecordIds.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => batchDeleteLlmRecords()}
+                  disabled={selectedLlmRecordIds.length === 0}
+                  className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Trash2 size={14} />
+                  批量删除记录
+                </button>
               </div>
             )}
           </div>
@@ -656,13 +720,22 @@ export default function JimengGenerationHistoryPage() {
               </div>
             )
           ) : filteredLlmRecords.length > 0 ? (
-            <div className="grid gap-3 p-4 xl:grid-cols-2 2xl:grid-cols-3">
+            <div className="space-y-2 p-4">
               {filteredLlmRecords.map((record) => {
                 const imageUrl = jimengMediaUrl(record.asset_image_path, record.updated_at);
                 const pending = LLM_PENDING_STATUSES.has(record.status);
-                const feedbackItems = (record.feedback ?? []).slice(-4).reverse();
+                const selected = selectedLlmRecordIds.includes(record.id);
+                const feedbackItems = (record.feedback ?? []).slice(-3).reverse();
                 return (
-                  <article key={record.id} className="grid gap-3 rounded-lg border border-glass-border bg-surface-inset p-3 sm:grid-cols-[150px_minmax(0,1fr)]">
+                  <article key={record.id} className="grid gap-3 rounded-lg border border-glass-border bg-surface-inset p-3 xl:grid-cols-[32px_120px_minmax(0,1fr)_auto] xl:items-start">
+                    <button
+                      type="button"
+                      onClick={() => toggleLlmRecordSelection(record.id)}
+                      className="grid h-8 w-8 place-items-center rounded-md border border-glass-border bg-panel-bg text-text-secondary hover:bg-hover-bg hover:text-foreground"
+                      title={selected ? "取消选择" : "选择记录"}
+                    >
+                      {selected ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} />}
+                    </button>
                     <button
                       type="button"
                       onClick={() => imageUrl && window.open(imageUrl, "_blank", "noopener,noreferrer")}
@@ -673,42 +746,39 @@ export default function JimengGenerationHistoryPage() {
                       {imageUrl ? (
                         <img src={imageUrl} alt={record.asset_name} className="h-full w-full object-cover transition-transform hover:scale-[1.03]" />
                       ) : (
-                        <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center">
-                          <RefreshCw size={22} />
+                        <div className="flex h-full flex-col items-center justify-center gap-1.5 px-2 text-center">
+                          <RefreshCw size={18} />
                           <span className="text-[11px]">等待获取</span>
                         </div>
                       )}
                     </button>
                     <div className="min-w-0">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <span className={clsx("inline-flex rounded border px-2 py-0.5 text-xs font-semibold", llmRecordStatusClass(record.status))}>
-                            {LLM_STATUS_LABELS[record.status] ?? record.status}
-                          </span>
-                          <h3 className="mt-2 truncate text-sm font-semibold text-foreground" title={record.asset_name}>
-                            {record.asset_name}
-                          </h3>
-                        </div>
-                        <span className="shrink-0 rounded border border-glass-border bg-panel-bg px-2 py-0.5 text-[11px] text-text-muted">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={clsx("inline-flex rounded border px-2 py-0.5 text-xs font-semibold", llmRecordStatusClass(record.status))}>
+                          {LLM_STATUS_LABELS[record.status] ?? record.status}
+                        </span>
+                        <span className="rounded border border-glass-border bg-panel-bg px-2 py-0.5 text-[11px] text-text-muted">
                           {JIMENG_ASSET_TYPE_LABELS[record.asset_type] ?? record.asset_type}
                         </span>
+                        <h3 className="min-w-[160px] flex-1 truncate text-sm font-semibold text-foreground" title={record.asset_name}>
+                          {record.asset_name}
+                        </h3>
                       </div>
-                      <p className="mt-1 truncate text-xs text-text-muted" title={projectById.get(record.project_id)?.name ?? record.project_id}>
-                        项目：{projectById.get(record.project_id)?.name ?? record.project_id}
-                      </p>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
+                        <span title={projectById.get(record.project_id)?.name ?? record.project_id}>项目：{projectById.get(record.project_id)?.name ?? record.project_id}</span>
+                        <span>提交：{formatUpdatedAt(llmRecordSubmittedAt(record))}</span>
+                        <span>更新：{formatUpdatedAt(record.updated_at)}</span>
+                        <span>获取 {record.poll_count} 次</span>
+                        <span>进度 {record.progress || "未知"}</span>
+                      </div>
                       <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-text-muted">
-                        <span className="max-w-[160px] truncate rounded border border-glass-border px-1.5 py-0.5">{record.provider_name || record.provider_id}</span>
-                        <span className="max-w-[160px] truncate rounded border border-glass-border px-1.5 py-0.5">{record.model_name || record.model_id}</span>
+                        <span className="max-w-[180px] truncate rounded border border-glass-border px-1.5 py-0.5">{record.provider_name || record.provider_id}</span>
+                        <span className="max-w-[180px] truncate rounded border border-glass-border px-1.5 py-0.5">{record.model_name || record.model_id}</span>
                         <span className="rounded border border-glass-border px-1.5 py-0.5">{record.size || "auto"}</span>
+                        <span className="max-w-[220px] truncate rounded border border-glass-border px-1.5 py-0.5 font-mono">task_id：{record.task_id || "未返回"}</span>
                       </div>
-                      <p className="mt-2 truncate text-xs text-text-muted" title={record.task_id || "暂无 task_id"}>
-                        task_id：<span className="font-mono text-text-secondary">{record.task_id || "未返回"}</span>
-                      </p>
-                      <p className="mt-1 text-xs text-text-muted">
-                        获取 {record.poll_count} 次，进度 {record.progress || "未知"}，更新时间 {formatUpdatedAt(record.updated_at)}
-                      </p>
                       <p className="mt-2 line-clamp-2 text-xs leading-5 text-text-secondary" title={record.prompt}>
-                        {compact(record.prompt, 120)}
+                        {compact(record.prompt, 180)}
                       </p>
                       {record.error ? (
                         <p className="mt-2 line-clamp-2 rounded border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-xs leading-5 text-red-200" title={record.error}>
@@ -716,7 +786,7 @@ export default function JimengGenerationHistoryPage() {
                         </p>
                       ) : null}
                       {feedbackItems.length > 0 ? (
-                        <div className="mt-2 space-y-1 rounded border border-glass-border bg-black/15 p-2">
+                        <div className="mt-2 grid gap-1 rounded border border-glass-border bg-black/10 p-2">
                           {feedbackItems.map((item) => (
                             <p key={`${item.at}-${item.message}`} className="truncate text-[11px] text-text-muted" title={`${item.at} ${item.message}`}>
                               <span className="font-mono text-text-secondary">{formatUpdatedAt(item.at)}</span> {item.message}
@@ -724,34 +794,34 @@ export default function JimengGenerationHistoryPage() {
                           ))}
                         </div>
                       ) : null}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => pollOneLlmRecord(record)}
-                          disabled={!pending}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-45"
-                        >
-                          <RefreshCw size={13} />
-                          继续获取
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => cancelLlmRecord(record)}
-                          disabled={!pending}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-45"
-                        >
-                          <Ban size={13} />
-                          取消
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteLlmRecord(record)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 hover:bg-red-500/15"
-                        >
-                          <Trash2 size={13} />
-                          删除
-                        </button>
-                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 xl:w-28 xl:flex-col">
+                      <button
+                        type="button"
+                        onClick={() => pollOneLlmRecord(record)}
+                        disabled={!pending}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <RefreshCw size={13} />
+                        继续获取
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cancelLlmRecord(record)}
+                        disabled={!pending}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-md border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <Ban size={13} />
+                        取消
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteLlmRecord(record)}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 hover:bg-red-500/15"
+                      >
+                        <Trash2 size={13} />
+                        删除
+                      </button>
                     </div>
                   </article>
                 );

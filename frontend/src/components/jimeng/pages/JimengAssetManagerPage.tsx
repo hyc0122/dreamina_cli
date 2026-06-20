@@ -14,8 +14,10 @@ import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssets
 import CreateAssetModal from "@/components/jimeng/assets/CreateAssetModal";
 import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
 import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
-import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
+import { jimengApi, type JimengAsset, type JimengAssetType, type JimengLlmAssetImageRecord, type JimengStylePreset } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
+
+const LLM_PENDING_RECORD_STATUSES = new Set(["submitted", "running", "timeout", "poll_error"]);
 
 const ASSET_TABS: Array<{ type: JimengAssetType; icon: LucideIcon }> = [
   { type: "character", icon: Volume2 },
@@ -71,6 +73,7 @@ export default function JimengAssetManagerPage() {
   const [stylePresets, setStylePresets] = useState<JimengStylePreset[]>([]);
   const [imageModelOptions, setImageModelOptions] = useState<LlmModelOption[]>([]);
   const [fallbackImageModelValue, setFallbackImageModelValue] = useState("");
+  const [llmImageRecords, setLlmImageRecords] = useState<JimengLlmAssetImageRecord[]>([]);
 
   const refreshProject = useCallback(async () => {
     if (currentProject?.id) {
@@ -78,9 +81,26 @@ export default function JimengAssetManagerPage() {
     }
   }, [currentProject?.id, loadProjectData]);
 
+  const loadLlmImageRecords = useCallback(async () => {
+    if (!currentProject?.id) {
+      setLlmImageRecords([]);
+      return;
+    }
+    try {
+      const response = await jimengApi.listLlmAssetImageRecords(currentProject.id);
+      setLlmImageRecords(response.records);
+    } catch {
+      setLlmImageRecords([]);
+    }
+  }, [currentProject?.id]);
+
   useEffect(() => {
     void refreshProject();
   }, [refreshProject]);
+
+  useEffect(() => {
+    void loadLlmImageRecords();
+  }, [loadLlmImageRecords]);
 
   useEffect(() => {
     jimengApi
@@ -166,6 +186,15 @@ export default function JimengAssetManagerPage() {
   const selectedCurrentTypeAssets = useMemo(
     () => assets.filter((asset) => asset.type === activeType && selectedAssetIds.includes(asset.id)),
     [activeType, assets, selectedAssetIds],
+  );
+  const pendingImageAssetIds = useMemo(
+    () =>
+      new Set(
+        llmImageRecords
+          .filter((record) => LLM_PENDING_RECORD_STATUSES.has(record.status))
+          .map((record) => record.asset_id),
+      ),
+    [llmImageRecords],
   );
   const allFilteredSelected = filteredAssets.length > 0 && filteredAssets.every((asset) => selectedAssetIds.includes(asset.id));
 
@@ -306,6 +335,7 @@ export default function JimengAssetManagerPage() {
         await runBatch(targets, imagePromptForAsset(imageSettings, activeType));
       }
       setNotice(`批量生图完成：成功 ${successCount}，失败 ${failedCount}`);
+      await loadLlmImageRecords();
       await refreshProject();
     } catch (caught) {
       setNotice(requestErrorMessage(caught, "批量生图失败"));
@@ -503,6 +533,8 @@ export default function JimengAssetManagerPage() {
           onSettingsOpen={() => setSettingsOpen(true)}
           onSettingsChange={saveImageSettings}
           onRefresh={refreshProject}
+          assetImagePending={selectedAsset ? pendingImageAssetIds.has(selectedAsset.id) : false}
+          onLlmImageRecordsChanged={loadLlmImageRecords}
           onPreview={setPreviewAsset}
           onSelectAsset={setSelectedAssetId}
         />

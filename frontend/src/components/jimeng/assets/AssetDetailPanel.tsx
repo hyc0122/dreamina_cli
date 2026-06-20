@@ -16,9 +16,11 @@ export default function AssetDetailPanel({
   settings,
   globalImageModelValue,
   globalImageModelLabel,
+  assetImagePending = false,
   onSettingsOpen,
   onSettingsChange,
   onRefresh,
+  onLlmImageRecordsChanged,
   onPreview,
   onSelectAsset,
 }: {
@@ -28,9 +30,11 @@ export default function AssetDetailPanel({
   settings: AssetImageSettings;
   globalImageModelValue: string;
   globalImageModelLabel: string;
+  assetImagePending?: boolean;
   onSettingsOpen: () => void;
   onSettingsChange: (settings: AssetImageSettings) => void;
   onRefresh: () => Promise<void>;
+  onLlmImageRecordsChanged?: () => Promise<void>;
   onPreview: (asset: JimengAsset) => void;
   onSelectAsset: (assetId: string) => void;
 }) {
@@ -47,7 +51,7 @@ export default function AssetDetailPanel({
   const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
   const voiceUrl = jimengMediaUrl(asset?.audio_path, asset?.updated_at);
   const isCharacter = asset?.type === "character";
-  const generatingImage = asset ? generatingImageAssetIds.includes(asset.id) : false;
+  const generatingImage = asset ? generatingImageAssetIds.includes(asset.id) || assetImagePending : false;
 
   useEffect(() => {
     activeAssetIdRef.current = asset?.id ?? "";
@@ -121,6 +125,7 @@ export default function AssetDetailPanel({
       if (activeAssetIdRef.current === targetAsset.id) {
         setNotice(`${response.message || "资产图片已生成"}${submitId}`);
       }
+      await onLlmImageRecordsChanged?.();
       await onRefresh();
     } catch (caught) {
       if (activeAssetIdRef.current === targetAsset.id) {

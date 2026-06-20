@@ -58,6 +58,10 @@ class LlmAssetImageRecordPollRequest(BaseModel):
     limit: int = 20
 
 
+class LlmAssetImageRecordBatchDeleteRequest(BaseModel):
+    record_ids: list[str] = Field(default_factory=list)
+
+
 @dataclass
 class LlmGeneratedImage:
     content: bytes
