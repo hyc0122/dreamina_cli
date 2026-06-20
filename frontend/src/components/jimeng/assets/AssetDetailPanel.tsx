@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { ArrowLeft, CheckSquare, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Maximize2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
@@ -38,16 +38,19 @@ export default function AssetDetailPanel({
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingVoice, setUploadingVoice] = useState(false);
-  const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatingImageAssetIds, setGeneratingImageAssetIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const activeAssetIdRef = useRef(asset?.id ?? "");
 
   const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
   const voiceUrl = jimengMediaUrl(asset?.audio_path, asset?.updated_at);
   const isCharacter = asset?.type === "character";
+  const generatingImage = asset ? generatingImageAssetIds.includes(asset.id) : false;
 
   useEffect(() => {
+    activeAssetIdRef.current = asset?.id ?? "";
     setForm(asset ? formFromAsset(asset) : null);
     setNotice(null);
     setError(null);
@@ -99,25 +102,31 @@ export default function AssetDetailPanel({
       setError("请先填写详情描述 / 生图提示词");
       return;
     }
-    setGeneratingImage(true);
+    const targetAsset = asset;
+    const targetForm = form;
+    setGeneratingImageAssetIds((ids) => (ids.includes(targetAsset.id) ? ids : [...ids, targetAsset.id]));
     setNotice(null);
     setError(null);
     try {
-      await jimengApi.updateAsset(projectId, asset.id, buildMetadataPayload());
+      await jimengApi.updateAsset(projectId, targetAsset.id, buildMetadataPayload());
       const selectedLlmModel = parseLlmModelValue(globalImageModelValue);
-      const response = await jimengApi.generateAssetImageWithLlm(projectId, asset.id, {
+      const response = await jimengApi.generateAssetImageWithLlm(projectId, targetAsset.id, {
         provider_id: selectedLlmModel?.providerId,
         model_id: selectedLlmModel?.modelId,
-        size: assetImageSizeFromSettings(settings.resolutionType, form.imageRatio),
-        extra_prompt: imagePromptForAsset(settings, asset.type, form.characterKind),
+        size: assetImageSizeFromSettings(settings.resolutionType, targetForm.imageRatio),
+        extra_prompt: imagePromptForAsset(settings, targetAsset.type, targetForm.characterKind),
       });
       const submitId = response.result.submit_id ? `，submit_id：${response.result.submit_id}` : "";
-      setNotice(`${response.message || "资产图片已生成"}${submitId}`);
+      if (activeAssetIdRef.current === targetAsset.id) {
+        setNotice(`${response.message || "资产图片已生成"}${submitId}`);
+      }
       await onRefresh();
     } catch (caught) {
-      setError(requestErrorMessage(caught, "资产生图失败"));
+      if (activeAssetIdRef.current === targetAsset.id) {
+        setError(requestErrorMessage(caught, "资产生图失败"));
+      }
     } finally {
-      setGeneratingImage(false);
+      setGeneratingImageAssetIds((ids) => ids.filter((id) => id !== targetAsset.id));
     }
   };
 
