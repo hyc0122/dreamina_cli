@@ -146,6 +146,10 @@ export default function JimengAssetManagerPage() {
 
   const selectedAsset = useMemo(() => assets.find((asset) => asset.id === selectedAssetId) ?? null, [assets, selectedAssetId]);
   const selectedGroup = useMemo(() => (selectedAsset ? (groupedByName.get(assetGroupKey(selectedAsset)) ?? [selectedAsset]) : []), [groupedByName, selectedAsset]);
+  const selectedCurrentTypeAssets = useMemo(
+    () => assets.filter((asset) => asset.type === activeType && selectedAssetIds.includes(asset.id)),
+    [activeType, assets, selectedAssetIds],
+  );
   const allFilteredSelected = filteredAssets.length > 0 && filteredAssets.every((asset) => selectedAssetIds.includes(asset.id));
 
   const saveImageSettings = (settings: AssetImageSettings) => {
@@ -229,12 +233,16 @@ export default function JimengAssetManagerPage() {
     if (!currentProject) {
       return;
     }
-    const targets = filteredAssets.filter((asset) => asset.description.trim());
-    if (targets.length === 0) {
-      setNotice("当前筛选结果没有可生图资产，请先填写详情描述");
+    if (selectedCurrentTypeAssets.length === 0) {
+      setNotice(`请先勾选要批量生图的${JIMENG_ASSET_TYPE_LABELS[activeType]}资产`);
       return;
     }
-    if (!window.confirm(`将为当前筛选出的 ${targets.length} 个${JIMENG_ASSET_TYPE_LABELS[activeType]}资产批量生图，是否继续？`)) {
+    const targets = selectedCurrentTypeAssets.filter((asset) => asset.description.trim());
+    if (targets.length === 0) {
+      setNotice("选中的资产没有可生图内容，请先填写详情描述");
+      return;
+    }
+    if (!window.confirm(`将为选中的 ${targets.length} 个${JIMENG_ASSET_TYPE_LABELS[activeType]}资产批量生图，是否继续？`)) {
       return;
     }
     setBatchGenerating(true);
