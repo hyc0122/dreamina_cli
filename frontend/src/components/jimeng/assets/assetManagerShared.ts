@@ -1,4 +1,5 @@
 import type { JimengAsset, JimengAssetType, JimengStylePreset } from "@/lib/jimengApi";
+import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 
 export const IMAGE_MODELS = [
   { value: "dreamina4.0", label: "Dreamina 4.0" },
@@ -16,6 +17,7 @@ export type AssetImageRatio = "16:9" | "9:16";
 export interface AssetImageSettings {
   resolutionType: "2k" | "4k";
   defaultImageRatio: AssetImageRatio;
+  imageModelValue: string;
   imagePromptTemplate: string;
   characterPromptPrefix: string;
   scenePromptPrefix: string;
@@ -25,6 +27,7 @@ export interface AssetImageSettings {
 export const DEFAULT_IMAGE_SETTINGS: AssetImageSettings = {
   resolutionType: "2k",
   defaultImageRatio: "16:9",
+  imageModelValue: "",
   imagePromptTemplate: "统一画风，干净背景，主体清晰，适合作为漫剧资产参考图。",
   characterPromptPrefix: "角色资产图：保持人物五官、服装、发型稳定，适合作为后续视频参考。",
   scenePromptPrefix: "场景资产图：强调空间结构、光线、可复用背景，不要出现主体人物。",
@@ -106,6 +109,23 @@ export const writeImageSettings = (settings: AssetImageSettings) => {
     window.localStorage.setItem(ASSET_IMAGE_SETTINGS_KEY, JSON.stringify(settings));
   }
 };
+
+export const resolveAssetImageModelOption = (
+  settings: AssetImageSettings,
+  imageModelOptions: LlmModelOption[],
+  fallbackImageModelValue = "",
+): LlmModelOption | null => {
+  const saved = settings.imageModelValue ? imageModelOptions.find((model) => model.value === settings.imageModelValue) : null;
+  if (saved) {
+    return saved;
+  }
+  const fallback = fallbackImageModelValue
+    ? imageModelOptions.find((model) => model.value === fallbackImageModelValue)
+    : null;
+  return fallback ?? imageModelOptions[0] ?? null;
+};
+
+export const assetImageModelLabel = (model: LlmModelOption | null): string => model?.label ?? "未选择可用模型";
 
 export const assetGroupKey = (asset: JimengAsset): string => {
   const base = asset.name.split(/[-_—·：:]/)[0]?.trim();
