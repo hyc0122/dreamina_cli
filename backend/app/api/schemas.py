@@ -57,6 +57,11 @@ class ShotBatchDelete(BaseModel):
     shot_ids: list[str] = Field(default_factory=list)
 
 
+class ShotAssetMatchRequest(BaseModel):
+    shot_ids: list[str] = Field(default_factory=list)
+    clear_existing_auto: bool = False
+
+
 class RenderPromptPreviewRequest(BaseModel):
     prompt_preset_id: Optional[str] = None
     content: Optional[str] = None

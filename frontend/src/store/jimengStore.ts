@@ -4,6 +4,7 @@ import {
   jimengApi,
   type JimengAsset,
   type JimengAssetBinding,
+  type JimengClearMatchedAssetsResponse,
   type JimengHighlightSpan,
   type JimengMatchAssetsResponse,
   type JimengPageMode,
@@ -48,7 +49,8 @@ export interface JimengStore extends JimengStateData {
   clearShotSelection: () => void;
   submitShots: (shotIds: string[], generationSettings?: JimengVideoGenerationSettings) => Promise<void>;
   submitSelectedShots: (generationSettings?: JimengVideoGenerationSettings) => Promise<void>;
-  matchAssets: () => Promise<void>;
+  matchAssets: (shotIds: string[], options?: { clearExistingAuto?: boolean }) => Promise<JimengMatchAssetsResponse | undefined>;
+  clearMatchedAssets: (shotIds: string[]) => Promise<JimengClearMatchedAssetsResponse | undefined>;
   loadQueue: (scope?: "currentProject" | "global") => Promise<void>;
   startQueue: () => Promise<void>;
   startQueueWorker: () => Promise<void>;
@@ -268,20 +270,64 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
     await get().submitShots(get().selectedShotIds, generationSettings);
   },
 
-  matchAssets: async () => {
+  matchAssets: async (shotIds, options) => {
     const projectId = get().currentProject?.id;
-    if (!projectId) {
-      return;
+    const targetShotIds = [...new Set(shotIds)].filter(Boolean);
+    if (!projectId || targetShotIds.length === 0) {
+      return undefined;
     }
 
     set({ loading: true, error: null });
     try {
-      const matchResponse = await jimengApi.matchAssets(projectId);
+      const matchResponse = await jimengApi.matchAssets(projectId, {
+        shot_ids: targetShotIds,
+        clear_existing_auto: options?.clearExistingAuto ?? false,
+      });
       const shots = await jimengApi.listShots(projectId);
       const bindingsByShotId = await buildBindingsByShotId(projectId, shots);
-      set({ shots, bindingsByShotId, highlightsByShotId: buildHighlightsByShotId(matchResponse), loading: false });
+      const highlightsByShotId = buildHighlightsByShotId(matchResponse);
+      set((state) => ({
+        shots,
+        bindingsByShotId,
+        highlightsByShotId: {
+          ...state.highlightsByShotId,
+          ...highlightsByShotId,
+        },
+        loading: false,
+      }));
+      return matchResponse;
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });
+      throw error;
+    }
+  },
+
+  clearMatchedAssets: async (shotIds) => {
+    const projectId = get().currentProject?.id;
+    const targetShotIds = [...new Set(shotIds)].filter(Boolean);
+    if (!projectId || targetShotIds.length === 0) {
+      return undefined;
+    }
+
+    set({ loading: true, error: null });
+    try {
+      const response = await jimengApi.clearMatchedAssets(projectId, { shot_ids: targetShotIds });
+      const shots = await jimengApi.listShots(projectId);
+      const bindingsByShotId = await buildBindingsByShotId(projectId, shots);
+      const clearedHighlights = Object.fromEntries(targetShotIds.map((shotId) => [shotId, [] as JimengHighlightSpan[]]));
+      set((state) => ({
+        shots,
+        bindingsByShotId,
+        highlightsByShotId: {
+          ...state.highlightsByShotId,
+          ...clearedHighlights,
+        },
+        loading: false,
+      }));
+      return response;
+    } catch (error) {
+      set({ error: errorMessageFrom(error), loading: false });
+      throw error;
     }
   },
 

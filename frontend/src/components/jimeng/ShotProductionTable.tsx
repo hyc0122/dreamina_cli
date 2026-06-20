@@ -6,6 +6,7 @@ import {
   ArrowUp,
   CheckSquare,
   Download,
+  Eraser,
   Eye,
   FileInput,
   FileText,
@@ -129,6 +130,7 @@ export default function ShotProductionTable({
   const toggleShotSelection = useJimengStore((state) => state.toggleShotSelection);
   const setShotSelection = useJimengStore((state) => state.setShotSelection);
   const matchAssets = useJimengStore((state) => state.matchAssets);
+  const clearMatchedAssets = useJimengStore((state) => state.clearMatchedAssets);
   const loadProjectData = useJimengStore((state) => state.loadProjectData);
   const [importOpen, setImportOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
@@ -138,6 +140,14 @@ export default function ShotProductionTable({
 
   const selectedShotSet = useMemo(() => new Set(selectedShotIds), [selectedShotIds]);
   const selectedShots = useMemo(() => shots.filter((shot) => selectedShotSet.has(shot.id)), [selectedShotSet, shots]);
+  const selectedAutoBindingCount = useMemo(
+    () =>
+      selectedShots.reduce(
+        (total, shot) => total + (bindingsByShotId[shot.id] ?? []).filter((binding) => binding.source === "auto").length,
+        0,
+      ),
+    [bindingsByShotId, selectedShots],
+  );
   const allSelected = shots.length > 0 && shots.every((shot) => selectedShotSet.has(shot.id));
   const operationBusy = operationLabel !== null;
 
@@ -225,8 +235,31 @@ export default function ShotProductionTable({
 
   const runMatchAssets = () =>
     runOperation("匹配资产中", async () => {
-      await matchAssets();
-      setNotice("资产匹配已完成");
+      if (selectedShotIds.length === 0) {
+        setOperationError("请先选择要匹配资产的分镜；需要全量匹配时先点击“全选分镜”。");
+        return;
+      }
+      const response = await matchAssets(selectedShotIds);
+      const matchedCount = response?.shots.reduce((total, shot) => total + shot.matches.length, 0) ?? 0;
+      const addedCount = response?.shots.reduce((total, shot) => total + shot.bindings.length, 0) ?? 0;
+      setNotice(`已为选中的 ${selectedShotIds.length} 个分镜匹配资产：命中 ${matchedCount} 项，新增 ${addedCount} 个绑定`);
+    });
+
+  const clearSelectedMatchedAssets = () =>
+    runOperation("删除匹配资产中", async () => {
+      if (selectedShotIds.length === 0) {
+        setOperationError("请先选择要删除匹配资产的分镜。");
+        return;
+      }
+      if (selectedAutoBindingCount === 0) {
+        setOperationError("选中分镜没有自动匹配的资产绑定。");
+        return;
+      }
+      if (!window.confirm(`删除选中 ${selectedShotIds.length} 个分镜里的 ${selectedAutoBindingCount} 个自动匹配资产绑定？手动添加的资产不会删除。`)) {
+        return;
+      }
+      const response = await clearMatchedAssets(selectedShotIds);
+      setNotice(`已删除 ${response?.deleted_count ?? 0} 个自动匹配资产绑定`);
     });
 
   const batchDownload = () =>
@@ -290,8 +323,11 @@ export default function ShotProductionTable({
         <ToolbarButton icon={Plus} onClick={addShot}>
           添加分镜
         </ToolbarButton>
-        <ToolbarButton icon={Layers} onClick={runMatchAssets} disabled={loading || shots.length === 0}>
-          匹配资产
+        <ToolbarButton icon={Layers} onClick={runMatchAssets} disabled={loading || selectedShotIds.length === 0}>
+          匹配选中资产
+        </ToolbarButton>
+        <ToolbarButton icon={Eraser} onClick={clearSelectedMatchedAssets} disabled={selectedShotIds.length === 0}>
+          删除匹配资产
         </ToolbarButton>
         <ToolbarButton icon={Timer} onClick={batchDetectDurations} disabled={loading || shots.length === 0}>
           批量检测时长

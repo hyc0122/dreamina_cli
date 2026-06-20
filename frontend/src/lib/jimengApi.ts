@@ -278,6 +278,24 @@ export interface JimengMatchAssetsResponse {
   shots: JimengMatchAssetsShotResult[];
 }
 
+export interface JimengMatchAssetsRequest {
+  shot_ids?: string[];
+  clear_existing_auto?: boolean;
+}
+
+export interface JimengClearMatchedAssetsShotResult {
+  shot_id: string;
+  deleted: string[];
+  bindings: JimengAssetBinding[];
+  highlights: JimengHighlightSpan[];
+}
+
+export interface JimengClearMatchedAssetsResponse {
+  shots: JimengClearMatchedAssetsShotResult[];
+  deleted: string[];
+  deleted_count: number;
+}
+
 export interface JimengPromptPreviewResponse {
   prefix_prompt: string;
   final_prompt: string;
@@ -590,8 +608,10 @@ export const jimengApi = {
     axios.post<JimengShot>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/move`, { direction }).then((res) => res.data),
   batchReplaceShots: (projectId: string, data: { find: string; replace: string }) =>
     axios.post<{ shots: JimengShot[] }>(`${API_URL}/jimeng/projects/${projectId}/shots/batch_replace`, data).then((res) => res.data),
-  matchAssets: (projectId: string) =>
-    axios.post<JimengMatchAssetsResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/match_assets`).then((res) => res.data),
+  matchAssets: (projectId: string, data: JimengMatchAssetsRequest = {}) =>
+    axios.post<JimengMatchAssetsResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/match_assets`, data).then((res) => res.data),
+  clearMatchedAssets: (projectId: string, data: { shot_ids: string[] }) =>
+    axios.post<JimengClearMatchedAssetsResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/clear_matched_assets`, data).then((res) => res.data),
 
   listAssets: (projectId: string, type?: JimengAssetType) =>
     axios.get<JimengAsset[]>(`${API_URL}/jimeng/projects/${projectId}/assets`, { params: { type } }).then((res) => res.data),
