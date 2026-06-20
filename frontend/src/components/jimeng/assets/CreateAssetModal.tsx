@@ -6,14 +6,12 @@ import { type ChangeEvent, useEffect, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { IMAGE_MODELS, type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
-import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
+import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
 
 export default function CreateAssetModal({
   projectId,
   assetType,
   defaultImageRatio,
-  imageModelOptions = [],
   open,
   onClose,
   onCreated,
@@ -21,7 +19,6 @@ export default function CreateAssetModal({
   projectId: string;
   assetType: JimengAssetType;
   defaultImageRatio: AssetImageRatio;
-  imageModelOptions?: LlmModelOption[];
   open: boolean;
   onClose: () => void;
   onCreated: (asset: JimengAsset) => Promise<void> | void;
@@ -114,60 +111,24 @@ export default function CreateAssetModal({
         </div>
 
         <div className="mt-4 grid gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium text-text-secondary">资产/文件名 <span className="text-red-300">*</span></span>
-              <input value={draft.name} onChange={(event) => updateDraft("name", event.target.value)} className="glass-input w-full text-sm text-foreground" placeholder="必填，例如：许禾" required />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium text-text-secondary">别名</span>
-              <input value={draft.aliasesText} onChange={(event) => updateDraft("aliasesText", event.target.value)} className="glass-input w-full text-sm text-foreground" placeholder="逗号、顿号或换行分隔" />
-            </label>
-          </div>
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-text-secondary">详情描述 / 生图提示词</span>
-            <textarea value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} className="glass-input min-h-[120px] w-full resize-y text-sm leading-6 text-foreground" />
-          </label>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5">
-              <span className="block text-xs font-medium text-text-secondary">生图模型</span>
-              <select value={draft.imageModel} onChange={(event) => updateDraft("imageModel", event.target.value)} className="glass-input h-10 w-full text-sm text-foreground">
-                {IMAGE_MODELS.map((model) => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))}
-                {imageModelOptions.length > 0 ? (
-                  <optgroup label="大模型图片模型">
-                    {imageModelOptions.map((model) => (
-                      <option key={model.value} value={model.value}>
-                        {model.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-              </select>
-            </label>
-            <div className="space-y-1.5">
-              <span className="block text-xs font-medium text-text-secondary">画幅</span>
-              <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
-                {(["16:9", "9:16"] as const).map((ratio) => (
-                  <button
-                    key={ratio}
-                    type="button"
-                    onClick={() => updateDraft("imageRatio", ratio)}
-                    className={clsx(
-                      "flex-1 rounded px-3 text-xs font-medium transition-colors",
-                      draft.imageRatio === ratio ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
-                    )}
-                  >
-                    {ratio}
-                  </button>
-                ))}
-              </div>
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-text-secondary">画幅</span>
+            <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
+              {(["16:9", "9:16"] as const).map((ratio) => (
+                <button
+                  key={ratio}
+                  type="button"
+                  onClick={() => updateDraft("imageRatio", ratio)}
+                  className={clsx(
+                    "flex-1 rounded px-3 text-xs font-medium transition-colors",
+                    draft.imageRatio === ratio ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                  )}
+                >
+                  {ratio}
+                </button>
+              ))}
             </div>
-          </div>
-          <div className={clsx("grid gap-3", assetType === "character" ? "md:grid-cols-2" : "md:grid-cols-1")}>
+          </div>          <div className={clsx("grid gap-3", assetType === "character" ? "md:grid-cols-2" : "md:grid-cols-1")}>
             <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-lg border border-dashed border-glass-border bg-surface-inset px-4 py-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
               <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
                 <ImageIcon size={16} className="text-primary" />

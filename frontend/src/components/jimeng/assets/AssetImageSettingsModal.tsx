@@ -50,15 +50,16 @@ export default function AssetImageSettingsModal({
   const [selectedStyleId, setSelectedStyleId] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const normalizedValue = useMemo(() => ({ ...value, imageModelValue: value.imageModelValue || resolvedImageModelValue }), [resolvedImageModelValue, value]);
   const { requestClose, backdropProps } = useModalDismiss({
     open,
-    dirty: JSON.stringify(draft) !== JSON.stringify(value),
+    dirty: JSON.stringify(draft) !== JSON.stringify(normalizedValue),
     onClose,
   });
 
   useEffect(() => {
     if (open) {
-      setDraft({ ...value, imageModelValue: value.imageModelValue || resolvedImageModelValue });
+      setDraft(normalizedValue);
       setActiveTab("model");
       setActivePrefixType("character");
       setPreviewType("character");
@@ -66,7 +67,7 @@ export default function AssetImageSettingsModal({
       setStatusMessage(null);
       setSaveError(null);
     }
-  }, [open, resolvedImageModelValue, value]);
+  }, [normalizedValue, open]);
 
   const promptPreview = useMemo(() => imagePromptForAsset(draft, previewType), [draft, previewType]);
 

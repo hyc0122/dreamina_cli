@@ -6,15 +6,16 @@ import { type ChangeEvent, useEffect, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { IMAGE_MODELS, type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
-import { parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
+import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+import { parseLlmModelValue } from "@/components/jimeng/llm/modelOptions";
 
 export default function AssetDetailPanel({
   projectId,
   asset,
   groupedAssets,
   settings,
-  imageModelOptions = [],
+  globalImageModelValue,
+  globalImageModelLabel,
   onSettingsOpen,
   onSettingsChange,
   onRefresh,
@@ -25,7 +26,8 @@ export default function AssetDetailPanel({
   asset: JimengAsset | null;
   groupedAssets: JimengAsset[];
   settings: AssetImageSettings;
-  imageModelOptions?: LlmModelOption[];
+  globalImageModelValue: string;
+  globalImageModelLabel: string;
   onSettingsOpen: () => void;
   onSettingsChange: (settings: AssetImageSettings) => void;
   onRefresh: () => Promise<void>;
@@ -59,7 +61,6 @@ export default function AssetDetailPanel({
     name: form?.name.trim() ?? "",
     aliases: splitAliases(form?.aliasesText ?? ""),
     description: form?.description ?? "",
-    image_model: form?.imageModel ?? "dreamina4.0",
     image_ratio: form?.imageRatio ?? "16:9",
   });
 
@@ -102,7 +103,7 @@ export default function AssetDetailPanel({
     setError(null);
     try {
       await jimengApi.updateAsset(projectId, asset.id, buildMetadataPayload());
-      const selectedLlmModel = parseLlmModelValue(form.imageModel);
+      const selectedLlmModel = parseLlmModelValue(globalImageModelValue);
       const response = await jimengApi.generateAssetImageWithLlm(projectId, asset.id, {
         provider_id: selectedLlmModel?.providerId,
         model_id: selectedLlmModel?.modelId,
@@ -313,26 +314,16 @@ export default function AssetDetailPanel({
         </label>
 
         <div className="grid gap-2 sm:grid-cols-3 sm:items-end">
-          <label className="space-y-1.5">
-            <span className="block text-xs font-medium text-text-secondary">生图模型</span>
-            <select value={form.imageModel} onChange={(event) => updateForm("imageModel", event.target.value)} className="glass-input h-10 w-full text-sm text-foreground">
-              {IMAGE_MODELS.map((model) => (
-                <option key={model.value} value={model.value}>
-                  {model.label}
-                </option>
-              ))}
-              {imageModelOptions.length > 0 ? (
-                <optgroup label="大模型图片模型">
-                  {imageModelOptions.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-            </select>
-          </label>
-          <div className="space-y-1.5">
+          <div className="rounded-lg border border-glass-border bg-surface-inset p-2.5 sm:col-span-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-text-secondary">全局生图模型</span>
+              <button type="button" onClick={onSettingsOpen} className="text-xs font-medium text-primary hover:text-primary/80">
+                设置
+              </button>
+            </div>
+            <p className="mt-1 truncate text-sm font-semibold text-foreground" title={globalImageModelLabel}>{globalImageModelLabel}</p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
             <span className="block text-xs font-medium text-text-secondary">画幅</span>
             <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
               {(["16:9", "9:16"] as const).map((ratio) => (
@@ -362,7 +353,6 @@ export default function AssetDetailPanel({
             </select>
           </label>
         </div>
-
         <div className="rounded-lg border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-secondary">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium text-foreground">全局必填提示词与专属前缀</span>

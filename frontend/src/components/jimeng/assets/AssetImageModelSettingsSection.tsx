@@ -73,7 +73,7 @@ export default function AssetImageModelSettingsSection({
             <option value="2k">2k</option>
             <option value="4k">4k</option>
           </select>
-          <span className="block text-xs leading-5 text-text-muted">批量资产生图和单张资产生图共用这个设置。</span>
+          <span className="block text-xs leading-5 text-text-muted">用于资产生图设置里的默认分辨率。</span>
         </label>
       </div>
     </section>
