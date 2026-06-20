@@ -12,7 +12,7 @@ import AssetPreviewModal from "@/components/jimeng/assets/AssetPreviewModal";
 import AssetToolbar from "@/components/jimeng/assets/AssetToolbar";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
 import CreateAssetModal from "@/components/jimeng/assets/CreateAssetModal";
-import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
+import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
 import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import OperationOverlay from "@/components/jimeng/OperationOverlay";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
@@ -272,15 +272,23 @@ export default function JimengAssetManagerPage() {
         if (batchTargets.length === 0) {
           return;
         }
-        const result = await jimengApi.batchGenerateAssetImagesWithLlm(currentProject.id, {
-          asset_ids: batchTargets.map((asset) => asset.id),
-          asset_type: activeType,
-          provider_id: selectedLlmModel?.providerId,
-          model_id: selectedLlmModel?.modelId,
-          extra_prompt: extraPrompt,
-        });
-        successCount += result.success_count;
-        failedCount += result.failed_count;
+        const ratioGroups = new Map<"16:9" | "9:16", JimengAsset[]>();
+        for (const asset of batchTargets) {
+          const ratio = asset.image_ratio === "9:16" ? "9:16" : "16:9";
+          ratioGroups.set(ratio, [...(ratioGroups.get(ratio) ?? []), asset]);
+        }
+        for (const [ratio, assetsForRatio] of ratioGroups) {
+          const result = await jimengApi.batchGenerateAssetImagesWithLlm(currentProject.id, {
+            asset_ids: assetsForRatio.map((asset) => asset.id),
+            asset_type: activeType,
+            provider_id: selectedLlmModel?.providerId,
+            model_id: selectedLlmModel?.modelId,
+            size: assetImageSizeFromSettings(imageSettings.resolutionType, ratio),
+            extra_prompt: extraPrompt,
+          });
+          successCount += result.success_count;
+          failedCount += result.failed_count;
+        }
       };
       if (activeType === "character") {
         for (const kind of ["single", "group"] as const) {
@@ -315,7 +323,7 @@ export default function JimengAssetManagerPage() {
 
   return (
     <section className="h-full overflow-y-auto pr-1">
-      <OperationOverlay open={batchGenerating} title="批量生图中，请等待..." subtitle="正在调用大模型生成资产图片，完成后会自动刷新资产库。" />
+      <OperationOverlay open={batchGenerating} title="批量生图中，请等待..." subtitle="正在调用即梦生成资产图片，完成后会自动刷新资产库。" />
       <div className="flex flex-col gap-5 pb-4">
       <AssetToolbar projectName={currentProject.name}>
         <div className="flex flex-wrap gap-2">

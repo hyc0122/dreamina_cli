@@ -6,8 +6,9 @@ import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import AssetMiniCard, { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/AssetMiniCard";
 import AssetMetadataImportModal from "@/components/jimeng/assets/AssetMetadataImportModal";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
-import { jimengApi, type JimengAsset, type JimengAssetBinding, type JimengAssetType, type JimengShot, type JimengCharacterKind } from "@/lib/jimengApi";
-import { CHARACTER_KIND_LABELS, normalizeCharacterKind } from "@/components/jimeng/assets/assetManagerShared";
+import { jimengApi, type JimengAsset, type JimengAssetBinding, type JimengAssetType, type JimengCharacterKind, type JimengShot } from "@/lib/jimengApi";
+import { CHARACTER_KIND_LABELS, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, resolveAssetImageModelOption } from "@/components/jimeng/assets/assetManagerShared";
+import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 
 export interface AssetPickerTarget {
   shot: JimengShot;
@@ -40,7 +41,6 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
   const [uploading, setUploading] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
-  const [draftCharacterKind, setDraftCharacterKind] = useState<JimengCharacterKind>("single");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -51,8 +51,10 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [assetImagePrompt, setAssetImagePrompt] = useState("统一画风，主体清晰，适合作为分镜参考资产。");
-  const [assetImageResolution, setAssetImageResolution] = useState<"2k" | "4k">("2k");
+  const [assetImageSettings, setAssetImageSettings] = useState(() => readImageSettings());
+  const [assetImagePrompt, setAssetImagePrompt] = useState("");
+  const [imageModelOptions, setImageModelOptions] = useState<LlmModelOption[]>([]);
+  const [fallbackImageModelValue, setFallbackImageModelValue] = useState("");
   const [newAssetName, setNewAssetName] = useState("");
   const [newAssetDescription, setNewAssetDescription] = useState("");
   const [newAssetCharacterKind, setNewAssetCharacterKind] = useState<JimengCharacterKind>("single");
@@ -88,19 +90,42 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
   );
 
   const checkedAssets = useMemo(() => filteredAssets.filter((asset) => checkedAssetIds.includes(asset.id)), [checkedAssetIds, filteredAssets]);
+  const resolvedImageModelOption = useMemo(
+    () => resolveAssetImageModelOption(assetImageSettings, imageModelOptions, fallbackImageModelValue),
+    [assetImageSettings, fallbackImageModelValue, imageModelOptions],
+  );
+  const resolvedImageModelValue = resolvedImageModelOption?.value ?? "";
 
   useEffect(() => {
     setSelectedAssetId(target.assetId ?? null);
     setCheckedAssetIds([]);
+    setAssetImageSettings(readImageSettings());
+    setAssetImagePrompt("");
+    setNewAssetCharacterKind("single");
     setError(null);
     setNotice(null);
   }, [target.assetId, target.assetType, target.shot.id]);
 
   useEffect(() => {
+    jimengApi
+      .getLlmSettings()
+      .then((settings) => {
+        const options = buildLlmModelOptions(settings, "image");
+        const defaultValue = encodeLlmModelValue(settings.default_provider_id, settings.default_model_id);
+        const fallback = options.find((model) => model.value === defaultValue)?.value ?? options[0]?.value ?? "";
+        setImageModelOptions(options);
+        setFallbackImageModelValue(fallback);
+      })
+      .catch(() => {
+        setImageModelOptions([]);
+        setFallbackImageModelValue("");
+      });
+  }, []);
+
+  useEffect(() => {
     if (selectedAsset) {
       setDraftName(selectedAsset.name);
       setDraftDescription(selectedAsset.description ?? "");
-      setDraftCharacterKind(normalizeCharacterKind(selectedAsset.character_kind));
     }
   }, [selectedAsset]);
 
@@ -147,7 +172,6 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
       await jimengApi.updateAsset(projectId, selectedAsset.id, {
         name: trimmedName,
         description: draftDescription,
-        ...(target.assetType === "character" ? { character_kind: draftCharacterKind } : {}),
       });
       setNotice("资产信息已保存");
       await onBound();
@@ -209,8 +233,7 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
         name: trimmedName,
         aliases: [],
         description: newAssetDescription,
-        image_model: "dreamina4.6",
-        image_ratio: "16:9",
+        image_ratio: assetImageSettings.defaultImageRatio,
         ...(target.assetType === "character" ? { character_kind: newAssetCharacterKind } : {}),
       });
       setSelectedAssetId(created.id);
@@ -229,8 +252,13 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
   };
 
   const batchGenerateCheckedAssets = async () => {
-    if (checkedAssetIds.length === 0) {
+    const targets = checkedAssets.filter((asset) => asset.description.trim());
+    if (checkedAssets.length === 0) {
       setError("请先勾选需要生图的资产，或点击全选当前。");
+      return;
+    }
+    if (targets.length === 0) {
+      setError("勾选的资产没有可生图内容，请先填写详情描述。");
       return;
     }
 
@@ -238,13 +266,41 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
     setError(null);
     setNotice(null);
     try {
-      const result = await jimengApi.batchGenerateAssetImages(projectId, {
-        asset_ids: checkedAssetIds,
-        asset_type: target.assetType,
-        resolution_type: assetImageResolution,
-        extra_prompt: assetImagePrompt,
-      });
-      setNotice(`批量生图完成：成功 ${result.success_count} 个，失败 ${result.failed_count} 个。`);
+      const selectedLlmModel = parseLlmModelValue(resolvedImageModelValue);
+      let successCount = 0;
+      let failedCount = 0;
+      const runBatch = async (batchTargets: JimengAsset[], characterKind?: JimengCharacterKind) => {
+        if (batchTargets.length === 0) {
+          return;
+        }
+        const ratioGroups = new Map<"16:9" | "9:16", JimengAsset[]>();
+        for (const asset of batchTargets) {
+          const ratio = asset.image_ratio === "9:16" ? "9:16" : "16:9";
+          ratioGroups.set(ratio, [...(ratioGroups.get(ratio) ?? []), asset]);
+        }
+        const basePrompt = imagePromptForAsset(assetImageSettings, target.assetType, characterKind ?? "single");
+        const extraPrompt = [basePrompt, assetImagePrompt].map((item) => item.trim()).filter(Boolean).join("\n");
+        for (const [ratio, assetsForRatio] of ratioGroups) {
+          const result = await jimengApi.batchGenerateAssetImagesWithLlm(projectId, {
+            asset_ids: assetsForRatio.map((asset) => asset.id),
+            asset_type: target.assetType,
+            provider_id: selectedLlmModel?.providerId,
+            model_id: selectedLlmModel?.modelId,
+            size: assetImageSizeFromSettings(assetImageSettings.resolutionType, ratio),
+            extra_prompt: extraPrompt,
+          });
+          successCount += result.success_count;
+          failedCount += result.failed_count;
+        }
+      };
+      if (target.assetType === "character") {
+        for (const kind of ["single", "group"] as const) {
+          await runBatch(targets.filter((asset) => normalizeCharacterKind(asset.character_kind) === kind), kind);
+        }
+      } else {
+        await runBatch(targets);
+      }
+      setNotice(`批量生图完成：成功 ${successCount} 个，失败 ${failedCount} 个。`);
       await onBound();
     } catch (caught) {
       setError(requestErrorMessage(caught, "批量生图失败"));
@@ -355,28 +411,45 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
 
         {settingsOpen ? (
           <div className="mt-2 rounded-md border border-glass-border bg-surface-inset p-2.5">
-            <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="text-xs font-medium text-text-secondary">
+                全局模型
+                <p className="mt-1 truncate rounded-md border border-glass-border bg-panel-bg px-2 py-2 text-xs font-semibold text-foreground" title={resolvedImageModelOption?.label ?? "未选择可用模型"}>
+                  {resolvedImageModelOption?.label ?? "未选择可用模型"}
+                </p>
+              </div>
+              <label className="text-xs font-medium text-text-secondary">
+                画幅
+                <select
+                  value={assetImageSettings.defaultImageRatio}
+                  onChange={(event) => setAssetImageSettings((settings) => ({ ...settings, defaultImageRatio: event.target.value as "16:9" | "9:16" }))}
+                  className="glass-input mt-1 w-full text-xs"
+                >
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                </select>
+              </label>
               <label className="text-xs font-medium text-text-secondary">
                 分辨率
                 <select
-                  value={assetImageResolution}
-                  onChange={(event) => setAssetImageResolution(event.target.value as "2k" | "4k")}
+                  value={assetImageSettings.resolutionType}
+                  onChange={(event) => setAssetImageSettings((settings) => ({ ...settings, resolutionType: event.target.value as "2k" | "4k" }))}
                   className="glass-input mt-1 w-full text-xs"
                 >
                   <option value="2k">2K</option>
                   <option value="4k">4K</option>
                 </select>
               </label>
-              <label className="text-xs font-medium text-text-secondary">
-                生图附加提示词
-                <textarea
-                  value={assetImagePrompt}
-                  onChange={(event) => setAssetImagePrompt(event.target.value)}
-                  className="glass-input mt-1 min-h-[68px] w-full resize-y text-xs leading-5 text-foreground"
-                  placeholder="会作为 extra_prompt 附带到勾选资产的生图请求里。"
-                />
-              </label>
             </div>
+            <label className="mt-3 block text-xs font-medium text-text-secondary">
+              附加提示词
+              <textarea
+                value={assetImagePrompt}
+                onChange={(event) => setAssetImagePrompt(event.target.value)}
+                className="glass-input mt-1 min-h-[68px] w-full resize-y text-xs leading-5 text-foreground"
+                placeholder="可选，只追加到本次勾选资产的生图请求里。"
+              />
+            </label>
           </div>
         ) : null}
 
@@ -389,32 +462,29 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
                 className="glass-input text-sm text-foreground"
                 placeholder={`${JIMENG_ASSET_TYPE_LABELS[target.assetType]}名称（必填）`}
               />
+              {target.assetType === "character" ? (
+                <div className="inline-flex h-9 rounded-md border border-glass-border bg-panel-bg p-1">
+                  {(["single", "group"] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => setNewAssetCharacterKind(kind)}
+                      className={clsx(
+                        "flex-1 rounded px-3 text-xs font-medium transition-colors",
+                        newAssetCharacterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                      )}
+                    >
+                      {CHARACTER_KIND_LABELS[kind]}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <textarea
                 value={newAssetDescription}
                 onChange={(event) => setNewAssetDescription(event.target.value)}
                 className="glass-input min-h-[72px] resize-y text-xs leading-5 text-foreground"
                 placeholder="详情描述 / 生图提示词"
               />
-              {target.assetType === "character" ? (
-                <div className="space-y-1">
-                  <span className="text-xs font-medium text-text-secondary">新建角色分类</span>
-                  <div className="inline-flex h-9 w-full rounded-md border border-glass-border bg-panel-bg p-1">
-                    {(["single", "group"] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        onClick={() => setNewAssetCharacterKind(kind)}
-                        className={clsx(
-                          "flex-1 rounded px-3 text-xs font-medium transition-colors",
-                          newAssetCharacterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
-                        )}
-                      >
-                        {CHARACTER_KIND_LABELS[kind]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
               <div className="flex justify-end">
                 <button
                   type="button"
@@ -470,26 +540,6 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
                 className="glass-input min-h-[64px] w-full resize-y text-xs leading-5 text-foreground"
                 placeholder="详情描述 / 生图提示词"
               />
-              {target.assetType === "character" ? (
-                <div className="space-y-1">
-                  <span className="text-xs font-medium text-text-secondary">当前角色分类</span>
-                  <div className="inline-flex h-9 w-full rounded-md border border-glass-border bg-panel-bg p-1">
-                    {(["single", "group"] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        onClick={() => setDraftCharacterKind(kind)}
-                        className={clsx(
-                          "flex-1 rounded px-3 text-xs font-medium transition-colors",
-                          draftCharacterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
-                        )}
-                      >
-                        {CHARACTER_KIND_LABELS[kind]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"

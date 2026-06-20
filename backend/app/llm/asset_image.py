@@ -2,7 +2,6 @@
 
 import re
 import uuid
-from pathlib import Path
 from typing import Any
 
 from ..jimeng_models import JimengAssetType
@@ -10,7 +9,6 @@ from ..jimeng_storage import JimengStore
 from .client import call_text_to_image
 from .models import LlmAssetImageBatchGenerateRequest, LlmAssetImageGenerateRequest
 from .settings import load_llm_settings, model_dump, resolve_provider_and_model
-
 
 _ASSET_TYPE_PREFIX = {
     JimengAssetType.character: "character_prefix",
@@ -38,6 +36,13 @@ def build_asset_image_prompt(asset: Any, settings: Any, extra_prompt: str = "") 
     return "\n".join(part for part in (type_prefix, global_prompt, extra, description, image_params) if part)
 
 
+def _assert_image_model(model: Any) -> None:
+    model_type = str(getattr(model, "type", "") or "").lower()
+    if model_type != "image":
+        model_name = getattr(model, "name", None) or getattr(model, "id", "")
+        raise ValueError(f"资产生图请选择图片模型，当前模型不是图片模型：{model_name}")
+
+
 def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, request: LlmAssetImageGenerateRequest):
     store.get_project(project_id)
     asset = store._get_asset(asset_id)
@@ -46,6 +51,7 @@ def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, req
 
     settings = load_llm_settings(store)
     provider, model = resolve_provider_and_model(settings, request.provider_id, request.model_id)
+    _assert_image_model(model)
     size = request.size or settings.asset_image.size
     prompt = build_asset_image_prompt(asset, settings, request.extra_prompt)
     generated = call_text_to_image(provider, prompt, model.id, size)
@@ -74,11 +80,12 @@ def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, req
 
 def batch_generate_asset_images(store: JimengStore, project_id: str, request: LlmAssetImageBatchGenerateRequest):
     store.get_project(project_id)
-    if request.asset_ids:
-        wanted = set(request.asset_ids)
-        assets = [asset for asset in store.list_assets(project_id, request.asset_type) if asset.id in wanted]
-    else:
-        assets = store.list_assets(project_id, request.asset_type)
+    if not request.asset_ids:
+        raise ValueError("请先选择需要批量生图的资产")
+    wanted = set(request.asset_ids)
+    assets = [asset for asset in store.list_assets(project_id, request.asset_type) if asset.id in wanted]
+    if not assets:
+        raise ValueError("未找到选中的资产，请刷新后重试")
 
     results: list[dict[str, Any]] = []
     single_request = LlmAssetImageGenerateRequest(

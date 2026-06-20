@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from ..jimeng_models import JimengQueueStatus
 from ..providers import DreaminaCliProvider
+from ..queue_worker_launcher import start_queue_worker_process
 from .context import _call, _dump, _model_data, _now, get_store, save_runtime_settings
 from .schemas import QueueBatchCreate, QueueItemCreate, QueueReorder
 from .settings import _cli
@@ -42,6 +43,11 @@ def start_queue():
 def pause_queue():
     save_runtime_settings({"queue_enabled": False})
     return {"status": _queue_status_payload(paused=True)}
+
+
+@router.post("/queue/worker/start")
+def start_queue_worker():
+    return _call(_start_queue_worker_payload)
 
 
 @router.post("/queue/items/{queue_item_id}/cancel")
@@ -117,6 +123,31 @@ def _heartbeat_is_recent(value: Any, max_age_seconds: int = 15) -> bool:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - parsed).total_seconds() <= max_age_seconds
+
+
+def _start_queue_worker_payload() -> dict[str, Any]:
+    status = _queue_status_payload()
+    if status["worker_online"]:
+        return {"started": False, "message": "worker already online", "status": status}
+
+    result = start_queue_worker_process()
+    get_store().update_runtime_settings(
+        {
+            "worker_launch_pid": result.get("worker_pid"),
+            "worker_launch_mode": result.get("mode"),
+            "worker_launch_script": result.get("script_path"),
+            "worker_launch_at": _now(),
+            "worker_last_error": None,
+        }
+    )
+    return {
+        "started": True,
+        "message": "worker start requested",
+        "worker_pid": result.get("worker_pid"),
+        "mode": result.get("mode"),
+        "script_path": result.get("script_path"),
+        "status": _queue_status_payload(),
+    }
 
 
 def _provider_factory(provider_name: str, account_id: str | None = None) -> Any:

@@ -1,6 +1,6 @@
-"""队列存储边界。
+"""Queue storage boundary.
 
-负责即梦生成队列的创建、查询、状态更新、位置重排、资产快照和异常退出后的恢复。
+Handles queue creation, status updates, asset snapshots, ordering, and recovery.
 """
 
 import json
@@ -17,6 +17,8 @@ _ASSET_DIRS = {
     JimengAssetType.scene: "scenes",
     JimengAssetType.prop: "props",
 }
+_MIN_VIDEO_DURATION_SECONDS = 4
+_MAX_VIDEO_DURATION_SECONDS = 15
 
 
 def _now() -> str:
@@ -35,6 +37,20 @@ def _loads(value: str | None, fallback: Any) -> Any:
     if value in (None, ""):
         return fallback
     return json.loads(value)
+
+
+
+def _clamp_video_duration_seconds(value: int) -> int:
+    return max(_MIN_VIDEO_DURATION_SECONDS, min(_MAX_VIDEO_DURATION_SECONDS, int(value)))
+
+
+def _apply_shot_default_duration(snapshot: dict[str, Any], duration: int | None) -> None:
+    if duration is None or int(duration) <= 0:
+        return
+    raw_settings = snapshot.get("generation_settings")
+    settings = dict(raw_settings) if isinstance(raw_settings, dict) else {}
+    settings["duration"] = _clamp_video_duration_seconds(duration)
+    snapshot["generation_settings"] = settings
 
 
 def create_queue_item(
@@ -64,6 +80,7 @@ def create_queue_item(
         resolved_asset_snapshot = asset_snapshot_for_shot(conn, shot_id)
         if asset_snapshot is not None:
             resolved_asset_snapshot.update(asset_snapshot)
+        _apply_shot_default_duration(resolved_asset_snapshot, shot.default_duration)
 
         conn.execute(
             """
@@ -361,7 +378,7 @@ def asset_snapshot_for_shot(conn: sqlite3.Connection, shot_id: str) -> dict[str,
             {
                 "id": row["id"],
                 "name": row["name"],
-                "character_kind": row["character_kind"] if "character_kind" in row.keys() else "single",
+                "character_kind": row["character_kind"],
                 "image_path": row["image_path"],
                 "audio_path": row["audio_path"] if bool(row["voice_enabled"]) else None,
                 "voice_enabled": bool(row["voice_enabled"]),

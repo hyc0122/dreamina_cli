@@ -12,7 +12,6 @@ const createEmptyDraft = (imageRatio: AssetImageRatio): AssetFormState => ({
   name: "",
   aliasesText: "",
   description: "",
-  imageModel: "dreamina4.0",
   imageRatio,
   characterKind: "single",
 });
@@ -76,7 +75,6 @@ export default function CreateAssetModal({
         name,
         aliases: splitAliases(draft.aliasesText),
         description: draft.description.trim(),
-        image_model: draft.imageModel,
         image_ratio: draft.imageRatio,
         ...(assetType === "character" ? { character_kind: draft.characterKind } : {}),
       });
@@ -115,6 +113,38 @@ export default function CreateAssetModal({
         </div>
 
         <div className="mt-4 grid gap-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1.5">
+              <span className="block text-xs font-medium text-text-secondary">资产/文件名</span>
+              <input
+                value={draft.name}
+                onChange={(event) => updateDraft("name", event.target.value)}
+                className="glass-input w-full text-sm text-foreground"
+                placeholder={`${JIMENG_ASSET_TYPE_LABELS[assetType]}名称（必填）`}
+                disabled={saving}
+              />
+            </label>
+            <label className="space-y-1.5">
+              <span className="block text-xs font-medium text-text-secondary">别名</span>
+              <input
+                value={draft.aliasesText}
+                onChange={(event) => updateDraft("aliasesText", event.target.value)}
+                className="glass-input w-full text-sm text-foreground"
+                placeholder="逗号、顿号或换行分隔"
+                disabled={saving}
+              />
+            </label>
+          </div>
+          <label className="space-y-1.5">
+            <span className="block text-xs font-medium text-text-secondary">详情描述 / 生图提示词</span>
+            <textarea
+              value={draft.description}
+              onChange={(event) => updateDraft("description", event.target.value)}
+              className="glass-input min-h-[84px] w-full resize-y text-sm leading-6 text-foreground"
+              placeholder="用于后续资产生图的主体描述"
+              disabled={saving}
+            />
+          </label>
           <div className="space-y-1.5">
             <span className="block text-xs font-medium text-text-secondary">画幅</span>
             <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">

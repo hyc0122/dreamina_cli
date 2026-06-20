@@ -1,7 +1,4 @@
-"""大模型设置与资产纯文本生图接口。
-
-该路由只负责通用大模型能力，不放即梦 CLI 登录、视频生成和队列逻辑。
-"""
+"""大模型设置与资产纯文本生图接口。"""
 
 from typing import Optional
 
@@ -11,7 +8,6 @@ from ..llm.asset_image import batch_generate_asset_images, generate_asset_image
 from ..llm.models import LlmAssetImageBatchGenerateRequest, LlmAssetImageGenerateRequest, LlmSettings
 from ..llm.settings import load_llm_settings, model_dump, save_llm_settings
 from .context import _call, _dump, get_store
-
 
 router = APIRouter(prefix="/jimeng", tags=["jimeng-llm"])
 

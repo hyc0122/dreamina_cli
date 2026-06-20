@@ -50,7 +50,6 @@ export interface AssetFormState {
   name: string;
   aliasesText: string;
   description: string;
-  imageModel: string;
   imageRatio: AssetImageRatio;
   characterKind: JimengCharacterKind;
 }
@@ -131,11 +130,19 @@ export const formFromAsset = (asset: JimengAsset): AssetFormState => ({
   name: asset.name,
   aliasesText: asset.aliases.join(", "),
   description: asset.description ?? "",
-  imageModel: asset.image_model || "dreamina4.0",
   imageRatio: asset.image_ratio === "9:16" ? "9:16" : "16:9",
   characterKind: normalizeCharacterKind(asset.character_kind),
 });
 
+export const assetImageSizeFromSettings = (
+  resolutionType: AssetImageSettings["resolutionType"],
+  imageRatio: AssetImageRatio,
+): string => {
+  if (resolutionType === "4k") {
+    return imageRatio === "9:16" ? "2160x3840" : "3840x2160";
+  }
+  return imageRatio === "9:16" ? "1440x2560" : "2560x1440";
+};
 const normalizeImageSettings = (raw: Partial<AssetImageSettings> & { imagePromptTemplate?: string } = {}): AssetImageSettings => {
   const { imagePromptTemplate, ...rest } = raw;
   const migratedGlobalStyle = raw.globalStylePrompt ?? imagePromptTemplate ?? DEFAULT_IMAGE_SETTINGS.globalStylePrompt;

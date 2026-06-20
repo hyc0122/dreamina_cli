@@ -513,11 +513,12 @@ def _generate_asset_image(project_id: str, asset_id: str, request: AssetImageGen
 def _batch_generate_asset_images(project_id: str, request: AssetImageGenerateRequest) -> dict[str, Any]:
     store = get_store()
     store.get_project(project_id)
-    if request.asset_ids:
-        wanted = set(request.asset_ids)
-        assets = [asset for asset in store.list_assets(project_id, request.asset_type) if asset.id in wanted]
-    else:
-        assets = store.list_assets(project_id, request.asset_type)
+    if not request.asset_ids:
+        raise ValueError("请先选择需要批量生图的资产")
+    wanted = set(request.asset_ids)
+    assets = [asset for asset in store.list_assets(project_id, request.asset_type) if asset.id in wanted]
+    if not assets:
+        raise ValueError("未找到选中的资产，请刷新后重试")
 
     results: list[dict[str, Any]] = []
     for asset in assets:

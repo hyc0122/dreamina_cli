@@ -312,6 +312,14 @@ def main() -> None:
     try:
         resource_root, data_dir = _prepare_environment()
         _setup_logging(data_dir)
+        if os.getenv("DREAMINA_QUEUE_WORKER", "").lower() in {"1", "true", "yes"}:
+            logging.info("Dreamina CLI Batch queue worker starting")
+            _safe_print("Dreamina CLI Batch queue worker")
+            from backend.app.queue_worker import main as queue_worker_main
+
+            queue_worker_main()
+            return
+
         host = os.getenv("DREAMINA_DESKTOP_HOST", "127.0.0.1")
         preferred_port = int(os.getenv("DREAMINA_DESKTOP_PORT", "62100"))
         if not _browser_disabled():

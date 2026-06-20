@@ -6,7 +6,7 @@ import { type ChangeEvent, useEffect, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
 import { parseLlmModelValue } from "@/components/jimeng/llm/modelOptions";
 
 export default function AssetDetailPanel({
@@ -108,6 +108,7 @@ export default function AssetDetailPanel({
       const response = await jimengApi.generateAssetImageWithLlm(projectId, asset.id, {
         provider_id: selectedLlmModel?.providerId,
         model_id: selectedLlmModel?.modelId,
+        size: assetImageSizeFromSettings(settings.resolutionType, form.imageRatio),
         extra_prompt: imagePromptForAsset(settings, asset.type, form.characterKind),
       });
       const submitId = response.result.submit_id ? `，submit_id：${response.result.submit_id}` : "";
@@ -314,9 +315,9 @@ export default function AssetDetailPanel({
           />
         </label>
         {isCharacter ? (
-          <div className="space-y-1.5">
-            <span className="block text-xs font-medium text-text-secondary">角色分类</span>
-            <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
+          <div className="flex items-center gap-3 rounded-lg border border-glass-border bg-surface-inset p-2">
+            <span className="w-16 shrink-0 text-xs font-medium text-text-secondary">角色分类</span>
+            <div className="inline-flex h-9 min-w-0 flex-1 rounded-md border border-glass-border bg-panel-bg p-1">
               {(["single", "group"] as const).map((kind) => (
                 <button
                   key={kind}

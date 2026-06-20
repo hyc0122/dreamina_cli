@@ -1,4 +1,4 @@
-"""大模型配置与结果模型。"""
+"""大模型配置与生成结果模型。"""
 
 from dataclasses import dataclass, field
 from typing import Any
@@ -30,12 +30,12 @@ class LlmAssetImageSettings(BaseModel):
     character_prefix: str = "角色设定图"
     scene_prefix: str = "场景设定图"
     prop_prefix: str = "道具设定图"
-    size: str = "1024x576"
+    size: str = "2560x1440"
 
 
 class LlmSettings(BaseModel):
     default_provider_id: str = "jiasuapi"
-    default_model_id: str = "gpt-5.4"
+    default_model_id: str = "gpt-image-2"
     providers: list[LlmProviderSetting] = Field(default_factory=list)
     asset_image: LlmAssetImageSettings = Field(default_factory=LlmAssetImageSettings)
 
@@ -50,6 +50,7 @@ class LlmAssetImageGenerateRequest(BaseModel):
 class LlmAssetImageBatchGenerateRequest(LlmAssetImageGenerateRequest):
     asset_ids: list[str] = Field(default_factory=list)
     asset_type: JimengAssetType | None = None
+
 
 @dataclass
 class LlmGeneratedImage:

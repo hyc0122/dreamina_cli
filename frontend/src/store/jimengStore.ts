@@ -51,6 +51,7 @@ export interface JimengStore extends JimengStateData {
   matchAssets: () => Promise<void>;
   loadQueue: (scope?: "currentProject" | "global") => Promise<void>;
   startQueue: () => Promise<void>;
+  startQueueWorker: () => Promise<void>;
   pauseQueue: () => Promise<void>;
   cancelQueueItem: (queueItemId: string) => Promise<void>;
   retryQueueItem: (queueItemId: string) => Promise<void>;
@@ -299,6 +300,17 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await jimengApi.startQueue();
+      await get().loadQueue("global");
+    } catch (error) {
+      set({ error: errorMessageFrom(error), loading: false });
+      throw error;
+    }
+  },
+
+  startQueueWorker: async () => {
+    set({ loading: true, error: null });
+    try {
+      await jimengApi.startQueueWorker();
       await get().loadQueue("global");
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });

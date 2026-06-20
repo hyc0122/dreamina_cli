@@ -300,6 +300,15 @@ export interface JimengQueueEnvelope {
   };
 }
 
+export interface JimengQueueWorkerStartResponse {
+  started: boolean;
+  message: string;
+  worker_pid?: number | null;
+  mode?: string | null;
+  script_path?: string | null;
+  status: JimengQueueEnvelope["status"];
+}
+
 export interface JimengSettings {
   dreamina_executable?: string;
   generation_provider?: "dreamina_cli" | "jimeng_api" | string;
@@ -657,6 +666,8 @@ export const jimengApi = {
     axios.post<{ items: JimengQueueItem[] }>(`${API_URL}/jimeng/queue/items/batch`, { items }).then((res) => res.data),
   startQueue: () =>
     axios.post<JimengQueueEnvelope["status"]>(`${API_URL}/jimeng/queue/start`).then((res) => res.data),
+  startQueueWorker: () =>
+    axios.post<JimengQueueWorkerStartResponse>(`${API_URL}/jimeng/queue/worker/start`).then((res) => res.data),
   pauseQueue: () =>
     axios.post<{ status: JimengQueueEnvelope["status"] }>(`${API_URL}/jimeng/queue/pause`).then((res) => res.data),
   cancelQueueItem: (queueItemId: string) =>
