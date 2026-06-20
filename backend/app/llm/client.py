@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from .models import LlmGeneratedImage, LlmProviderSetting
+from .models import LlmGeneratedImage, LlmImageTaskStart, LlmImageTaskStatus, LlmProviderSetting
 
 JIASU_MEDIA_HOSTS = {"api.lk888.ai", "api.lk666.ai"}
 DEFAULT_JIASU_BASE_URL = "https://api.lk888.ai"
@@ -274,27 +274,20 @@ def _openai_image_generate_body(prompt: str, model_id: str, size: str) -> dict[s
 
 def _poll_jiasu_media_task(settings: LlmProviderSetting, task_id: object) -> LlmGeneratedImage:
     for attempt in range(JIASU_STATUS_MAX_POLLS):
-        request = urllib.request.Request(
-            _media_status_endpoint(settings.base_url, task_id),
-            headers=_auth_headers(settings),
-            method="GET",
-        )
-        payload = _urlopen_json(request, timeout=60)
-        _raise_jiasu_api_error(payload)
-        status = _payload_data(payload)
-        state = str(status.get("state") or "").lower()
-        is_final = status.get("is_final") is True
-        if is_final:
-            if state == "failed":
-                error = status.get("error") or status.get("status") or status
+        status = _poll_jiasu_media_status(settings, task_id)
+        if status.is_final:
+            if status.state == "failed":
+                error = status.error or status.raw
                 raise ValueError(f"大模型生图任务失败: {error}")
-            return _require_image_payload(payload)
+            if status.image is None:
+                raise ValueError("大模型生图接口未返回图片数据")
+            return status.image
         if attempt < JIASU_STATUS_MAX_POLLS - 1:
             time.sleep(JIASU_STATUS_POLL_INTERVAL_SECONDS)
     raise ValueError(f"大模型生图任务超时未完成: task_id={task_id}")
 
 
-def _call_jiasu_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmGeneratedImage:
+def _start_jiasu_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmImageTaskStart:
     request = urllib.request.Request(
         _media_generate_endpoint(settings.base_url),
         data=json.dumps(_jiasu_media_generate_body(prompt, model_id, size), ensure_ascii=False).encode("utf-8"),
@@ -305,10 +298,47 @@ def _call_jiasu_text_to_image(settings: LlmProviderSetting, prompt: str, model_i
     _raise_jiasu_api_error(payload)
     immediate = _decode_image_payload(payload)
     if immediate is not None:
-        return immediate
+        return LlmImageTaskStart(raw=payload, image=immediate)
     task_id = _extract_task_id(payload)
     if not task_id:
         raise ValueError(f"大模型生图接口未返回 task_id 或图片结果: {payload}")
+    return LlmImageTaskStart(raw=payload, task_id=str(task_id))
+
+
+def _poll_jiasu_media_status(settings: LlmProviderSetting, task_id: object) -> LlmImageTaskStatus:
+    request = urllib.request.Request(
+        _media_status_endpoint(settings.base_url, task_id),
+        headers=_auth_headers(settings),
+        method="GET",
+    )
+    payload = _urlopen_json(request, timeout=60)
+    _raise_jiasu_api_error(payload)
+    status = _payload_data(payload)
+    state = str(status.get("state") or "").lower()
+    is_final = status.get("is_final") is True
+    error = str(status.get("error") or "") if status.get("error") else ""
+    image: LlmGeneratedImage | None = None
+    if is_final and state != "failed":
+        image = _require_image_payload(payload)
+    return LlmImageTaskStatus(
+        raw=payload,
+        state=state,
+        is_final=is_final,
+        image=image,
+        progress=str(status.get("progress") or ""),
+        result_url=str(status.get("result_url") or status.get("url") or status.get("image_url") or ""),
+        result_type=str(status.get("result_type") or ""),
+        error=error,
+    )
+
+
+def _call_jiasu_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmGeneratedImage:
+    started = _start_jiasu_text_to_image(settings, prompt, model_id, size)
+    if started.image is not None:
+        return started.image
+    task_id = started.task_id
+    if not task_id:
+        raise ValueError(f"大模型生图接口未返回 task_id 或图片结果: {started.raw}")
     return _poll_jiasu_media_task(settings, task_id)
 
 
@@ -330,3 +360,23 @@ def call_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str,
     if _is_jiasu_provider(settings):
         return _call_jiasu_text_to_image(settings, prompt, model_id, size)
     return _call_openai_text_to_image(settings, prompt, model_id, size)
+
+
+def start_text_to_image_task(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmImageTaskStart:
+    if settings.kind != "openai_compatible":
+        raise ValueError("当前仅支持 OpenAI 兼容图片接口")
+    if not _normalized_api_key(settings.api_key):
+        raise ValueError("大模型供应商缺少 API Key")
+    if _is_jiasu_provider(settings):
+        return _start_jiasu_text_to_image(settings, prompt, model_id, size)
+    return LlmImageTaskStart(raw={}, image=_call_openai_text_to_image(settings, prompt, model_id, size))
+
+
+def poll_text_to_image_task(settings: LlmProviderSetting, task_id: object) -> LlmImageTaskStatus:
+    if settings.kind != "openai_compatible":
+        raise ValueError("当前仅支持 OpenAI 兼容图片接口")
+    if not _normalized_api_key(settings.api_key):
+        raise ValueError("大模型供应商缺少 API Key")
+    if not _is_jiasu_provider(settings):
+        raise ValueError("当前供应商不支持通过 task_id 查询图片任务")
+    return _poll_jiasu_media_status(settings, task_id)

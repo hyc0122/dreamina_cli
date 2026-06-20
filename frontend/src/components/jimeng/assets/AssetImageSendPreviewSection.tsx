@@ -28,7 +28,7 @@ export default function AssetImageSendPreviewSection({
       </div>
       <div className="rounded-lg border border-glass-border bg-panel-bg p-3 text-xs leading-5 text-text-secondary">
         <p className="font-medium text-foreground">发送规则</p>
-        <p className="mt-2">资产生图会发送：类型前缀 + 全局画风 + 单人/群演/场景画风 + 资产详情描述 / 生图提示词 + 资产参数配置。</p>
+        <p className="mt-2">资产生图会发送：单人/群演/场景/道具类型前缀 + 全局画风 + 单人/群演/场景画风 + 资产详情描述 / 生图提示词 + 资产参数配置。</p>
       </div>
       <div className="flex flex-wrap gap-2">
         {(["character", "scene", "prop"] as JimengAssetType[]).map((type) => (

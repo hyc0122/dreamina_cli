@@ -116,7 +116,8 @@ export default function AssetDetailPanel({
         size: assetImageSizeFromSettings(settings.resolutionType, targetForm.imageRatio),
         extra_prompt: imagePromptForAsset(settings, targetAsset.type, targetForm.characterKind),
       });
-      const submitId = response.result.submit_id ? `，submit_id：${response.result.submit_id}` : "";
+      const resultSubmitId = typeof response.result.submit_id === "string" ? response.result.submit_id : "";
+      const submitId = response.record?.task_id ? `，task_id：${response.record.task_id}` : resultSubmitId ? `，submit_id：${resultSubmitId}` : "";
       if (activeAssetIdRef.current === targetAsset.id) {
         setNotice(`${response.message || "资产图片已生成"}${submitId}`);
       }

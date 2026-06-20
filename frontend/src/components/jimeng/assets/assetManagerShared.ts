@@ -28,7 +28,8 @@ export interface AssetImageSettings {
   singleCharacterStylePrompt: string;
   groupCharacterStylePrompt: string;
   sceneStylePrompt: string;
-  characterPromptPrefix: string;
+  singleCharacterPromptPrefix: string;
+  groupCharacterPromptPrefix: string;
   scenePromptPrefix: string;
   propPromptPrefix: string;
 }
@@ -41,7 +42,8 @@ export const DEFAULT_IMAGE_SETTINGS: AssetImageSettings = {
   singleCharacterStylePrompt: "",
   groupCharacterStylePrompt: "",
   sceneStylePrompt: "",
-  characterPromptPrefix: "角色资产图：保持人物五官、服装、发型稳定，适合作为后续视频参考。",
+  singleCharacterPromptPrefix: "单人角色资产图：保持人物五官、服装、发型稳定，适合作为后续视频参考。",
+  groupCharacterPromptPrefix: "群演角色资产图：适合背景人物或配角群像，弱化主角感，服装层次清晰，面部差异明确。",
   scenePromptPrefix: "场景资产图：强调空间结构、光线、可复用背景，不要出现主体人物。",
   propPromptPrefix: "道具资产图：单体道具清晰居中，材质细节明确，背景简洁。",
 };
@@ -143,9 +145,13 @@ export const assetImageSizeFromSettings = (
   }
   return imageRatio === "9:16" ? "1440x2560" : "2560x1440";
 };
-const normalizeImageSettings = (raw: Partial<AssetImageSettings> & { imagePromptTemplate?: string } = {}): AssetImageSettings => {
-  const { imagePromptTemplate, ...rest } = raw;
+const normalizeImageSettings = (
+  raw: Partial<AssetImageSettings> & { imagePromptTemplate?: string; characterPromptPrefix?: string } = {},
+): AssetImageSettings => {
+  const { imagePromptTemplate, characterPromptPrefix, ...rest } = raw;
   const migratedGlobalStyle = raw.globalStylePrompt ?? imagePromptTemplate ?? DEFAULT_IMAGE_SETTINGS.globalStylePrompt;
+  const migratedSingleCharacterPromptPrefix =
+    raw.singleCharacterPromptPrefix ?? characterPromptPrefix ?? DEFAULT_IMAGE_SETTINGS.singleCharacterPromptPrefix;
   return {
     ...DEFAULT_IMAGE_SETTINGS,
     ...rest,
@@ -153,6 +159,8 @@ const normalizeImageSettings = (raw: Partial<AssetImageSettings> & { imagePrompt
     singleCharacterStylePrompt: raw.singleCharacterStylePrompt ?? "",
     groupCharacterStylePrompt: raw.groupCharacterStylePrompt ?? "",
     sceneStylePrompt: raw.sceneStylePrompt ?? "",
+    singleCharacterPromptPrefix: migratedSingleCharacterPromptPrefix,
+    groupCharacterPromptPrefix: raw.groupCharacterPromptPrefix ?? DEFAULT_IMAGE_SETTINGS.groupCharacterPromptPrefix,
   };
 };
 
@@ -204,7 +212,9 @@ export const imagePromptForAsset = (
 ): string => {
   const typePrefix =
     assetType === "character"
-      ? settings.characterPromptPrefix
+      ? normalizeCharacterKind(characterKind) === "group"
+        ? settings.groupCharacterPromptPrefix
+        : settings.singleCharacterPromptPrefix
       : assetType === "scene"
         ? settings.scenePromptPrefix
         : settings.propPromptPrefix;

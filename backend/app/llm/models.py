@@ -52,8 +52,33 @@ class LlmAssetImageBatchGenerateRequest(LlmAssetImageGenerateRequest):
     asset_type: JimengAssetType | None = None
 
 
+class LlmAssetImageRecordPollRequest(BaseModel):
+    project_id: str | None = None
+    record_ids: list[str] = Field(default_factory=list)
+    limit: int = 20
+
+
 @dataclass
 class LlmGeneratedImage:
     content: bytes
     extension: str = "png"
     raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class LlmImageTaskStart:
+    raw: dict[str, Any] = field(default_factory=dict)
+    image: LlmGeneratedImage | None = None
+    task_id: str | None = None
+
+
+@dataclass
+class LlmImageTaskStatus:
+    raw: dict[str, Any] = field(default_factory=dict)
+    state: str = ""
+    is_final: bool = False
+    image: LlmGeneratedImage | None = None
+    progress: str = ""
+    result_url: str = ""
+    result_type: str = ""
+    error: str = ""
