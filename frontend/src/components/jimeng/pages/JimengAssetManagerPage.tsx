@@ -13,7 +13,7 @@ import AssetPreviewModal from "@/components/jimeng/assets/AssetPreviewModal";
 import AssetToolbar from "@/components/jimeng/assets/AssetToolbar";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
 import CreateAssetModal from "@/components/jimeng/assets/CreateAssetModal";
-import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, normalizeReferenceImageUrls, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
+import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, referenceImagesForAssetType, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
 import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengLlmAssetImageRecord, type JimengStylePreset } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
@@ -326,7 +326,7 @@ export default function JimengAssetManagerPage() {
     setBatchProgressMessage(`批量生图进度：准备生成 ${targets.length} 个${JIMENG_ASSET_TYPE_LABELS[activeType]}资产。`);
     try {
       const selectedLlmModel = parseLlmModelValue(resolvedImageModelValue);
-      const referenceImages = normalizeReferenceImageUrls(imageSettings.styleReferenceImages);
+      const referenceImages = referenceImagesForAssetType(imageSettings, activeType);
       let successCount = 0;
       let failedCount = 0;
       let processedCount = 0;

@@ -8,7 +8,7 @@ import AssetHistoryImageStrip from "@/components/jimeng/assets/detail/AssetHisto
 import AssetImagePanel from "@/components/jimeng/assets/detail/AssetImagePanel";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengLlmAssetImageRecord, type JimengStylePreset } from "@/lib/jimengApi";
-import { ASSET_IMAGE_QUALITY_OPTIONS, type AssetFormState, type AssetImageQuality, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, normalizeReferenceImageUrls, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+import { ASSET_IMAGE_QUALITY_OPTIONS, type AssetFormState, type AssetImageQuality, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, referenceImagesForAssetType, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
 import { parseLlmModelValue } from "@/components/jimeng/llm/modelOptions";
 
 export default function AssetDetailPanel({
@@ -53,11 +53,13 @@ export default function AssetDetailPanel({
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [imageMagnifierEnabled, setImageMagnifierEnabled] = useState(false);
   const activeAssetIdRef = useRef(asset?.id ?? "");
 
   const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
   const voiceUrl = jimengMediaUrl(asset?.audio_path, asset?.updated_at);
   const isCharacter = asset?.type === "character";
+  const referenceEnabledForAsset = asset?.type === "character" ? settings.styleReferenceUseCharacter : asset?.type === "scene" ? settings.styleReferenceUseScene : false;
   const generatingImage = asset ? generatingImageAssetIds.includes(asset.id) || assetImagePending : false;
   const availableHistoryRecords = imageHistoryRecords
     .filter((record) => record.status === "succeeded" && Boolean(record.asset_image_path || record.source_path))
@@ -125,7 +127,7 @@ export default function AssetDetailPanel({
     try {
       await jimengApi.updateAsset(projectId, targetAsset.id, buildMetadataPayload());
       const selectedLlmModel = parseLlmModelValue(globalImageModelValue);
-      const referenceImages = normalizeReferenceImageUrls(settings.styleReferenceImages);
+      const referenceImages = referenceImagesForAssetType(settings, targetAsset.type);
       const response = await jimengApi.generateAssetImageWithLlm(projectId, targetAsset.id, {
         provider_id: selectedLlmModel?.providerId,
         model_id: selectedLlmModel?.modelId,
@@ -298,6 +300,8 @@ export default function AssetDetailPanel({
         asset={asset}
         imageUrl={imageUrl}
         uploadingImage={uploadingImage}
+        magnifierEnabled={imageMagnifierEnabled}
+        onMagnifierChange={setImageMagnifierEnabled}
         onPreview={onPreview}
         onPaste={() => void pasteImageFromClipboard()}
         onUpload={uploadImage}
@@ -476,7 +480,9 @@ export default function AssetDetailPanel({
 
           <div className="flex h-10 items-center justify-between gap-3 rounded-lg border border-glass-border bg-surface-inset px-3 text-xs">
             <span className="font-medium text-foreground">全局风格参考图</span>
-            <span className="rounded border border-glass-border bg-panel-bg px-2 py-0.5 font-mono text-text-muted">{settings.styleReferenceImages.length} 张</span>
+            <span className="rounded border border-glass-border bg-panel-bg px-2 py-0.5 font-mono text-text-muted">
+              {referenceEnabledForAsset ? `${settings.styleReferenceImages.length} 张` : "未启用"}
+            </span>
           </div>
         </div>
 

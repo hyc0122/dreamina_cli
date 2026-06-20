@@ -24,6 +24,11 @@ export default function AssetImageReferenceSettingsSection({
     setCopiedNotice(null);
   };
 
+  const updateReferenceUsage = (key: "styleReferenceUseCharacter" | "styleReferenceUseScene", checked: boolean) => {
+    setDraft((state) => ({ ...state, [key]: checked }));
+    onDirty();
+  };
+
   const uploadReferences = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -64,8 +69,32 @@ export default function AssetImageReferenceSettingsSection({
   return (
     <section className="space-y-4">
       <div>
-        <h3 className="font-display text-lg font-semibold text-foreground">风格参考图</h3>
-        <p className="mt-1 text-sm text-text-secondary">上传用于资产生图的全局参考图。上传后会自动获取图片链接，单个生图和批量生图都会使用这些链接。</p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h3 className="font-display text-lg font-semibold text-foreground">风格参考图</h3>
+            <p className="mt-1 text-sm text-text-secondary">上传用于资产生图的全局参考图。只有勾选使用范围后，单个生图和批量生图才会发送这些链接。</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground">
+              <input
+                type="checkbox"
+                checked={draft.styleReferenceUseCharacter}
+                onChange={(event) => updateReferenceUsage("styleReferenceUseCharacter", event.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              角色使用
+            </label>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground">
+              <input
+                type="checkbox"
+                checked={draft.styleReferenceUseScene}
+                onChange={(event) => updateReferenceUsage("styleReferenceUseScene", event.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              场景使用
+            </label>
+          </div>
+        </div>
       </div>
 
       <label className="flex min-h-[112px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-center text-sm font-medium text-primary transition-colors hover:bg-primary/10">

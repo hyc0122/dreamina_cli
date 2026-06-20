@@ -19,6 +19,8 @@ export interface AssetImageSettings {
   imageModelValue: string;
   globalStylePrompt: string;
   styleReferenceImages: string[];
+  styleReferenceUseCharacter: boolean;
+  styleReferenceUseScene: boolean;
   singleCharacterStylePrompt: string;
   groupCharacterStylePrompt: string;
   sceneStylePrompt: string;
@@ -35,6 +37,8 @@ export const DEFAULT_IMAGE_SETTINGS: AssetImageSettings = {
   imageModelValue: "",
   globalStylePrompt: "统一画风，干净背景，主体清晰，适合作为漫剧资产参考图。",
   styleReferenceImages: [],
+  styleReferenceUseCharacter: false,
+  styleReferenceUseScene: false,
   singleCharacterStylePrompt: "",
   groupCharacterStylePrompt: "",
   sceneStylePrompt: "",
@@ -123,6 +127,16 @@ export const normalizeReferenceImageUrls = (value: unknown): string[] => {
   return urls.filter((url, index) => urls.indexOf(url) === index).slice(0, 10);
 };
 
+export const referenceImagesForAssetType = (settings: AssetImageSettings, assetType: JimengAssetType): string[] => {
+  if (assetType === "character" && settings.styleReferenceUseCharacter) {
+    return normalizeReferenceImageUrls(settings.styleReferenceImages);
+  }
+  if (assetType === "scene" && settings.styleReferenceUseScene) {
+    return normalizeReferenceImageUrls(settings.styleReferenceImages);
+  }
+  return [];
+};
+
 export const formatUpdatedAt = (value: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -173,6 +187,8 @@ const normalizeImageSettings = (
     ...rest,
     globalStylePrompt: migratedGlobalStyle,
     styleReferenceImages: normalizeReferenceImageUrls(raw.styleReferenceImages),
+    styleReferenceUseCharacter: raw.styleReferenceUseCharacter === true,
+    styleReferenceUseScene: raw.styleReferenceUseScene === true,
     singleCharacterStylePrompt: raw.singleCharacterStylePrompt ?? "",
     groupCharacterStylePrompt: raw.groupCharacterStylePrompt ?? "",
     sceneStylePrompt: raw.sceneStylePrompt ?? "",

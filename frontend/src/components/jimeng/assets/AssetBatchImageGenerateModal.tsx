@@ -34,6 +34,16 @@ export default function AssetBatchImageGenerateModal({
   const [resolutionType, setResolutionType] = useState<AssetImageSettings["resolutionType"]>(settings.resolutionType);
   const [quality, setQuality] = useState<AssetImageQuality>(settings.imageQuality);
   const [error, setError] = useState<string | null>(null);
+  const referenceUsageLabel =
+    assetType === "character"
+      ? settings.styleReferenceUseCharacter
+        ? "角色已启用"
+        : "角色未启用"
+      : assetType === "scene"
+        ? settings.styleReferenceUseScene
+          ? "场景已启用"
+          : "场景未启用"
+        : "道具不使用";
   const { requestClose, backdropProps } = useModalDismiss({
     open,
     dirty: resolutionType !== settings.resolutionType || quality !== settings.imageQuality,
@@ -118,7 +128,7 @@ export default function AssetBatchImageGenerateModal({
           <section className="rounded-lg border border-glass-border bg-surface-inset p-4">
             <h3 className="font-display text-lg font-semibold text-foreground">风格参考图</h3>
             <p className="mt-1 text-sm text-text-secondary">
-              当前全局参考图 {settings.styleReferenceImages.length} 张；如需调整，请先打开资产管理的生图设置上传或删除参考图。
+              当前全局参考图 {settings.styleReferenceImages.length} 张，{referenceUsageLabel}；如需调整，请先打开资产管理的生图设置上传或删除参考图。
             </p>
           </section>
         </div>
