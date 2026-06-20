@@ -2,11 +2,11 @@
 
 import clsx from "clsx";
 import { ArrowLeft, CheckSquare, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Maximize2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
 import { parseLlmModelValue } from "@/components/jimeng/llm/modelOptions";
 
 export default function AssetDetailPanel({
@@ -38,16 +38,19 @@ export default function AssetDetailPanel({
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingVoice, setUploadingVoice] = useState(false);
-  const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatingImageAssetIds, setGeneratingImageAssetIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const activeAssetIdRef = useRef(asset?.id ?? "");
 
   const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
   const voiceUrl = jimengMediaUrl(asset?.audio_path, asset?.updated_at);
   const isCharacter = asset?.type === "character";
+  const generatingImage = asset ? generatingImageAssetIds.includes(asset.id) : false;
 
   useEffect(() => {
+    activeAssetIdRef.current = asset?.id ?? "";
     setForm(asset ? formFromAsset(asset) : null);
     setNotice(null);
     setError(null);
@@ -99,24 +102,32 @@ export default function AssetDetailPanel({
       setError("请先填写详情描述 / 生图提示词");
       return;
     }
-    setGeneratingImage(true);
+    const targetAsset = asset;
+    const targetForm = form;
+    setGeneratingImageAssetIds((ids) => (ids.includes(targetAsset.id) ? ids : [...ids, targetAsset.id]));
     setNotice(null);
     setError(null);
     try {
-      await jimengApi.updateAsset(projectId, asset.id, buildMetadataPayload());
+      await jimengApi.updateAsset(projectId, targetAsset.id, buildMetadataPayload());
       const selectedLlmModel = parseLlmModelValue(globalImageModelValue);
-      const response = await jimengApi.generateAssetImageWithLlm(projectId, asset.id, {
+      const response = await jimengApi.generateAssetImageWithLlm(projectId, targetAsset.id, {
         provider_id: selectedLlmModel?.providerId,
         model_id: selectedLlmModel?.modelId,
-        extra_prompt: imagePromptForAsset(settings, asset.type, form.characterKind),
+        size: assetImageSizeFromSettings(settings.resolutionType, targetForm.imageRatio),
+        extra_prompt: imagePromptForAsset(settings, targetAsset.type, targetForm.characterKind),
       });
-      const submitId = response.result.submit_id ? `，submit_id：${response.result.submit_id}` : "";
-      setNotice(`${response.message || "资产图片已生成"}${submitId}`);
+      const resultSubmitId = typeof response.result.submit_id === "string" ? response.result.submit_id : "";
+      const submitId = response.record?.task_id ? `，task_id：${response.record.task_id}` : resultSubmitId ? `，submit_id：${resultSubmitId}` : "";
+      if (activeAssetIdRef.current === targetAsset.id) {
+        setNotice(`${response.message || "资产图片已生成"}${submitId}`);
+      }
       await onRefresh();
     } catch (caught) {
-      setError(requestErrorMessage(caught, "资产生图失败"));
+      if (activeAssetIdRef.current === targetAsset.id) {
+        setError(requestErrorMessage(caught, "资产生图失败"));
+      }
     } finally {
-      setGeneratingImage(false);
+      setGeneratingImageAssetIds((ids) => ids.filter((id) => id !== targetAsset.id));
     }
   };
 
@@ -287,7 +298,7 @@ export default function AssetDetailPanel({
           </div>
         ) : null}
 
-        <div className="grid gap-2 lg:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1.5">
             <span className="text-xs font-medium text-text-secondary">资产/文件名</span>
             <input value={form.name} onChange={(event) => updateForm("name", event.target.value)} className="glass-input w-full text-sm text-foreground" />
@@ -309,14 +320,14 @@ export default function AssetDetailPanel({
           <textarea
             value={form.description}
             onChange={(event) => updateForm("description", event.target.value)}
-            className="glass-input min-h-[120px] w-full resize-y text-sm leading-6 text-foreground"
+            className="glass-input min-h-[88px] w-full resize-y text-sm leading-6 text-foreground"
             placeholder="用于生成资产图片的提示词"
           />
         </label>
         {isCharacter ? (
-          <div className="space-y-1.5">
-            <span className="block text-xs font-medium text-text-secondary">角色分类</span>
-            <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
+          <div className="flex items-center gap-3 rounded-lg border border-glass-border bg-surface-inset p-2">
+            <span className="w-16 shrink-0 text-xs font-medium text-text-secondary">角色分类</span>
+            <div className="inline-flex h-9 min-w-0 flex-1 rounded-md border border-glass-border bg-panel-bg p-1">
               {(["single", "group"] as const).map((kind) => (
                 <button
                   key={kind}
@@ -334,53 +345,51 @@ export default function AssetDetailPanel({
           </div>
         ) : null}
 
-        <div className="grid gap-2 sm:grid-cols-3 sm:items-end">
-          <div className="rounded-lg border border-glass-border bg-surface-inset p-2.5 sm:col-span-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-text-secondary">全局生图模型</span>
-              <button type="button" onClick={onSettingsOpen} className="text-xs font-medium text-primary hover:text-primary/80">
-                设置
-              </button>
-            </div>
-            <p className="mt-1 truncate text-sm font-semibold text-foreground" title={globalImageModelLabel}>{globalImageModelLabel}</p>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 rounded-lg border border-glass-border bg-surface-inset p-2">
+            <span className="w-20 shrink-0 text-xs font-medium text-text-secondary">全局生图模型</span>
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={globalImageModelLabel}>{globalImageModelLabel}</p>
+            <button type="button" onClick={onSettingsOpen} className="shrink-0 text-xs font-medium text-primary hover:text-primary/80">
+              设置
+            </button>
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <span className="block text-xs font-medium text-text-secondary">画幅</span>
-            <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
-              {(["16:9", "9:16"] as const).map((ratio) => (
-                <button
-                  key={ratio}
-                  type="button"
-                  onClick={() => updateForm("imageRatio", ratio)}
-                  className={clsx(
-                    "flex-1 rounded px-3 text-xs font-medium transition-colors",
-                    form.imageRatio === ratio ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
-                  )}
-                >
-                  {ratio}
-                </button>
-              ))}
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
+              <span className="w-10 shrink-0 text-xs font-medium text-text-secondary">画幅</span>
+              <div className="inline-flex h-8 min-w-0 flex-1 rounded-md border border-glass-border bg-panel-bg p-1">
+                {(["16:9", "9:16"] as const).map((ratio) => (
+                  <button
+                    key={ratio}
+                    type="button"
+                    onClick={() => updateForm("imageRatio", ratio)}
+                    className={clsx(
+                      "flex-1 rounded px-2 text-xs font-medium transition-colors",
+                      form.imageRatio === ratio ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                    )}
+                  >
+                    {ratio}
+                  </button>
+                ))}
+              </div>
             </div>
+            <label className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
+              <span className="shrink-0 text-xs font-medium text-text-secondary">分辨率</span>
+              <select
+                value={settings.resolutionType}
+                onChange={(event) => onSettingsChange({ ...settings, resolutionType: event.target.value as "2k" | "4k" })}
+                className="glass-input h-8 min-w-0 flex-1 px-2 text-sm text-foreground"
+              >
+                <option value="2k">2k</option>
+                <option value="4k">4k</option>
+              </select>
+            </label>
           </div>
-          <label className="space-y-1.5">
-            <span className="block text-xs font-medium text-text-secondary">分辨率</span>
-            <select
-              value={settings.resolutionType}
-              onChange={(event) => onSettingsChange({ ...settings, resolutionType: event.target.value as "2k" | "4k" })}
-              className="glass-input h-10 w-full text-sm text-foreground"
-            >
-              <option value="2k">2k</option>
-              <option value="4k">4k</option>
-            </select>
-          </label>
-        </div>
-        <div className="rounded-lg border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-secondary">
-          <div className="flex items-center justify-between gap-2">
+
+          <div className="flex h-10 items-center justify-between gap-3 rounded-lg border border-glass-border bg-surface-inset px-3 text-xs">
             <span className="font-medium text-foreground">画风风格与类型前缀</span>
-            <button type="button" onClick={onSettingsOpen} className="text-primary hover:text-primary/80">设置</button>
+            <button type="button" onClick={onSettingsOpen} className="shrink-0 font-medium text-primary hover:text-primary/80">设置</button>
           </div>
-          <p className="mt-1 line-clamp-3">{imagePromptForAsset(settings, asset.type, form.characterKind) || "未设置，将只发送资产详情描述。"}</p>
-          <p className="mt-1 text-text-muted">发送给大模型纯文本生图时，会按资产类型拼接在资产详情描述前。</p>
         </div>
 
         {notice ? <p className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">{notice}</p> : null}

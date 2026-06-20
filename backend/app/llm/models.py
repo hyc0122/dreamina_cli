@@ -1,4 +1,4 @@
-"""大模型配置与结果模型。"""
+"""大模型配置与生成结果模型。"""
 
 from dataclasses import dataclass, field
 from typing import Any
@@ -30,12 +30,12 @@ class LlmAssetImageSettings(BaseModel):
     character_prefix: str = "角色设定图"
     scene_prefix: str = "场景设定图"
     prop_prefix: str = "道具设定图"
-    size: str = "1024x576"
+    size: str = "2560x1440"
 
 
 class LlmSettings(BaseModel):
     default_provider_id: str = "jiasuapi"
-    default_model_id: str = "gpt-5.4"
+    default_model_id: str = "gpt-image-2"
     providers: list[LlmProviderSetting] = Field(default_factory=list)
     asset_image: LlmAssetImageSettings = Field(default_factory=LlmAssetImageSettings)
 
@@ -51,8 +51,34 @@ class LlmAssetImageBatchGenerateRequest(LlmAssetImageGenerateRequest):
     asset_ids: list[str] = Field(default_factory=list)
     asset_type: JimengAssetType | None = None
 
+
+class LlmAssetImageRecordPollRequest(BaseModel):
+    project_id: str | None = None
+    record_ids: list[str] = Field(default_factory=list)
+    limit: int = 20
+
+
 @dataclass
 class LlmGeneratedImage:
     content: bytes
     extension: str = "png"
     raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class LlmImageTaskStart:
+    raw: dict[str, Any] = field(default_factory=dict)
+    image: LlmGeneratedImage | None = None
+    task_id: str | None = None
+
+
+@dataclass
+class LlmImageTaskStatus:
+    raw: dict[str, Any] = field(default_factory=dict)
+    state: str = ""
+    is_final: bool = False
+    image: LlmGeneratedImage | None = None
+    progress: str = ""
+    result_url: str = ""
+    result_type: str = ""
+    error: str = ""

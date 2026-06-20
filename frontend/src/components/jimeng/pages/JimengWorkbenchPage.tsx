@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, Clapperboard, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Clapperboard, RefreshCw, ScrollText, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AssetPickerDrawer, { type AssetPickerTarget } from "@/components/jimeng/assets/AssetPickerDrawer";
+import PromptPresetManager from "@/components/jimeng/PromptPresetManager";
 import BatchSubmitSettingsModal from "@/components/jimeng/workbench/BatchSubmitSettingsModal";
 import ConfirmMissingPropsModal from "@/components/jimeng/workbench/ConfirmMissingPropsModal";
 import ShotDetailPanel from "@/components/jimeng/workbench/ShotDetailPanel";
@@ -61,6 +62,7 @@ export default function JimengWorkbenchPage() {
   const [generationSettings, setGenerationSettings] = useState<JimengVideoGenerationSettings>(DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS);
   const [batchSettingsOpen, setBatchSettingsOpen] = useState(false);
   const [confirmMissingPropsOpen, setConfirmMissingPropsOpen] = useState(false);
+  const [promptPresetManagerOpen, setPromptPresetManagerOpen] = useState(false);
   const [missingPropShotIndexes, setMissingPropShotIndexes] = useState<number[]>([]);
   const [pendingSubmitShotIds, setPendingSubmitShotIds] = useState<string[]>([]);
   const [pendingGenerationSettings, setPendingGenerationSettings] = useState<JimengVideoGenerationSettings>(
@@ -325,18 +327,34 @@ export default function JimengWorkbenchPage() {
             <span className="rounded border border-glass-border bg-surface-inset px-2 py-1">视频模板：{promptPresetName}</span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => loadProjectData(currentProject.id)}
-            disabled={loading}
-            className="inline-flex h-9 w-fit items-center gap-2 rounded-md border border-glass-border bg-surface-inset px-3 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-wait disabled:opacity-50"
-          >
-            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-            刷新项目数据
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPromptPresetManagerOpen((open) => !open)}
+              className="inline-flex h-9 w-fit items-center gap-2 rounded-md border border-primary/35 bg-primary/10 px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/15"
+            >
+              <ScrollText size={15} />
+              视频指令模板
+            </button>
+            <button
+              type="button"
+              onClick={() => loadProjectData(currentProject.id)}
+              disabled={loading}
+              className="inline-flex h-9 w-fit items-center gap-2 rounded-md border border-glass-border bg-surface-inset px-3 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-wait disabled:opacity-50"
+            >
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+              刷新项目数据
+            </button>
+          </div>
         </div>
         {storeError ? <p className="mt-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{storeError}</p> : null}
       </section>
+
+      {promptPresetManagerOpen ? (
+        <div className="max-h-[min(62vh,680px)] shrink-0 overflow-y-auto pr-1">
+          <PromptPresetManager />
+        </div>
+      ) : null}
 
       <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_410px]">
         <section className="glass-panel min-h-0 min-w-0 overflow-hidden rounded-xl">

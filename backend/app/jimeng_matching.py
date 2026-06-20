@@ -42,8 +42,12 @@ class _CandidateSpan:
 
 
 _FIELD_PATTERN = re.compile(r"^\s*(场景|人物|道具|分镜提示词)\s*[：:]\s*(.*)$")
+_CHARACTER_FIELD_PATTERN = re.compile(r"(?m)^\s*人物\s*[：:]\s*(.*)$")
 _SHOT_MARKER_PATTERN = re.compile(r"(?m)^\s*#\s*\d+\s*$")
 _NAME_SPLIT_PATTERN = re.compile(r"[、;,，；]")
+_BRACKET_TRANSLATION = str.maketrans({"[": "(", "【": "(", "（": "(", "［": "(", "]": ")", "】": ")", "）": ")", "］": ")"})
+_NAME_QUOTE_CHARS = "\"'“”‘’「」『』《》"
+_BRACKET_OPEN_CHARS = "([（【［"
 _ASSET_TYPE_PRIORITY = {
     JimengAssetType.character: 0,
     JimengAssetType.scene: 1,
@@ -211,13 +215,100 @@ def _select_non_overlapping_asset_spans(prompt: str, assets: list[JimengAsset]) 
 
 
 def _iter_candidate_spans(prompt: str, assets: Iterable[JimengAsset]) -> Iterable[_CandidateSpan]:
+    character_name_spans = _prompt_character_name_spans(prompt)
     for asset in assets:
+        if asset.type == JimengAssetType.character:
+            yield from _iter_character_candidate_spans(prompt, asset, character_name_spans)
+            continue
         for keyword in _asset_keywords(asset):
             start = prompt.find(keyword)
             while start != -1:
                 end = start + len(keyword)
                 yield _CandidateSpan(asset=asset, text=keyword, start=start, end=end)
                 start = prompt.find(keyword, start + 1)
+
+
+def _iter_character_candidate_spans(
+    prompt: str, asset: JimengAsset, character_name_spans: list[tuple[str, int, int]]
+) -> Iterable[_CandidateSpan]:
+    keywords = _asset_keywords(asset)
+    if not keywords:
+        return
+
+    normalized_keywords = {_normalize_name_for_match(keyword) for keyword in keywords}
+    normalized_keywords.discard("")
+
+    if character_name_spans:
+        for name, start, end in character_name_spans:
+            if _normalize_name_for_match(name) in normalized_keywords:
+                yield _CandidateSpan(asset=asset, text=prompt[start:end], start=start, end=end)
+        return
+
+    for keyword in keywords:
+        yield from _iter_normalized_keyword_spans(prompt, asset, keyword)
+
+
+def _prompt_character_name_spans(prompt: str) -> list[tuple[str, int, int]]:
+    spans: list[tuple[str, int, int]] = []
+    for match in _CHARACTER_FIELD_PATTERN.finditer(prompt):
+        value = match.group(1)
+        value_start = match.start(1)
+        token_start = 0
+        for separator in _NAME_SPLIT_PATTERN.finditer(value):
+            spans.extend(_clean_name_token_span(value, value_start, token_start, separator.start()))
+            token_start = separator.end()
+        spans.extend(_clean_name_token_span(value, value_start, token_start, len(value)))
+    return spans
+
+
+def _clean_name_token_span(value: str, value_start: int, start: int, end: int) -> list[tuple[str, int, int]]:
+    while start < end and (value[start].isspace() or value[start] in _NAME_QUOTE_CHARS):
+        start += 1
+    while end > start and (value[end - 1].isspace() or value[end - 1] in _NAME_QUOTE_CHARS):
+        end -= 1
+    if start >= end:
+        return []
+    return [(value[start:end], value_start + start, value_start + end)]
+
+
+def _normalize_name_for_match(value: str) -> str:
+    return "".join(ch for ch in value.strip().translate(_BRACKET_TRANSLATION).casefold() if not ch.isspace())
+
+
+def _iter_normalized_keyword_spans(prompt: str, asset: JimengAsset, keyword: str) -> Iterable[_CandidateSpan]:
+    normalized_prompt, offsets = _normalize_text_with_offsets(prompt)
+    normalized_keyword = _normalize_name_for_match(keyword)
+    if not normalized_keyword:
+        return
+
+    normalized_start = normalized_prompt.find(normalized_keyword)
+    while normalized_start != -1:
+        normalized_end = normalized_start + len(normalized_keyword)
+        start = offsets[normalized_start]
+        end = offsets[normalized_end - 1] + 1
+        if _is_valid_character_fallback_span(prompt, start, end):
+            yield _CandidateSpan(asset=asset, text=prompt[start:end], start=start, end=end)
+        normalized_start = normalized_prompt.find(normalized_keyword, normalized_start + 1)
+
+
+def _normalize_text_with_offsets(text: str) -> tuple[str, list[int]]:
+    chars: list[str] = []
+    offsets: list[int] = []
+    for index, ch in enumerate(text):
+        if ch.isspace():
+            continue
+        chars.append(ch.translate(_BRACKET_TRANSLATION).casefold())
+        offsets.append(index)
+    return "".join(chars), offsets
+
+
+def _is_valid_character_fallback_span(prompt: str, start: int, end: int) -> bool:
+    next_index = end
+    while next_index < len(prompt) and prompt[next_index].isspace():
+        next_index += 1
+    if next_index < len(prompt) and prompt[next_index] in _BRACKET_OPEN_CHARS:
+        return False
+    return True
 
 
 def _asset_keywords(asset: JimengAsset) -> list[str]:

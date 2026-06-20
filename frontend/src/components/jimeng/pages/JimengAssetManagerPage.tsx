@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, CheckSquare, Download, FileInput, Image as ImageIcon, Loader2, Plus, RefreshCw, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, CheckSquare, Download, FileInput, Image as ImageIcon, Plus, RefreshCw, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AssetBrowser from "@/components/jimeng/assets/AssetBrowser";
 import AssetDetailPanel from "@/components/jimeng/assets/AssetDetailPanel";
@@ -12,9 +12,8 @@ import AssetPreviewModal from "@/components/jimeng/assets/AssetPreviewModal";
 import AssetToolbar from "@/components/jimeng/assets/AssetToolbar";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
 import CreateAssetModal from "@/components/jimeng/assets/CreateAssetModal";
-import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
+import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
 import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
-import OperationOverlay from "@/components/jimeng/OperationOverlay";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
 
@@ -66,6 +65,7 @@ export default function JimengAssetManagerPage() {
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [assetViewMode, setAssetViewMode] = useState<AssetViewMode>("compact");
   const [notice, setNotice] = useState<string | null>(null);
+  const [batchProgressMessage, setBatchProgressMessage] = useState<string | null>(null);
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [imageSettings, setImageSettings] = useState<AssetImageSettings>(() => readImageSettings());
   const [stylePresets, setStylePresets] = useState<JimengStylePreset[]>([]);
@@ -163,6 +163,10 @@ export default function JimengAssetManagerPage() {
 
   const selectedAsset = useMemo(() => assets.find((asset) => asset.id === selectedAssetId) ?? null, [assets, selectedAssetId]);
   const selectedGroup = useMemo(() => (selectedAsset ? (groupedByName.get(assetGroupKey(selectedAsset)) ?? [selectedAsset]) : []), [groupedByName, selectedAsset]);
+  const selectedCurrentTypeAssets = useMemo(
+    () => assets.filter((asset) => asset.type === activeType && selectedAssetIds.includes(asset.id)),
+    [activeType, assets, selectedAssetIds],
+  );
   const allFilteredSelected = filteredAssets.length > 0 && filteredAssets.every((asset) => selectedAssetIds.includes(asset.id));
 
   const saveImageSettings = (settings: AssetImageSettings) => {
@@ -246,33 +250,52 @@ export default function JimengAssetManagerPage() {
     if (!currentProject) {
       return;
     }
-    const targets = filteredAssets.filter((asset) => asset.description.trim());
-    if (targets.length === 0) {
-      setNotice("当前筛选结果没有可生图资产，请先填写详情描述");
+    if (selectedCurrentTypeAssets.length === 0) {
+      setNotice(`请先勾选要批量生图的${JIMENG_ASSET_TYPE_LABELS[activeType]}资产`);
       return;
     }
-    if (!window.confirm(`将为当前筛选出的 ${targets.length} 个${JIMENG_ASSET_TYPE_LABELS[activeType]}资产批量生图，是否继续？`)) {
+    const targets = selectedCurrentTypeAssets.filter((asset) => asset.description.trim());
+    if (targets.length === 0) {
+      setNotice("选中的资产没有可生图内容，请先填写详情描述");
+      return;
+    }
+    if (!window.confirm(`将为选中的 ${targets.length} 个${JIMENG_ASSET_TYPE_LABELS[activeType]}资产批量生图，是否继续？`)) {
       return;
     }
     setBatchGenerating(true);
     setNotice(null);
+    setBatchProgressMessage(`批量生图进度：准备生成 ${targets.length} 个${JIMENG_ASSET_TYPE_LABELS[activeType]}资产。`);
     try {
       const selectedLlmModel = parseLlmModelValue(resolvedImageModelValue);
       let successCount = 0;
       let failedCount = 0;
+      let processedCount = 0;
       const runBatch = async (batchTargets: JimengAsset[], extraPrompt: string) => {
         if (batchTargets.length === 0) {
           return;
         }
-        const result = await jimengApi.batchGenerateAssetImagesWithLlm(currentProject.id, {
-          asset_ids: batchTargets.map((asset) => asset.id),
-          asset_type: activeType,
-          provider_id: selectedLlmModel?.providerId,
-          model_id: selectedLlmModel?.modelId,
-          extra_prompt: extraPrompt,
-        });
-        successCount += result.success_count;
-        failedCount += result.failed_count;
+        const ratioGroups = new Map<"16:9" | "9:16", JimengAsset[]>();
+        for (const asset of batchTargets) {
+          const ratio = asset.image_ratio === "9:16" ? "9:16" : "16:9";
+          ratioGroups.set(ratio, [...(ratioGroups.get(ratio) ?? []), asset]);
+        }
+        for (const [ratio, assetsForRatio] of ratioGroups) {
+          setBatchProgressMessage(
+            `批量生图进度：正在生成 ${processedCount + 1}-${processedCount + assetsForRatio.length} / ${targets.length}，画幅 ${ratio}，请勿重复点击。`,
+          );
+          const result = await jimengApi.batchGenerateAssetImagesWithLlm(currentProject.id, {
+            asset_ids: assetsForRatio.map((asset) => asset.id),
+            asset_type: activeType,
+            provider_id: selectedLlmModel?.providerId,
+            model_id: selectedLlmModel?.modelId,
+            size: assetImageSizeFromSettings(imageSettings.resolutionType, ratio),
+            extra_prompt: extraPrompt,
+          });
+          successCount += result.success_count;
+          failedCount += result.failed_count;
+          processedCount += assetsForRatio.length;
+          setBatchProgressMessage(`批量生图进度：已处理 ${processedCount} / ${targets.length}，成功 ${successCount}，失败 ${failedCount}。`);
+        }
       };
       if (activeType === "character") {
         for (const kind of ["single", "group"] as const) {
@@ -288,6 +311,7 @@ export default function JimengAssetManagerPage() {
       setNotice(requestErrorMessage(caught, "批量生图失败"));
     } finally {
       setBatchGenerating(false);
+      setBatchProgressMessage(null);
     }
   };
 
@@ -307,7 +331,6 @@ export default function JimengAssetManagerPage() {
 
   return (
     <section className="h-full overflow-y-auto pr-1">
-      <OperationOverlay open={batchGenerating} title="批量生图中，请等待..." subtitle="正在调用大模型生成资产图片，完成后会自动刷新资产库。" />
       <div className="flex flex-col gap-5 pb-4">
       <AssetToolbar projectName={currentProject.name}>
         <div className="flex flex-wrap gap-2">
@@ -320,12 +343,22 @@ export default function JimengAssetManagerPage() {
             <span>生图设置</span>
           </button>
           <button type="button" onClick={batchGenerateImages} disabled={batchGenerating} className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60">
-            {batchGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            <Sparkles size={16} />
             <span>{batchGenerating ? "批量生图中" : "批量生图"}</span>
           </button>
           <button type="button" onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90">
             <Plus size={16} />
             <span>新建资产</span>
+          </button>
+          <button
+            type="button"
+            onClick={toggleAllFilteredAssets}
+            disabled={filteredAssets.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary hover:bg-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {allFilteredSelected ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} />}
+            <span>{allFilteredSelected ? "取消全选当前" : "全选当前"}</span>
+            <span className="rounded border border-glass-border bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{selectedAssetIds.length}</span>
           </button>
           <button type="button" onClick={() => void batchDeleteAssets()} disabled={selectedAssetIds.length === 0} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-45">
             <Trash2 size={16} />
@@ -354,6 +387,7 @@ export default function JimengAssetManagerPage() {
         </div>
       </AssetToolbar>
 
+      {batchProgressMessage ? <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-200">{batchProgressMessage}</p> : null}
       {notice ? <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{notice}</p> : null}
       {storeError ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{storeError}</p> : null}
 
@@ -422,7 +456,7 @@ export default function JimengAssetManagerPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_500px]">
         <div className="min-h-[520px]">
           {filteredAssets.length > 0 ? (
             <div

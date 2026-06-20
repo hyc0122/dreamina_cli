@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Pause,
   Play,
+  Power,
   RefreshCw,
   RotateCcw,
   SquareX,
@@ -34,6 +35,7 @@ interface QueueActionButtonProps {
 type QueueStatusFilter = JimengQueueFilterStatus | "all";
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const;
+const WORKER_START_BUSY_ID = "__worker_start__";
 
 const STATUS_FILTERS: Array<{ value: QueueStatusFilter; label: string; tone?: "danger" | "success" | "primary" }> = [
   { value: "all", label: "全部" },
@@ -91,6 +93,7 @@ export default function JimengQueuePage() {
   const loadProjects = useJimengStore((state) => state.loadProjects);
   const loadQueue = useJimengStore((state) => state.loadQueue);
   const startQueue = useJimengStore((state) => state.startQueue);
+  const startQueueWorker = useJimengStore((state) => state.startQueueWorker);
   const pauseQueue = useJimengStore((state) => state.pauseQueue);
   const cancelQueueItem = useJimengStore((state) => state.cancelQueueItem);
   const retryQueueItem = useJimengStore((state) => state.retryQueueItem);
@@ -279,11 +282,22 @@ export default function JimengQueuePage() {
           </p>
 
           <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-text-secondary">
-              独立 worker：
-              <span className={clsx("ml-1 font-medium", queueStatus?.worker_online ? "text-emerald-300" : "text-red-300")}>
-                {queueStatus?.worker_online ? "在线" : "离线"}
+            <div className="flex min-h-10 items-center justify-between gap-2 rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-text-secondary">
+              <span className="min-w-0">
+                独立 worker：
+                <span className={clsx("ml-1 font-medium", queueStatus?.worker_online ? "text-emerald-300" : "text-red-300")}>
+                  {queueStatus?.worker_online ? "在线" : "离线"}
+                </span>
               </span>
+              {queueStatus?.worker_online ? null : (
+                <QueueActionButton
+                  icon={Power}
+                  label={busyId === WORKER_START_BUSY_ID ? "启动中" : "启动 worker"}
+                  onClick={() => runAction("worker 启动指令已发送", startQueueWorker, WORKER_START_BUSY_ID)}
+                  disabled={loading || busyId === WORKER_START_BUSY_ID}
+                  tone="primary"
+                />
+              )}
             </div>
             <div className="rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-text-secondary">
               队列开关：<span className="ml-1 font-medium text-foreground">{queueStatus?.started ? "运行" : "暂停"}</span>

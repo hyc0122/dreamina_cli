@@ -67,10 +67,7 @@ export default function LlmProviderPanel({
   };
 
   const removeProvider = () => {
-    if (!activeProvider) {
-      return;
-    }
-    if (activeProvider.id === "jiasuapi") {
+    if (!activeProvider || activeProvider.id === "jiasuapi") {
       return;
     }
     const nextProviders = providers.filter((provider) => provider.id !== activeProvider.id);

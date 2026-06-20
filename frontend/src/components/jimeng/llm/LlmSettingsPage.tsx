@@ -91,7 +91,11 @@ export default function LlmSettingsPage() {
             </button>
           </div>
           {(notice || error) && (
-            <p className={`mt-3 rounded-md border px-3 py-2 text-sm ${error ? "border-red-500/20 bg-red-500/10 text-red-300" : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"}`}>
+            <p
+              className={`mt-3 rounded-md border px-3 py-2 text-sm ${
+                error ? "border-red-500/20 bg-red-500/10 text-red-300" : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+              }`}
+            >
               {error ?? notice}
             </p>
           )}
@@ -116,7 +120,7 @@ export default function LlmSettingsPage() {
               <h3 className="font-display text-lg font-semibold text-foreground">资产图片生图默认项</h3>
               <p className="mt-2 text-sm leading-6 text-text-secondary">
                 这里是大模型接口侧的兜底画风和图片尺寸；资产管理里的“生图设置”是操作侧画风。
-                资产管理传入画风时会优先使用资产管理设置；这里保留为接口兜底项，不和资产管理冲突。
+                实际生图会把两处提示词与资产详情描述拼接后发送，不是互相覆盖或冲突。
               </p>
             </div>
             <span className="rounded-md border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs text-primary">纯文本生图</span>
@@ -140,9 +144,9 @@ export default function LlmSettingsPage() {
                 value={settings.asset_image.size}
                 onChange={(event) => setSettings((state) => ({ ...state, asset_image: { ...state.asset_image, size: event.target.value } }))}
                 className="glass-input h-10 w-full font-mono text-sm text-foreground"
-                placeholder="1024x576"
+                placeholder="2560x1440"
               />
-              <span className="block text-xs leading-5 text-text-muted">按 OpenAI 兼容图片接口传给 size 字段。</span>
+              <span className="block text-xs leading-5 text-text-muted">按图片接口传给 size 字段。</span>
             </label>
           </div>
 

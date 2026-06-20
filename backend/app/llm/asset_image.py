@@ -1,8 +1,6 @@
 """资产图片纯文本生图。"""
 
 import re
-import uuid
-from pathlib import Path
 from typing import Any
 
 from ..jimeng_models import JimengAssetType
@@ -10,7 +8,14 @@ from ..jimeng_storage import JimengStore
 from .client import call_text_to_image
 from .models import LlmAssetImageBatchGenerateRequest, LlmAssetImageGenerateRequest
 from .settings import load_llm_settings, model_dump, resolve_provider_and_model
-
+from .asset_image_records import (
+    complete_asset_image_record_with_image,
+    create_asset_image_record,
+    mark_asset_image_record_submitted,
+    mark_asset_image_record_timeout,
+    public_asset_image_record,
+    update_asset_image_record,
+)
 
 _ASSET_TYPE_PREFIX = {
     JimengAssetType.character: "character_prefix",
@@ -18,6 +23,7 @@ _ASSET_TYPE_PREFIX = {
     JimengAssetType.prop: "prop_prefix",
 }
 _PROMPT_LABEL_RE = re.compile(r"^\s*【[^】]+】\s*$")
+_TASK_ID_ERROR_RE = re.compile(r"task_id=([^\s,，。;；]+)")
 
 
 def _clean_prompt_part(value: str) -> str:
@@ -38,6 +44,18 @@ def build_asset_image_prompt(asset: Any, settings: Any, extra_prompt: str = "") 
     return "\n".join(part for part in (type_prefix, global_prompt, extra, description, image_params) if part)
 
 
+def _assert_image_model(model: Any) -> None:
+    model_type = str(getattr(model, "type", "") or "").lower()
+    if model_type != "image":
+        model_name = getattr(model, "name", None) or getattr(model, "id", "")
+        raise ValueError(f"资产生图请选择图片模型，当前模型不是图片模型：{model_name}")
+
+
+def _task_id_from_error(error: Exception) -> str:
+    match = _TASK_ID_ERROR_RE.search(str(error))
+    return match.group(1).strip() if match else ""
+
+
 def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, request: LlmAssetImageGenerateRequest):
     store.get_project(project_id)
     asset = store._get_asset(asset_id)
@@ -46,39 +64,60 @@ def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, req
 
     settings = load_llm_settings(store)
     provider, model = resolve_provider_and_model(settings, request.provider_id, request.model_id)
+    _assert_image_model(model)
     size = request.size or settings.asset_image.size
     prompt = build_asset_image_prompt(asset, settings, request.extra_prompt)
-    generated = call_text_to_image(provider, prompt, model.id, size)
+    record = create_asset_image_record(
+        store,
+        project_id=project_id,
+        asset=asset,
+        provider=provider,
+        model=model,
+        prompt=prompt,
+        size=size,
+    )
+    try:
+        generated = call_text_to_image(provider, prompt, model.id, size)
+    except ValueError as exc:
+        task_id = _task_id_from_error(exc)
+        if not task_id:
+            update_asset_image_record(store, record["id"], status="failed", error=str(exc), last_response={"error": str(exc)})
+            raise
+        record = mark_asset_image_record_submitted(store, record["id"], task_id, {"error": str(exc)})
+        record = mark_asset_image_record_timeout(store, record["id"])
+        return {
+            "asset": asset,
+            "provider": model_dump(provider),
+            "model": model_dump(model),
+            "prompt": prompt,
+            "source_path": "",
+            "result": record.get("last_response") or {},
+            "record": public_asset_image_record(record),
+            "message": "大模型生图任务已记录，当前请求超时；可在生成记录中继续获取远端结果",
+        }
 
-    safe_ext = generated.extension.lower().lstrip(".") or "png"
-    if safe_ext not in {"png", "jpg", "jpeg", "webp"}:
-        safe_ext = "png"
-    generated_dir = store._asset_dir(project_id, asset.type, "image") / ".llm_generated"
-    generated_dir.mkdir(parents=True, exist_ok=True)
-    store._assert_under_output_root(generated_dir)
-    source_path = generated_dir / f"{asset.id}-{uuid.uuid4().hex}.{safe_ext}"
-    source_path.write_bytes(generated.content)
-
-    updated_asset = store.upsert_asset_file(project_id, asset.type, asset.name, source_path, "image")
-    source_path.unlink(missing_ok=True)
+    record = complete_asset_image_record_with_image(store, record["id"], generated)
+    updated_asset = store._get_asset(asset.id)
     return {
         "asset": updated_asset,
         "provider": model_dump(provider),
         "model": model_dump(model),
         "prompt": prompt,
-        "source_path": str(source_path),
+        "source_path": str(record.get("source_path") or ""),
         "result": generated.raw,
+        "record": public_asset_image_record(record),
         "message": "资产图片已通过大模型纯文本生成并保存",
     }
 
 
 def batch_generate_asset_images(store: JimengStore, project_id: str, request: LlmAssetImageBatchGenerateRequest):
     store.get_project(project_id)
-    if request.asset_ids:
-        wanted = set(request.asset_ids)
-        assets = [asset for asset in store.list_assets(project_id, request.asset_type) if asset.id in wanted]
-    else:
-        assets = store.list_assets(project_id, request.asset_type)
+    if not request.asset_ids:
+        raise ValueError("请先选择需要批量生图的资产")
+    wanted = set(request.asset_ids)
+    assets = [asset for asset in store.list_assets(project_id, request.asset_type) if asset.id in wanted]
+    if not assets:
+        raise ValueError("未找到选中的资产，请刷新后重试")
 
     results: list[dict[str, Any]] = []
     single_request = LlmAssetImageGenerateRequest(

@@ -19,7 +19,7 @@ export type AssetImageSettingsTab = "model" | "prompt" | "prefix" | "style" | "p
 const SETTINGS_TABS: Array<{ id: AssetImageSettingsTab; label: string; description: string }> = [
   { id: "model", label: "模型与尺寸", description: "模型、画幅、分辨率" },
   { id: "prompt", label: "画风风格", description: "全局、单人、群演、场景" },
-  { id: "prefix", label: "类型前缀", description: "人物、场景、道具" },
+  { id: "prefix", label: "类型前缀", description: "单人、群演、场景、道具" },
   { id: "style", label: "风格库", description: "复用资产风格" },
   { id: "preview", label: "发送预览", description: "检查最终组合" },
 ];

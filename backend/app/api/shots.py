@@ -19,6 +19,7 @@ from .context import (
 from .schemas import (
     BatchReplaceRequest,
     MoveRequest,
+    ShotAssetMatchRequest,
     ShotBatchDelete,
     ShotCreate,
     ShotImport,
@@ -71,11 +72,15 @@ def batch_replace_shots(project_id: str, request: BatchReplaceRequest):
 
 
 @router.post("/projects/{project_id}/shots/match_assets")
-def match_assets(project_id: str):
-    def match_all():
+def match_assets(project_id: str, request: ShotAssetMatchRequest | None = None):
+    def match_target_shots():
+        match_request = request or ShotAssetMatchRequest()
         assets = get_store().list_assets(project_id)
+        shots = _target_shots(project_id, match_request.shot_ids)
         results = []
-        for shot in get_store().list_shots(project_id):
+        for shot in shots:
+            if match_request.clear_existing_auto:
+                _delete_auto_bindings(project_id, shot.id)
             existing = {(binding.asset_id, binding.asset_type) for binding in get_store().list_bindings(project_id, shot.id)}
             bindings = []
             matches = match_assets_for_prompt(shot.prompt, assets)
@@ -96,7 +101,54 @@ def match_assets(project_id: str):
             )
         return {"shots": results}
 
-    return _call(match_all)
+    return _call(match_target_shots)
+
+
+@router.post("/projects/{project_id}/shots/clear_matched_assets")
+def clear_matched_assets(project_id: str, request: ShotAssetMatchRequest):
+    def clear_target_shots():
+        if not request.shot_ids:
+            raise ValueError("请选择要删除匹配资产的分镜")
+        shots = _target_shots(project_id, request.shot_ids)
+        results = []
+        deleted_ids: list[str] = []
+        for shot in shots:
+            deleted = _delete_auto_bindings(project_id, shot.id)
+            deleted_ids.extend(deleted)
+            results.append(
+                {
+                    "shot_id": shot.id,
+                    "deleted": deleted,
+                    "bindings": _dump(get_store().list_bindings(project_id, shot.id)),
+                    "highlights": [],
+                }
+            )
+        return {"shots": results, "deleted": deleted_ids, "deleted_count": len(deleted_ids)}
+
+    return _call(clear_target_shots)
+
+
+def _target_shots(project_id: str, shot_ids: list[str] | None):
+    all_shots = get_store().list_shots(project_id)
+    if not shot_ids:
+        return all_shots
+
+    ordered_ids = list(dict.fromkeys(shot_ids))
+    shot_by_id = {shot.id: shot for shot in all_shots}
+    missing = [shot_id for shot_id in ordered_ids if shot_id not in shot_by_id]
+    if missing:
+        raise ValueError("selected shot does not belong to project")
+    return [shot_by_id[shot_id] for shot_id in ordered_ids]
+
+
+def _delete_auto_bindings(project_id: str, shot_id: str) -> list[str]:
+    deleted: list[str] = []
+    for binding in get_store().list_bindings(project_id, shot_id):
+        if binding.source != "auto":
+            continue
+        get_store().delete_binding(binding.id)
+        deleted.append(binding.id)
+    return deleted
 
 
 @router.put("/projects/{project_id}/shots/{shot_id}")

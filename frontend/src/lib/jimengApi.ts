@@ -278,6 +278,24 @@ export interface JimengMatchAssetsResponse {
   shots: JimengMatchAssetsShotResult[];
 }
 
+export interface JimengMatchAssetsRequest {
+  shot_ids?: string[];
+  clear_existing_auto?: boolean;
+}
+
+export interface JimengClearMatchedAssetsShotResult {
+  shot_id: string;
+  deleted: string[];
+  bindings: JimengAssetBinding[];
+  highlights: JimengHighlightSpan[];
+}
+
+export interface JimengClearMatchedAssetsResponse {
+  shots: JimengClearMatchedAssetsShotResult[];
+  deleted: string[];
+  deleted_count: number;
+}
+
 export interface JimengPromptPreviewResponse {
   prefix_prompt: string;
   final_prompt: string;
@@ -298,6 +316,15 @@ export interface JimengQueueEnvelope {
     waiting_count: number;
     last_error: string | null;
   };
+}
+
+export interface JimengQueueWorkerStartResponse {
+  started: boolean;
+  message: string;
+  worker_pid?: number | null;
+  mode?: string | null;
+  script_path?: string | null;
+  status: JimengQueueEnvelope["status"];
 }
 
 export interface JimengSettings {
@@ -367,7 +394,44 @@ export interface JimengLlmAssetImageGenerationResponse {
   prompt: string;
   source_path: string;
   result: Record<string, unknown>;
+  record?: JimengLlmAssetImageRecord;
   message: string;
+}
+
+export interface JimengLlmAssetImageRecordFeedback {
+  at: string;
+  level: "info" | "success" | "warning" | "error" | string;
+  message: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface JimengLlmAssetImageRecord {
+  id: string;
+  project_id: string;
+  asset_id: string;
+  asset_name: string;
+  asset_type: JimengAssetType;
+  provider_id: string;
+  provider_name: string;
+  model_id: string;
+  model_name: string;
+  size: string;
+  prompt: string;
+  task_id: string;
+  status: "submitted" | "running" | "timeout" | "poll_error" | "succeeded" | "failed" | "canceled" | string;
+  state: string;
+  progress: string;
+  result_url: string;
+  result_type: string;
+  error: string;
+  poll_count: number;
+  last_checked_at: string;
+  created_at: string;
+  updated_at: string;
+  source_path?: string;
+  asset_image_path?: string;
+  asset_image_filename?: string;
+  feedback: JimengLlmAssetImageRecordFeedback[];
 }
 
 export interface JimengVideoGenerationSettings {
@@ -581,8 +645,10 @@ export const jimengApi = {
     axios.post<JimengShot>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/move`, { direction }).then((res) => res.data),
   batchReplaceShots: (projectId: string, data: { find: string; replace: string }) =>
     axios.post<{ shots: JimengShot[] }>(`${API_URL}/jimeng/projects/${projectId}/shots/batch_replace`, data).then((res) => res.data),
-  matchAssets: (projectId: string) =>
-    axios.post<JimengMatchAssetsResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/match_assets`).then((res) => res.data),
+  matchAssets: (projectId: string, data: JimengMatchAssetsRequest = {}) =>
+    axios.post<JimengMatchAssetsResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/match_assets`, data).then((res) => res.data),
+  clearMatchedAssets: (projectId: string, data: { shot_ids: string[] }) =>
+    axios.post<JimengClearMatchedAssetsResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/clear_matched_assets`, data).then((res) => res.data),
 
   listAssets: (projectId: string, type?: JimengAssetType) =>
     axios.get<JimengAsset[]>(`${API_URL}/jimeng/projects/${projectId}/assets`, { params: { type } }).then((res) => res.data),
@@ -633,6 +699,16 @@ export const jimengApi = {
     axios
       .post<JimengAssetBatchImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/llm_image/batch_generate`, data)
       .then((res) => res.data),
+  listLlmAssetImageRecords: (projectId?: string) =>
+    axios.get<{ records: JimengLlmAssetImageRecord[] }>(`${API_URL}/jimeng/llm/asset_image_records`, { params: { project_id: projectId } }).then((res) => res.data),
+  pollLlmAssetImageRecords: (data: { project_id?: string; record_ids?: string[]; limit?: number } = {}) =>
+    axios.post<{ records: JimengLlmAssetImageRecord[] }>(`${API_URL}/jimeng/llm/asset_image_records/poll`, data).then((res) => res.data),
+  pollLlmAssetImageRecord: (recordId: string) =>
+    axios.post<JimengLlmAssetImageRecord>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}/poll`).then((res) => res.data),
+  cancelLlmAssetImageRecord: (recordId: string) =>
+    axios.post<JimengLlmAssetImageRecord>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}/cancel`).then((res) => res.data),
+  deleteLlmAssetImageRecord: (recordId: string) =>
+    axios.delete<{ deleted: string }>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}`).then((res) => res.data),
   uploadAssetVoice: (projectId: string, assetId: string, file: File) =>
     axios.post<JimengAsset>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}/voice`, formDataWithFile(file), multipartHeaders).then((res) => res.data),
   getAssetVoiceUrl: (projectId: string, assetId: string) =>
@@ -657,6 +733,8 @@ export const jimengApi = {
     axios.post<{ items: JimengQueueItem[] }>(`${API_URL}/jimeng/queue/items/batch`, { items }).then((res) => res.data),
   startQueue: () =>
     axios.post<JimengQueueEnvelope["status"]>(`${API_URL}/jimeng/queue/start`).then((res) => res.data),
+  startQueueWorker: () =>
+    axios.post<JimengQueueWorkerStartResponse>(`${API_URL}/jimeng/queue/worker/start`).then((res) => res.data),
   pauseQueue: () =>
     axios.post<{ status: JimengQueueEnvelope["status"] }>(`${API_URL}/jimeng/queue/pause`).then((res) => res.data),
   cancelQueueItem: (queueItemId: string) =>
