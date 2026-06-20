@@ -185,6 +185,10 @@ export default function JimengAssetManagerPage() {
 
   const selectedAsset = useMemo(() => assets.find((asset) => asset.id === selectedAssetId) ?? null, [assets, selectedAssetId]);
   const selectedGroup = useMemo(() => (selectedAsset ? (groupedByName.get(assetGroupKey(selectedAsset)) ?? [selectedAsset]) : []), [groupedByName, selectedAsset]);
+  const selectedAssetImageHistoryRecords = useMemo(
+    () => (selectedAsset ? llmImageRecords.filter((record) => record.asset_id === selectedAsset.id && record.status === "succeeded") : []),
+    [llmImageRecords, selectedAsset],
+  );
   const selectedCurrentTypeAssets = useMemo(
     () => assets.filter((asset) => asset.type === activeType && selectedAssetIds.includes(asset.id)),
     [activeType, assets, selectedAssetIds],
@@ -548,6 +552,7 @@ export default function JimengAssetManagerPage() {
           settings={imageSettings}
           globalImageModelValue={resolvedImageModelValue}
           globalImageModelLabel={resolvedImageModelLabel}
+          imageHistoryRecords={selectedAssetImageHistoryRecords}
           onSettingsOpen={() => setSettingsOpen(true)}
           onSettingsChange={saveImageSettings}
           onRefresh={refreshProject}

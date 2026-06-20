@@ -1,11 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, CheckSquare, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Maximize2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
+import { ArrowLeft, CheckSquare, ClipboardPaste, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Maximize2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
-import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
+import { jimengApi, type JimengAsset, type JimengAssetType, type JimengLlmAssetImageRecord, type JimengStylePreset } from "@/lib/jimengApi";
 import { ASSET_IMAGE_QUALITY_OPTIONS, type AssetFormState, type AssetImageQuality, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases, splitReferenceImageUrls } from "@/components/jimeng/assets/assetManagerShared";
 import { parseLlmModelValue } from "@/components/jimeng/llm/modelOptions";
 
@@ -17,10 +17,12 @@ export default function AssetDetailPanel({
   globalImageModelValue,
   globalImageModelLabel,
   assetImagePending = false,
+  imageHistoryRecords = [],
   onSettingsOpen,
   onSettingsChange,
   onRefresh,
   onLlmImageRecordsChanged,
+  onHistoryApplied,
   onPreview,
   onSelectAsset,
 }: {
@@ -31,10 +33,12 @@ export default function AssetDetailPanel({
   globalImageModelValue: string;
   globalImageModelLabel: string;
   assetImagePending?: boolean;
+  imageHistoryRecords?: JimengLlmAssetImageRecord[];
   onSettingsOpen: () => void;
   onSettingsChange: (settings: AssetImageSettings) => void;
   onRefresh: () => Promise<void>;
   onLlmImageRecordsChanged?: () => Promise<void>;
+  onHistoryApplied?: () => Promise<void>;
   onPreview: (asset: JimengAsset) => void;
   onSelectAsset: (assetId: string) => void;
 }) {
@@ -43,6 +47,7 @@ export default function AssetDetailPanel({
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingVoice, setUploadingVoice] = useState(false);
   const [generatingImageAssetIds, setGeneratingImageAssetIds] = useState<string[]>([]);
+  const [applyingHistoryRecordId, setApplyingHistoryRecordId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +58,10 @@ export default function AssetDetailPanel({
   const voiceUrl = jimengMediaUrl(asset?.audio_path, asset?.updated_at);
   const isCharacter = asset?.type === "character";
   const generatingImage = asset ? generatingImageAssetIds.includes(asset.id) || assetImagePending : false;
+  const availableHistoryRecords = imageHistoryRecords
+    .filter((record) => record.status === "succeeded" && Boolean(record.asset_image_path || record.source_path))
+    .sort((left, right) => (right.created_at || right.updated_at).localeCompare(left.created_at || left.updated_at))
+    .slice(0, 12);
 
   useEffect(() => {
     activeAssetIdRef.current = asset?.id ?? "";
@@ -141,9 +150,7 @@ export default function AssetDetailPanel({
     }
   };
 
-  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+  const uploadImageFile = async (file: File, successMessage?: string) => {
     if (!asset || !file) {
       return;
     }
@@ -153,11 +160,69 @@ export default function AssetDetailPanel({
     try {
       await jimengApi.uploadAssetImage(projectId, asset.id, file);
       await onRefresh();
-      setNotice(asset.image_filename ? "图片已替换，预览已刷新。" : "图片已上传，预览已刷新。");
+      setNotice(successMessage ?? (asset.image_filename ? "图片已替换，预览已刷新。" : "图片已上传，预览已刷新。"));
     } catch (caught) {
       setError(requestErrorMessage(caught, "图片上传失败"));
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    await uploadImageFile(file);
+  };
+
+  const pasteImageFromClipboard = async () => {
+    if (!asset) {
+      return;
+    }
+    if (!navigator.clipboard?.read) {
+      setError("当前浏览器不支持读取剪贴板图片，请使用上传图片。");
+      return;
+    }
+    setNotice(null);
+    setError(null);
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((type) => type.startsWith("image/"));
+        if (!imageType) {
+          continue;
+        }
+        const blob = await item.getType(imageType);
+        const ext = imageType.includes("jpeg") ? "jpg" : imageType.includes("webp") ? "webp" : "png";
+        const safeName = asset.name.replace(/[\\/:*?"<>|]+/g, "_") || "clipboard";
+        await uploadImageFile(new File([blob], `${safeName}-clipboard.${ext}`, { type: imageType }), "已粘贴剪贴板图片，预览已刷新。");
+        return;
+      }
+      setError("剪贴板里没有图片，请先复制图片后再点击粘贴。");
+    } catch (caught) {
+      setError(requestErrorMessage(caught, "粘贴剪贴板图片失败"));
+    }
+  };
+
+  const applyHistoryImage = async (record: JimengLlmAssetImageRecord) => {
+    if (!asset) {
+      return;
+    }
+    setApplyingHistoryRecordId(record.id);
+    setNotice(null);
+    setError(null);
+    try {
+      await jimengApi.applyLlmAssetImageRecord(record.id);
+      await onLlmImageRecordsChanged?.();
+      await onHistoryApplied?.();
+      await onRefresh();
+      setNotice(`已使用历史生成图：${asset.name}`);
+    } catch (caught) {
+      setError(requestErrorMessage(caught, "使用历史生成图失败"));
+    } finally {
+      setApplyingHistoryRecordId(null);
     }
   };
 
@@ -230,31 +295,89 @@ export default function AssetDetailPanel({
       </div>
 
       <div className="mt-3 flex items-stretch gap-2">
-        <button
-          type="button"
-          onClick={() => imageUrl && onPreview(asset)}
-          disabled={!imageUrl}
-          className="group relative aspect-video min-w-0 flex-1 overflow-hidden rounded-lg border border-glass-border bg-surface-inset disabled:cursor-default"
-        >
-          {imageUrl ? (
-            <img src={imageUrl} alt={asset.name} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
-          ) : (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-muted">
-              <ImageIcon size={30} />
-              <span className="text-xs">未上传图片</span>
-            </div>
-          )}
-          {imageUrl ? (
-            <span className="absolute bottom-3 right-3 grid h-8 w-8 place-items-center rounded-md border border-glass-border bg-panel-bg/80 text-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
-              <Maximize2 size={15} />
-            </span>
-          ) : null}
-        </button>
+        <div className="relative aspect-video min-w-0 flex-1 overflow-hidden rounded-lg border border-glass-border bg-surface-inset">
+          <button
+            type="button"
+            onClick={() => imageUrl && onPreview(asset)}
+            disabled={!imageUrl}
+            className="group h-full w-full disabled:cursor-default"
+          >
+            {imageUrl ? (
+              <img src={imageUrl} alt={asset.name} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
+            ) : (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-muted">
+                <ImageIcon size={30} />
+                <span className="text-xs">未上传图片</span>
+              </div>
+            )}
+            {imageUrl ? (
+              <span className="absolute bottom-3 right-3 grid h-8 w-8 place-items-center rounded-md border border-glass-border bg-panel-bg/80 text-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
+                <Maximize2 size={15} />
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            title="粘贴剪贴板图片"
+            onClick={() => void pasteImageFromClipboard()}
+            disabled={uploadingImage}
+            className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full border border-glass-border bg-panel-bg/90 text-primary shadow-lg backdrop-blur transition-colors hover:bg-hover-bg disabled:cursor-wait disabled:opacity-60"
+          >
+            {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <ClipboardPaste size={16} />}
+          </button>
+        </div>
         <label className="flex w-24 shrink-0 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2 text-center text-xs font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground">
           {uploadingImage ? <Loader2 size={18} className="animate-spin" /> : <ImageIcon size={18} />}
           <span>{asset.image_filename ? "替换图片" : "上传图片"}</span>
           <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" className="sr-only" onChange={uploadImage} disabled={uploadingImage} />
         </label>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-glass-border bg-surface-inset p-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-foreground">历史生成图对比</span>
+          <span className="rounded border border-glass-border bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{availableHistoryRecords.length}</span>
+        </div>
+        {availableHistoryRecords.length > 0 ? (
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {availableHistoryRecords.map((record) => {
+              const historyImageUrl = jimengMediaUrl(record.asset_image_path || record.source_path, record.updated_at);
+              const applying = applyingHistoryRecordId === record.id;
+              return (
+                <div key={record.id} className="w-28 shrink-0 rounded-lg border border-glass-border bg-panel-bg p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => historyImageUrl && window.open(historyImageUrl, "_blank", "noopener,noreferrer")}
+                    className="aspect-video w-full overflow-hidden rounded-md border border-glass-border bg-surface-inset text-text-muted"
+                    title="打开历史图对比"
+                  >
+                    {historyImageUrl ? (
+                      <img src={historyImageUrl} alt={`${asset.name} 历史生成图`} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="grid h-full place-items-center">
+                        <ImageIcon size={14} />
+                      </div>
+                    )}
+                  </button>
+                  <p className="mt-1 truncate text-[10px] text-text-muted" title={formatUpdatedAt(record.created_at || record.updated_at)}>
+                    {formatUpdatedAt(record.created_at || record.updated_at)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => applyHistoryImage(record)}
+                    disabled={applying}
+                    className="mt-1 inline-flex h-7 w-full items-center justify-center gap-1 rounded-md border border-primary/30 bg-primary/10 text-[11px] font-medium text-primary hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {applying ? <Loader2 size={12} className="animate-spin" /> : <CheckSquare size={12} />}
+                    使用此图
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-2 rounded-md border border-dashed border-glass-border px-2 py-2 text-xs text-text-muted">暂无历史生成图，后续 AI 生图成功后会保留在这里用于对比。</p>
+        )}
       </div>
 
       {groupedAssets.length > 1 ? (

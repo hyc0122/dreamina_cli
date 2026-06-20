@@ -4,6 +4,7 @@
 """
 
 import json
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,17 +12,28 @@ from typing import Any
 
 from ..jimeng_models import JimengAssetType
 from ..jimeng_storage import JimengStore
-from .client import poll_text_to_image_task
+from .client import download_text_to_image_result, poll_text_to_image_task
 from .models import LlmGeneratedImage, LlmModelSetting, LlmProviderSetting
 from .settings import load_llm_settings
 
 PENDING_RECORD_STATUSES = {"submitted", "running", "timeout", "poll_error"}
 FINAL_RECORD_STATUSES = {"succeeded", "failed", "canceled"}
+DEFAULT_AUTO_CANCEL_MINUTES = 20
 MAX_FEEDBACK_ITEMS = 80
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def _record_id() -> str:
@@ -177,6 +189,23 @@ def delete_asset_image_record(store: JimengStore, record_id: str) -> dict[str, A
     return deleted
 
 
+def _auto_cancel_record_if_expired(store: JimengStore, record: dict[str, Any], auto_cancel_minutes: int | None) -> dict[str, Any] | None:
+    if not auto_cancel_minutes or auto_cancel_minutes <= 0:
+        return None
+    if record.get("status") not in PENDING_RECORD_STATUSES:
+        return None
+    created_at = _parse_time(record.get("created_at") or record.get("updated_at"))
+    if created_at is None:
+        return None
+    elapsed_seconds = (datetime.now(timezone.utc) - created_at).total_seconds()
+    if elapsed_seconds < auto_cancel_minutes * 60:
+        return None
+    record["status"] = "canceled"
+    record["error"] = f"超过 {auto_cancel_minutes} 分钟未获取成功，已自动取消继续获取"
+    append_feedback(record, record["error"], "warning", {"auto_cancel_minutes": auto_cancel_minutes})
+    return save_asset_image_record(store, record)
+
+
 def delete_asset_image_records(store: JimengStore, record_ids: list[str]) -> list[dict[str, Any]]:
     wanted = set(record_ids)
     if not wanted:
@@ -229,14 +258,20 @@ def _save_generated_image_to_asset(store: JimengStore, project_id: str, asset_id
     store._assert_under_output_root(generated_dir)
     source_path = generated_dir / f"{asset.id}-{uuid.uuid4().hex}.{safe_ext}"
     source_path.write_bytes(generated.content)
+    history_dir = store._asset_dir(project_id, asset.type, "image") / ".llm_history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+    store._assert_under_output_root(history_dir)
+    history_path = history_dir / f"{asset.id}-{uuid.uuid4().hex}.{safe_ext}"
+    store._assert_under_output_root(history_path)
+    shutil.copyfile(source_path, history_path)
     updated_asset = store.upsert_asset_file(project_id, asset.type, asset.name, source_path, "image")
     source_path.unlink(missing_ok=True)
-    return updated_asset, str(source_path)
+    return updated_asset, str(history_path)
 
 
 def complete_asset_image_record_with_image(store: JimengStore, record_id: str, generated: LlmGeneratedImage) -> dict[str, Any]:
     record = get_asset_image_record(store, record_id)
-    updated_asset, source_path = _save_generated_image_to_asset(
+    updated_asset, history_path = _save_generated_image_to_asset(
         store,
         str(record.get("project_id") or ""),
         str(record.get("asset_id") or ""),
@@ -250,14 +285,41 @@ def complete_asset_image_record_with_image(store: JimengStore, record_id: str, g
             "state": "success",
             "progress": "100%",
             "error": "",
-            "source_path": source_path,
-            "asset_image_path": updated_asset.image_path,
-            "asset_image_filename": updated_asset.image_filename,
+            "source_path": history_path,
+            "asset_image_path": history_path,
+            "asset_image_filename": Path(history_path).name,
+            "asset_current_image_path": updated_asset.image_path,
+            "asset_current_image_filename": updated_asset.image_filename,
             "last_response": generated.raw,
         }
     )
     append_feedback(record, "远端任务已成功，本地资产图片已保存。", "success")
     return save_asset_image_record(store, record)
+
+
+def apply_asset_image_record_to_asset(store: JimengStore, record_id: str) -> dict[str, Any]:
+    record = get_asset_image_record(store, record_id)
+    if record.get("status") != "succeeded":
+        raise ValueError("只能使用已成功保存的历史资产图")
+    project_id = str(record.get("project_id") or "")
+    asset_id = str(record.get("asset_id") or "")
+    image_path = Path(str(record.get("asset_image_path") or record.get("source_path") or ""))
+    if not image_path.exists():
+        raise ValueError("历史资产图文件不存在，无法应用")
+    asset = store._get_asset(asset_id)
+    if asset.project_id != project_id:
+        raise ValueError("asset does not belong to project")
+    updated_asset = store.upsert_asset_file(project_id, asset.type, asset.name, image_path, "image")
+    record.update(
+        {
+            "asset_name": updated_asset.name,
+            "asset_type": _asset_type_value(updated_asset.type),
+            "asset_current_image_path": updated_asset.image_path,
+            "asset_current_image_filename": updated_asset.image_filename,
+        }
+    )
+    append_feedback(record, "已将这张历史生成图应用为当前资产图。", "success")
+    return {"asset": updated_asset, "record": save_asset_image_record(store, record)}
 
 
 def _provider_for_record(store: JimengStore, record: dict[str, Any]) -> LlmProviderSetting:
@@ -269,15 +331,43 @@ def _provider_for_record(store: JimengStore, record: dict[str, Any]) -> LlmProvi
     return provider
 
 
-def poll_asset_image_record(store: JimengStore, record_id: str) -> dict[str, Any]:
+def poll_asset_image_record(
+    store: JimengStore,
+    record_id: str,
+    auto_cancel_minutes: int | None = DEFAULT_AUTO_CANCEL_MINUTES,
+    force: bool = False,
+) -> dict[str, Any]:
     record = get_asset_image_record(store, record_id)
-    if record.get("status") == "canceled":
+    if record.get("status") == "succeeded":
+        return record
+    if record.get("status") == "canceled" and not force:
         append_feedback(record, "记录已取消，跳过获取。", "warning")
         return save_asset_image_record(store, record)
-    if record.get("status") in FINAL_RECORD_STATUSES:
+    if record.get("status") in FINAL_RECORD_STATUSES and not force:
         return record
+    if force and record.get("status") in {"failed", "canceled"}:
+        append_feedback(record, "已手动重新获取该记录。", "info")
+    expired_record = _auto_cancel_record_if_expired(store, record, auto_cancel_minutes)
+    if expired_record is not None:
+        return expired_record
     task_id = str(record.get("task_id") or "").strip()
     if not task_id:
+        result_url = str(record.get("result_url") or "").strip()
+        if result_url:
+            record["poll_count"] = int(record.get("poll_count") or 0) + 1
+            record["last_checked_at"] = _now()
+            try:
+                generated = download_text_to_image_result(result_url, record.get("last_response") if isinstance(record.get("last_response"), dict) else {"result_url": result_url})
+                record["error"] = ""
+                record["last_response"] = generated.raw
+                append_feedback(record, f"第 {record['poll_count']} 次按结果图地址重新下载成功。", "success", {"result_url": result_url})
+                save_asset_image_record(store, record)
+                return complete_asset_image_record_with_image(store, record_id, generated)
+            except Exception as exc:
+                record["status"] = "poll_error"
+                record["error"] = str(exc)
+                append_feedback(record, f"按结果图地址重新下载失败：{exc}", "error", {"result_url": result_url})
+                return save_asset_image_record(store, record)
         record["status"] = "failed"
         record["error"] = "记录缺少 task_id，无法继续获取"
         append_feedback(record, record["error"], "error")
@@ -331,17 +421,23 @@ def poll_pending_asset_image_records(
     project_id: str | None = None,
     record_ids: list[str] | None = None,
     limit: int = 20,
+    auto_cancel_minutes: int | None = DEFAULT_AUTO_CANCEL_MINUTES,
+    force: bool = False,
 ) -> list[dict[str, Any]]:
     wanted_ids = set(record_ids or [])
     records = list_asset_image_records(store, project_id)
     targets = [
         record
         for record in records
-        if record.get("status") in PENDING_RECORD_STATUSES and (not wanted_ids or record.get("id") in wanted_ids)
+        if (not wanted_ids or record.get("id") in wanted_ids)
+        and (
+            record.get("status") in PENDING_RECORD_STATUSES
+            or (force and bool(wanted_ids) and record.get("status") in {"failed", "canceled"})
+        )
     ]
     results: list[dict[str, Any]] = []
     for record in targets[: max(1, limit)]:
-        results.append(poll_asset_image_record(store, str(record["id"])))
+        results.append(poll_asset_image_record(store, str(record["id"]), auto_cancel_minutes=auto_cancel_minutes, force=force))
     return results
 
 

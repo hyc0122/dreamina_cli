@@ -163,18 +163,39 @@ def _extract_task_id(payload: dict[str, Any]) -> object | None:
 
 def _download_image(url: str, raw: dict[str, Any]) -> LlmGeneratedImage:
     last_error: OSError | None = None
+    parsed = urllib.parse.urlparse(str(url))
+    origin = f"{parsed.scheme}://{parsed.netloc}/" if parsed.scheme and parsed.netloc else ""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    }
+    if origin:
+        headers["Referer"] = origin
     for attempt in range(URL_OPEN_MAX_ATTEMPTS):
         try:
-            with urllib.request.urlopen(str(url), timeout=120) as response:
+            request = urllib.request.Request(str(url), headers=headers, method="GET")
+            with urllib.request.urlopen(request, timeout=120) as response:
                 return LlmGeneratedImage(content=response.read(), extension=_image_extension_from_url(str(url)), raw=raw)
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if attempt < URL_OPEN_MAX_ATTEMPTS - 1 and exc.code in {403, 408, 429, 500, 502, 503, 504}:
+                time.sleep(URL_OPEN_RETRY_BASE_SECONDS * (attempt + 1))
+                continue
+            detail = exc.read().decode("utf-8", errors="replace")
+            suffix = f"：{detail}" if detail else ""
+            raise ValueError(f"大模型生图结果图片下载失败：HTTP {exc.code}{suffix} result_url={url}") from exc
         except OSError as exc:
             last_error = exc
             if attempt < URL_OPEN_MAX_ATTEMPTS - 1:
                 time.sleep(URL_OPEN_RETRY_BASE_SECONDS * (attempt + 1))
                 continue
             message = _transient_request_message(exc)
-            raise ValueError(f"大模型生图结果图片下载失败：{message}，已重试 {URL_OPEN_MAX_ATTEMPTS} 次，请稍后再试。") from exc
-    raise ValueError(f"大模型生图结果图片下载失败: {last_error}")
+            raise ValueError(f"大模型生图结果图片下载失败：{message}，已重试 {URL_OPEN_MAX_ATTEMPTS} 次，请稍后再试。 result_url={url}") from exc
+    raise ValueError(f"大模型生图结果图片下载失败: {last_error} result_url={url}")
+
+
+def download_text_to_image_result(url: str, raw: dict[str, Any] | None = None) -> LlmGeneratedImage:
+    return _download_image(url, raw or {"result_url": url})
 
 
 def _decode_image_payload(payload: dict[str, Any]) -> LlmGeneratedImage | None:
@@ -310,7 +331,9 @@ def _poll_jiasu_media_task(settings: LlmProviderSetting, task_id: object) -> Llm
                 error = status.error or status.raw
                 raise ValueError(f"大模型生图任务失败: {error}")
             if status.image is None:
-                raise ValueError("大模型生图接口未返回图片数据")
+                detail = status.error or "大模型生图接口未返回图片数据"
+                result_url = f" result_url={status.result_url}" if status.result_url else ""
+                raise ValueError(f"{detail} task_id={task_id}{result_url}")
             return status.image
         if attempt < JIASU_STATUS_MAX_POLLS - 1:
             time.sleep(JIASU_STATUS_POLL_INTERVAL_SECONDS)
@@ -355,15 +378,19 @@ def _poll_jiasu_media_status(settings: LlmProviderSetting, task_id: object) -> L
     is_final = status.get("is_final") is True
     error = str(status.get("error") or "") if status.get("error") else ""
     image: LlmGeneratedImage | None = None
+    result_url = str(status.get("result_url") or status.get("url") or status.get("image_url") or "")
     if is_final and state != "failed":
-        image = _require_image_payload(payload)
+        try:
+            image = _require_image_payload(payload)
+        except ValueError as exc:
+            error = str(exc)
     return LlmImageTaskStatus(
         raw=payload,
         state=state,
         is_final=is_final,
         image=image,
         progress=str(status.get("progress") or ""),
-        result_url=str(status.get("result_url") or status.get("url") or status.get("image_url") or ""),
+        result_url=result_url,
         result_type=str(status.get("result_type") or ""),
         error=error,
     )

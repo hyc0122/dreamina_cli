@@ -25,6 +25,7 @@ _ASSET_TYPE_PREFIX = {
 }
 _PROMPT_LABEL_RE = re.compile(r"^\s*【[^】]+】\s*$")
 _TASK_ID_ERROR_RE = re.compile(r"task_id=([^\s,，。;；]+)")
+_RESULT_URL_ERROR_RE = re.compile(r"result_url=(\S+)")
 _IMAGE_QUALITIES = {"auto", "high", "medium", "low"}
 
 
@@ -55,6 +56,11 @@ def _assert_image_model(model: Any) -> None:
 
 def _task_id_from_error(error: Exception) -> str:
     match = _TASK_ID_ERROR_RE.search(str(error))
+    return match.group(1).strip() if match else ""
+
+
+def _result_url_from_error(error: Exception) -> str:
+    match = _RESULT_URL_ERROR_RE.search(str(error))
     return match.group(1).strip() if match else ""
 
 
@@ -110,11 +116,18 @@ def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, req
         generated = _call_text_to_image_provider(provider, prompt, model.id, size, quality, reference_images)
     except ValueError as exc:
         task_id = _task_id_from_error(exc)
-        if not task_id:
+        result_url = _result_url_from_error(exc)
+        if not task_id and not result_url:
             update_asset_image_record(store, record["id"], status="failed", error=str(exc), last_response={"error": str(exc)})
             raise
-        record = mark_asset_image_record_submitted(store, record["id"], task_id, {"error": str(exc)})
-        record = mark_asset_image_record_timeout(store, record["id"])
+        if task_id:
+            record = mark_asset_image_record_submitted(store, record["id"], task_id, {"error": str(exc), **({"result_url": result_url} if result_url else {})})
+        updates: dict[str, Any] = {"error": str(exc), "last_response": {"error": str(exc)}}
+        if result_url:
+            updates.update({"status": "poll_error", "result_url": result_url, "last_response": {"error": str(exc), "result_url": result_url}})
+            record = update_asset_image_record(store, record["id"], **updates)
+        else:
+            record = mark_asset_image_record_timeout(store, record["id"])
         return {
             "asset": asset,
             "provider": model_dump(provider),
@@ -123,7 +136,7 @@ def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, req
             "source_path": "",
             "result": record.get("last_response") or {},
             "record": public_asset_image_record(record),
-            "message": "大模型生图任务已记录，当前请求超时；可在生成记录中继续获取远端结果",
+            "message": "大模型生图任务已记录，当前结果图未保存；可在生成记录中继续获取远端结果",
         }
 
     record = complete_asset_image_record_with_image(store, record["id"], generated)

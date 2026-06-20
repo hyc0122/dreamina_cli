@@ -58,6 +58,8 @@ class LlmAssetImageRecordPollRequest(BaseModel):
     project_id: str | None = None
     record_ids: list[str] = Field(default_factory=list)
     limit: int = 20
+    auto_cancel_minutes: int | None = 20
+    force: bool = False
 
 
 class LlmAssetImageRecordBatchDeleteRequest(BaseModel):

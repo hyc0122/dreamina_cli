@@ -13,6 +13,7 @@ type LockFilter = "all" | "locked" | "unlocked";
 type HistoryMode = "video" | "asset" | "llm_image";
 type AssetHistoryType = Extract<JimengAssetType, "character" | "scene">;
 type LlmRecordStatusFilter = "all" | "pending" | "succeeded" | "failed" | "canceled";
+type LlmAutoCancelMinutes = 0 | 10 | 20 | 30 | 60 | 120;
 
 const STATUS_OPTIONS: Array<{ value: JimengQueueStatus | "all"; label: string }> = [
   { value: "all", label: "全部状态" },
@@ -42,7 +43,18 @@ const LLM_RECORD_STATUS_OPTIONS: Array<{ value: LlmRecordStatusFilter; label: st
   { value: "canceled", label: "已取消" },
 ];
 
+const LLM_AUTO_CANCEL_STORAGE_KEY = "dreamina_cli_llm_image_record_auto_cancel_minutes";
+const LLM_AUTO_CANCEL_OPTIONS: Array<{ value: LlmAutoCancelMinutes; label: string }> = [
+  { value: 20, label: "超过 20 分钟自动取消" },
+  { value: 10, label: "超过 10 分钟自动取消" },
+  { value: 30, label: "超过 30 分钟自动取消" },
+  { value: 60, label: "超过 1 小时自动取消" },
+  { value: 120, label: "超过 2 小时自动取消" },
+  { value: 0, label: "不自动取消" },
+];
+
 const LLM_PENDING_STATUSES = new Set(["submitted", "running", "timeout", "poll_error"]);
+const LLM_MANUAL_POLL_STATUSES = new Set(["failed", "canceled"]);
 const LLM_STATUS_LABELS: Record<string, string> = {
   submitted: "已提交",
   running: "获取中",
@@ -91,6 +103,14 @@ const llmRecordSubmittedAt = (record: JimengLlmAssetImageRecord): string => reco
 const sortLlmRecordsBySubmittedAt = (records: JimengLlmAssetImageRecord[]): JimengLlmAssetImageRecord[] =>
   [...records].sort((left, right) => llmRecordSubmittedAt(right).localeCompare(llmRecordSubmittedAt(left)));
 
+const readLlmAutoCancelMinutes = (): LlmAutoCancelMinutes => {
+  if (typeof window === "undefined") {
+    return 20;
+  }
+  const value = Number(window.localStorage.getItem(LLM_AUTO_CANCEL_STORAGE_KEY));
+  return LLM_AUTO_CANCEL_OPTIONS.some((option) => option.value === value) ? (value as LlmAutoCancelMinutes) : 20;
+};
+
 export default function JimengGenerationHistoryPage() {
   const projects = useJimengStore((state) => state.projects);
   const currentProject = useJimengStore((state) => state.currentProject);
@@ -109,6 +129,7 @@ export default function JimengGenerationHistoryPage() {
   const [queueStatus, setQueueStatus] = useState<JimengQueueStatus | "all">("all");
   const [lockState, setLockState] = useState<LockFilter>("all");
   const [llmRecordStatus, setLlmRecordStatus] = useState<LlmRecordStatusFilter>("all");
+  const [llmAutoCancelMinutes, setLlmAutoCancelMinutes] = useState<LlmAutoCancelMinutes>(() => readLlmAutoCancelMinutes());
   const [selectedLlmRecordIds, setSelectedLlmRecordIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,6 +178,10 @@ export default function JimengGenerationHistoryPage() {
   useEffect(() => {
     setSelectedLlmRecordIds((ids) => ids.filter((id) => llmImageRecords.some((record) => record.id === id)));
   }, [llmImageRecords]);
+
+  useEffect(() => {
+    window.localStorage.setItem(LLM_AUTO_CANCEL_STORAGE_KEY, String(llmAutoCancelMinutes));
+  }, [llmAutoCancelMinutes]);
 
   const projectById = useMemo(() => {
     const entries = currentProject ? [...projects, currentProject] : projects;
@@ -223,6 +248,15 @@ export default function JimengGenerationHistoryPage() {
   );
   const allFilteredLlmSelected =
     filteredLlmRecords.length > 0 && filteredLlmRecords.every((record) => selectedLlmRecordIds.includes(record.id));
+  const selectedRetryableLlmRecords = useMemo(
+    () =>
+      llmImageRecords.filter(
+        (record) =>
+          selectedLlmRecordIds.includes(record.id) &&
+          (LLM_PENDING_STATUSES.has(record.status) || LLM_MANUAL_POLL_STATUSES.has(record.status)),
+      ),
+    [llmImageRecords, selectedLlmRecordIds],
+  );
 
   const activeCount =
     historyMode === "video" ? filteredCandidates.length : historyMode === "asset" ? filteredAssetRecords.length : filteredLlmRecords.length;
@@ -260,12 +294,14 @@ export default function JimengGenerationHistoryPage() {
         const response = await jimengApi.pollLlmAssetImageRecords({
           project_id: projectId === "all" ? undefined : projectId,
           limit: 20,
+          auto_cancel_minutes: llmAutoCancelMinutes,
         });
         mergeLlmRecords(response.records);
         await refreshCurrentProjectAfterLlmSave(response.records);
         if (!silent) {
           const savedCount = response.records.filter((record) => record.status === "succeeded").length;
-          setNotice(response.records.length > 0 ? `已继续获取 ${response.records.length} 条记录，保存本地 ${savedCount} 条` : "暂无需要继续获取的大模型生图记录");
+          const canceledCount = response.records.filter((record) => record.status === "canceled").length;
+          setNotice(response.records.length > 0 ? `已继续获取 ${response.records.length} 条记录，保存本地 ${savedCount} 条，自动取消 ${canceledCount} 条` : "暂无需要继续获取的大模型生图记录");
         }
       } catch (caught) {
         if (!silent) {
@@ -273,14 +309,18 @@ export default function JimengGenerationHistoryPage() {
         }
       }
     },
-    [mergeLlmRecords, projectId, refreshCurrentProjectAfterLlmSave],
+    [llmAutoCancelMinutes, mergeLlmRecords, projectId, refreshCurrentProjectAfterLlmSave],
   );
 
   const pollOneLlmRecord = async (record: JimengLlmAssetImageRecord) => {
     setNotice(null);
     setError(null);
     try {
-      const updated = await jimengApi.pollLlmAssetImageRecord(record.id);
+      const manual = LLM_MANUAL_POLL_STATUSES.has(record.status);
+      const updated = await jimengApi.pollLlmAssetImageRecord(record.id, {
+        auto_cancel_minutes: llmAutoCancelMinutes,
+        force: manual,
+      });
       mergeLlmRecords([updated]);
       await refreshCurrentProjectAfterLlmSave([updated]);
       setNotice(updated.status === "succeeded" ? `已获取并保存：${updated.asset_name}` : `已获取：${updated.asset_name}，当前状态 ${LLM_STATUS_LABELS[updated.status] ?? updated.status}`);
@@ -346,6 +386,30 @@ export default function JimengGenerationHistoryPage() {
       setNotice(`已删除 ${response.deleted.length} 条大模型生图记录`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "批量删除大模型生图记录失败");
+    }
+  };
+
+  const pollSelectedLlmRecords = async () => {
+    if (selectedRetryableLlmRecords.length === 0) {
+      setNotice("请先勾选失败、已取消或待获取记录");
+      return;
+    }
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await jimengApi.pollLlmAssetImageRecords({
+        record_ids: selectedRetryableLlmRecords.map((record) => record.id),
+        limit: selectedRetryableLlmRecords.length,
+        auto_cancel_minutes: llmAutoCancelMinutes,
+        force: true,
+      });
+      mergeLlmRecords(response.records);
+      await refreshCurrentProjectAfterLlmSave(response.records);
+      const savedCount = response.records.filter((record) => record.status === "succeeded").length;
+      const failedCount = response.records.filter((record) => record.status === "failed" || record.status === "poll_error").length;
+      setNotice(`已手动获取选中记录 ${response.records.length} 条，保存本地 ${savedCount} 条，失败/异常 ${failedCount} 条`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "手动获取选中大模型生图记录失败");
     }
   };
 
@@ -544,6 +608,20 @@ export default function JimengGenerationHistoryPage() {
                   <RefreshCw size={14} />
                   继续获取全部
                 </button>
+                <label className="inline-flex items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-3 py-2 text-xs font-medium text-text-secondary">
+                  <span className="shrink-0">超过多久自动取消</span>
+                  <select
+                    value={llmAutoCancelMinutes}
+                    onChange={(event) => setLlmAutoCancelMinutes(Number(event.target.value) as LlmAutoCancelMinutes)}
+                    className="bg-transparent text-xs font-semibold text-foreground outline-none"
+                  >
+                    {LLM_AUTO_CANCEL_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button
                   type="button"
                   onClick={toggleAllFilteredLlmRecords}
@@ -553,6 +631,16 @@ export default function JimengGenerationHistoryPage() {
                   {allFilteredLlmSelected ? <CheckSquare size={14} className="text-primary" /> : <Square size={14} />}
                   {allFilteredLlmSelected ? "取消全选当前" : "全选当前"}
                   <span className="rounded border border-glass-border bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{selectedLlmRecordIds.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => pollSelectedLlmRecords()}
+                  disabled={selectedRetryableLlmRecords.length === 0}
+                  className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <RefreshCw size={14} />
+                  手动获取选中
+                  <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[11px]">{selectedRetryableLlmRecords.length}</span>
                 </button>
                 <button
                   type="button"
@@ -724,6 +812,8 @@ export default function JimengGenerationHistoryPage() {
               {filteredLlmRecords.map((record) => {
                 const imageUrl = jimengMediaUrl(record.asset_image_path, record.updated_at);
                 const pending = LLM_PENDING_STATUSES.has(record.status);
+                const manualRetryable = LLM_MANUAL_POLL_STATUSES.has(record.status);
+                const pollable = pending || manualRetryable;
                 const selected = selectedLlmRecordIds.includes(record.id);
                 const feedbackItems = (record.feedback ?? []).slice(-3).reverse();
                 return (
@@ -799,11 +889,11 @@ export default function JimengGenerationHistoryPage() {
                       <button
                         type="button"
                         onClick={() => pollOneLlmRecord(record)}
-                        disabled={!pending}
+                        disabled={!pollable}
                         className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         <RefreshCw size={13} />
-                        继续获取
+                        {manualRetryable ? "手动获取" : "继续获取"}
                       </button>
                       <button
                         type="button"
