@@ -1,6 +1,8 @@
 runtime_data/
 build_cache/
 releases/
+!docs/releases/
+!docs/releases/*.md
 backend/data/
 backend/1/
 build_exe/
