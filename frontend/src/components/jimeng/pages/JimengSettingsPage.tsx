@@ -20,7 +20,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import PromptPresetManager from "@/components/jimeng/PromptPresetManager";
 import { buildLlmModelOptions, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import {
   JIMENG_VIDEO_DURATION_OPTIONS,
@@ -1142,8 +1141,6 @@ export default function JimengSettingsPage() {
             {lastAction ? `${lastAction.label}\n${stringifyResult(lastAction.response)}` : "点击上方 CLI 按钮后，这里会显示完整返回值。"}
           </pre>
         </section>
-
-        <PromptPresetManager />
       </div>
     </div>
   );
