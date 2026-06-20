@@ -1,4 +1,4 @@
-﻿# 资产管理全局生图模型与设置拆分 Implementation Plan
+# 资产管理全局生图模型与设置拆分 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -296,9 +296,9 @@ Expected: TypeScript and Vite build pass.
 
 ```bash
 git diff --check
-git ls-files tests frontend/src/**/__tests__ runtime_data frontend/dist build_cache releases backend/data
+git status --short
 ```
 
-Expected: no whitespace errors and no tracked test/generated paths.
+Expected: no whitespace errors; status only includes intended source or documentation changes.
 
 

@@ -1,4 +1,4 @@
-﻿# 资产管理全局生图模型与设置拆分设计
+# 资产管理全局生图模型与设置拆分设计
 
 日期：2026-06-20
 
@@ -78,4 +78,4 @@ README 保持简短：
 - 本地结构测试验证关键代码连线、模块拆分和文档规则。
 - 后端 `python -m compileall backend/app/llm backend/app/api` 通过。
 - 前端 `npm run build` 通过。
-- `git ls-files tests frontend/src/**/__tests__ runtime_data frontend/dist build_cache releases backend/data` 不应输出路径，确保测试和本地生成数据不会被提交。
+- 发布前按仓库忽略规则检查提交内容。

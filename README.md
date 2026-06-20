@@ -2,7 +2,11 @@
 
 [![说明文档](https://img.shields.io/badge/说明文档-README-0ea5e9)](https://github.com/hyc0122/dreamina_cli#readme)
 
-当前版本：`v0.1.1`
+当前版本：`v1.00.001`
+
+更新时间：`2026-06-20 11:22:36 +08:00`
+
+最近更新：资产管理全局生图模型与设置拆分
 
 更新日志：[CHANGELOG.md](./CHANGELOG.md)
 
@@ -228,7 +232,7 @@ $env:DREAMINA_CLI_DATA_DIR="D:\dreamina-data"
 - 即梦资产图片模型后端能力列表：`backend/app/api/settings.py` 中的 `_JIMENG_IMAGE_MODELS`。
 - 即梦 CLI 图片模型校验：`backend/app/jimeng_cli.py` 中的 `_IMAGE_MODELS`。
 
-“大模型设置”里新增的图片模型会出现在资产管理的生图模型选择中；新增的视频模型会出现在分镜工作台和即梦设置的视频模型选择中。
+“大模型设置”里新增的图片模型会出现在资产管理“生图设置”的全局模型选择中；新增的视频模型会出现在分镜工作台和即梦设置的视频模型选择中。
 
 ## 即梦 CLI 设置
 

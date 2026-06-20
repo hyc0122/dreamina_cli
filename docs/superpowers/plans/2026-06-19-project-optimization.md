@@ -74,7 +74,7 @@ Create `CHANGELOG.md` with this content:
 ### 调整内容
 
 - README 保留项目入口、环境、拉取、安装和启动说明。
-- 本地运行数据、构建产物和测试目录不作为发布源码内容。
+- 发布前按仓库忽略规则检查提交内容。
 
 ### 已知限制
 
@@ -573,9 +573,9 @@ Create `docs/development/maintenance-guidelines.md`:
 - README 只保留当前版本和更新日志链接，不复制完整更新历史。
 - `CHANGELOG.md`、README、`pyproject.toml`、`frontend/package.json` 的版本号必须一致。
 
-## 发布范围
+## 发布检查
 
-- GitHub 发布源码不包含 `tests/`、`__tests__/`、`runtime_data/`、`backend/data/`、`backend/1/`、`frontend/dist/`、`build_cache/`、`releases/`。
+- 发布前按仓库忽略规则检查提交内容。
 - 发布前运行 `.\scripts\verify_all.ps1`。
 
 ## 前端结构
@@ -649,10 +649,10 @@ Expected:
 Run:
 
 ```powershell
-git ls-tree -r --name-only HEAD | rg '(^tests/|__tests__|frontend/dist|runtime_data|backend/data|backend/1|build_cache|releases)'
+git status --short
 ```
 
-Expected: no output.
+Expected: review the output and confirm only intended source or documentation changes are present.
 
 - [ ] **Step 3: Push to GitHub**
 
