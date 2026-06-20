@@ -202,7 +202,12 @@ export default function JimengAssetManagerPage() {
       ),
     [llmImageRecords],
   );
+  const ungeneratedFilteredAssets = useMemo(
+    () => filteredAssets.filter((asset) => !asset.image_path && !pendingImageAssetIds.has(asset.id)),
+    [filteredAssets, pendingImageAssetIds],
+  );
   const allFilteredSelected = filteredAssets.length > 0 && filteredAssets.every((asset) => selectedAssetIds.includes(asset.id));
+  const allUngeneratedFilteredSelected = ungeneratedFilteredAssets.length > 0 && ungeneratedFilteredAssets.every((asset) => selectedAssetIds.includes(asset.id));
 
   const saveImageSettings = (settings: AssetImageSettings) => {
     setImageSettings(settings);
@@ -221,6 +226,15 @@ export default function JimengAssetManagerPage() {
       return;
     }
     setSelectedAssetIds((ids) => [...ids, ...filteredIds.filter((id) => !ids.includes(id))]);
+  };
+
+  const toggleUngeneratedFilteredAssets = () => {
+    const ungeneratedIds = ungeneratedFilteredAssets.map((asset) => asset.id);
+    if (allUngeneratedFilteredSelected) {
+      setSelectedAssetIds((ids) => ids.filter((id) => !ungeneratedIds.includes(id)));
+      return;
+    }
+    setSelectedAssetIds((ids) => [...ids, ...ungeneratedIds.filter((id) => !ids.includes(id))]);
   };
 
   const handleAssetCreated = async (asset: JimengAsset) => {
@@ -412,6 +426,16 @@ export default function JimengAssetManagerPage() {
             <span>{allFilteredSelected ? "取消全选当前" : "全选当前"}</span>
             <span className="rounded border border-glass-border bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{selectedAssetIds.length}</span>
           </button>
+          <button
+            type="button"
+            onClick={toggleUngeneratedFilteredAssets}
+            disabled={ungeneratedFilteredAssets.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {allUngeneratedFilteredSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+            <span>{allUngeneratedFilteredSelected ? "取消未生图" : "全选未生图"}</span>
+            <span className="rounded border border-primary/20 bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{ungeneratedFilteredAssets.length}</span>
+          </button>
           <button type="button" onClick={() => void batchDeleteAssets()} disabled={selectedAssetIds.length === 0} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-45">
             <Trash2 size={16} />
             <span>批量删除资产</span>
@@ -473,6 +497,16 @@ export default function JimengAssetManagerPage() {
             {allFilteredSelected ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} />}
             <span>{allFilteredSelected ? "取消全选" : "全选资产"}</span>
             <span className="rounded border border-glass-border bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{selectedAssetIds.length}</span>
+          </button>
+          <button
+            type="button"
+            onClick={toggleUngeneratedFilteredAssets}
+            disabled={ungeneratedFilteredAssets.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {allUngeneratedFilteredSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+            <span>{allUngeneratedFilteredSelected ? "取消未生图" : "全选未生图"}</span>
+            <span className="rounded border border-primary/20 bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{ungeneratedFilteredAssets.length}</span>
           </button>
         </div>
 

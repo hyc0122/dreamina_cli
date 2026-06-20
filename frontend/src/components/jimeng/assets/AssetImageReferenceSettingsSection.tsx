@@ -15,11 +15,13 @@ export default function AssetImageReferenceSettingsSection({
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
   const references = normalizeReferenceImageUrls(draft.styleReferenceImages);
 
   const updateReferences = (urls: string[]) => {
     setDraft((state) => ({ ...state, styleReferenceImages: normalizeReferenceImageUrls(urls) }));
     onDirty();
+    setCopiedNotice(null);
   };
 
   const uploadReferences = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -51,6 +53,12 @@ export default function AssetImageReferenceSettingsSection({
 
   const copyUrl = async (url: string) => {
     await navigator.clipboard?.writeText(url);
+    setCopiedNotice("已复制参考图链接");
+  };
+
+  const copyAllUrls = async () => {
+    await navigator.clipboard?.writeText(references.join("\n"));
+    setCopiedNotice(`已复制 ${references.length} 个参考图链接`);
   };
 
   return (
@@ -71,15 +79,37 @@ export default function AssetImageReferenceSettingsSection({
 
       <div className="rounded-lg border border-glass-border bg-panel-bg p-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-foreground">已获取链接</span>
-          <span className="rounded border border-glass-border bg-surface-inset px-2 py-0.5 font-mono text-xs text-text-muted">{references.length}/10</span>
+          <div className="min-w-0">
+            <span className="text-sm font-semibold text-foreground">已获取链接</span>
+            {copiedNotice ? <p className="mt-1 text-xs text-primary">{copiedNotice}</p> : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="rounded border border-glass-border bg-surface-inset px-2 py-0.5 font-mono text-xs text-text-muted">{references.length}/10</span>
+            <button
+              type="button"
+              onClick={() => void copyAllUrls()}
+              disabled={references.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-md border border-glass-border bg-surface-inset px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Copy size={13} />
+              复制全部链接
+            </button>
+          </div>
         </div>
         {references.length > 0 ? (
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {references.map((url) => (
               <div key={url} className="grid gap-2 rounded-lg border border-glass-border bg-surface-inset p-2">
-                <div className="aspect-video overflow-hidden rounded-md border border-glass-border bg-black/30">
+                <div className="relative aspect-video overflow-hidden rounded-md border border-glass-border bg-black/30">
                   <img src={url} alt="风格参考图" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    title="复制参考图链接"
+                    onClick={() => void copyUrl(url)}
+                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full border border-glass-border bg-panel-bg/90 text-primary shadow-lg backdrop-blur transition-colors hover:bg-hover-bg"
+                  >
+                    <Copy size={14} />
+                  </button>
                 </div>
                 <p className="truncate font-mono text-[11px] text-text-muted" title={url}>{url}</p>
                 <div className="flex gap-2">
