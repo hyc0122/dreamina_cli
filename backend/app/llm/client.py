@@ -439,7 +439,7 @@ def call_text_to_image(
     if _is_jiasu_provider(settings):
         return _call_jiasu_text_to_image(settings, prompt, model_id, size, quality, reference_images)
     if _normalize_reference_images(reference_images):
-        raise ValueError("当前供应商暂不支持通过参考图地址生成资产图片")
+        raise ValueError("当前供应商暂不支持通过参考图链接生成资产图片")
     return _call_openai_text_to_image(settings, prompt, model_id, size, quality)
 
 
@@ -459,7 +459,7 @@ def start_text_to_image_task(
     if _is_jiasu_provider(settings):
         return _start_jiasu_text_to_image(settings, prompt, model_id, size, quality, reference_images)
     if _normalize_reference_images(reference_images):
-        raise ValueError("当前供应商暂不支持通过参考图地址生成资产图片")
+        raise ValueError("当前供应商暂不支持通过参考图链接生成资产图片")
     return LlmImageTaskStart(raw={}, image=_call_openai_text_to_image(settings, prompt, model_id, size, quality))
 
 

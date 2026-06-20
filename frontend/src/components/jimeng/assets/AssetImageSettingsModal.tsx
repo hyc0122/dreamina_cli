@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from "react";
 import AssetImageModelSettingsSection from "@/components/jimeng/assets/AssetImageModelSettingsSection";
 import AssetImagePromptSettingsSection from "@/components/jimeng/assets/AssetImagePromptSettingsSection";
+import AssetImageReferenceSettingsSection from "@/components/jimeng/assets/AssetImageReferenceSettingsSection";
 import AssetImageSendPreviewSection from "@/components/jimeng/assets/AssetImageSendPreviewSection";
 import AssetImageStyleSettingsSection from "@/components/jimeng/assets/AssetImageStyleSettingsSection";
 import AssetImageTypePrefixSettingsSection from "@/components/jimeng/assets/AssetImageTypePrefixSettingsSection";
@@ -14,12 +15,13 @@ import { appendPromptPart, type AssetImageSettings, type AssetStylePromptField, 
 import type { JimengAssetType, JimengCharacterKind, JimengStylePreset } from "@/lib/jimengApi";
 
 export type AssetImageSettingsDraftSetter = Dispatch<SetStateAction<AssetImageSettings>>;
-export type AssetImageSettingsTab = "model" | "prompt" | "prefix" | "style" | "preview";
+export type AssetImageSettingsTab = "model" | "prompt" | "prefix" | "reference" | "style" | "preview";
 
 const SETTINGS_TABS: Array<{ id: AssetImageSettingsTab; label: string; description: string }> = [
   { id: "model", label: "模型与尺寸", description: "模型、画幅、分辨率" },
   { id: "prompt", label: "画风风格", description: "全局、单人、群演、场景" },
   { id: "prefix", label: "类型前缀", description: "单人、群演、场景、道具" },
+  { id: "reference", label: "风格参考图", description: "上传图片并获取链接" },
   { id: "style", label: "风格库", description: "复用资产风格" },
   { id: "preview", label: "发送预览", description: "检查最终组合" },
 ];
@@ -139,6 +141,7 @@ export default function AssetImageSettingsModal({
             ) : null}
             {activeTab === "prompt" ? <AssetImagePromptSettingsSection draft={draft} setDraft={setDraft} onDirty={clearMessages} /> : null}
             {activeTab === "prefix" ? <AssetImageTypePrefixSettingsSection draft={draft} setDraft={setDraft} activeType={activePrefixType} onActiveTypeChange={setActivePrefixType} /> : null}
+            {activeTab === "reference" ? <AssetImageReferenceSettingsSection draft={draft} setDraft={setDraft} onDirty={clearMessages} /> : null}
             {activeTab === "style" ? (
               <AssetImageStyleSettingsSection
                 stylePresets={stylePresets}

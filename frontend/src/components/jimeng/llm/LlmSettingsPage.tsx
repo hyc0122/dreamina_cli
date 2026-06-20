@@ -114,64 +114,6 @@ export default function LlmSettingsPage() {
           onDefaultChange={(providerId, modelId) => setSettings((state) => ({ ...state, default_provider_id: providerId, default_model_id: modelId }))}
         />
 
-        <section className="glass-panel rounded-xl p-5">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h3 className="font-display text-lg font-semibold text-foreground">资产图片生图默认项</h3>
-              <p className="mt-2 text-sm leading-6 text-text-secondary">
-                这里是大模型接口侧的兜底画风和图片尺寸；资产管理里的“生图设置”是操作侧画风。
-                实际生图会把两处提示词与资产详情描述拼接后发送，不是互相覆盖或冲突。
-              </p>
-            </div>
-            <span className="rounded-md border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs text-primary">纯文本生图</span>
-          </div>
-
-          <div className="mt-4 grid gap-3 lg:grid-cols-3">
-            <label className="space-y-2 lg:col-span-2">
-              <span className="text-xs font-medium text-text-muted">默认画风提示词</span>
-              <textarea
-                value={settings.asset_image.global_prompt}
-                onChange={(event) =>
-                  setSettings((state) => ({ ...state, asset_image: { ...state.asset_image, global_prompt: event.target.value } }))
-                }
-                className="glass-input min-h-[96px] w-full resize-y text-sm leading-6 text-foreground"
-                placeholder="例如：高质量资产设定图，干净背景，主体清晰，细节稳定"
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-xs font-medium text-text-muted">图片尺寸</span>
-              <input
-                value={settings.asset_image.size}
-                onChange={(event) => setSettings((state) => ({ ...state, asset_image: { ...state.asset_image, size: event.target.value } }))}
-                className="glass-input h-10 w-full font-mono text-sm text-foreground"
-                placeholder="2560x1440"
-              />
-              <span className="block text-xs leading-5 text-text-muted">按图片接口传给 size 字段。</span>
-            </label>
-          </div>
-
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            {[
-              ["character_prefix", "人物前缀提示词"],
-              ["scene_prefix", "场景前缀提示词"],
-              ["prop_prefix", "道具前缀提示词"],
-            ].map(([key, label]) => (
-              <label key={key} className="space-y-2">
-                <span className="text-xs font-medium text-text-muted">{label}</span>
-                <textarea
-                  value={settings.asset_image[key as keyof typeof settings.asset_image]}
-                  onChange={(event) =>
-                    setSettings((state) => ({
-                      ...state,
-                      asset_image: { ...state.asset_image, [key]: event.target.value },
-                    }))
-                  }
-                  className="glass-input min-h-[84px] w-full resize-y text-sm leading-6 text-foreground"
-                />
-              </label>
-            ))}
-          </div>
-        </section>
       </div>
     </div>
   );

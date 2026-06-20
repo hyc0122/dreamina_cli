@@ -1,12 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, CheckSquare, ClipboardPaste, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Maximize2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
+import { ArrowLeft, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
+import AssetHistoryImageStrip from "@/components/jimeng/assets/detail/AssetHistoryImageStrip";
+import AssetImagePanel from "@/components/jimeng/assets/detail/AssetImagePanel";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengLlmAssetImageRecord, type JimengStylePreset } from "@/lib/jimengApi";
-import { ASSET_IMAGE_QUALITY_OPTIONS, type AssetFormState, type AssetImageQuality, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases, splitReferenceImageUrls } from "@/components/jimeng/assets/assetManagerShared";
+import { ASSET_IMAGE_QUALITY_OPTIONS, type AssetFormState, type AssetImageQuality, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, normalizeReferenceImageUrls, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
 import { parseLlmModelValue } from "@/components/jimeng/llm/modelOptions";
 
 export default function AssetDetailPanel({
@@ -51,7 +53,6 @@ export default function AssetDetailPanel({
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [referenceImageText, setReferenceImageText] = useState("");
   const activeAssetIdRef = useRef(asset?.id ?? "");
 
   const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
@@ -66,7 +67,6 @@ export default function AssetDetailPanel({
   useEffect(() => {
     activeAssetIdRef.current = asset?.id ?? "";
     setForm(asset ? formFromAsset(asset) : null);
-    setReferenceImageText("");
     setNotice(null);
     setError(null);
   }, [asset]);
@@ -125,7 +125,7 @@ export default function AssetDetailPanel({
     try {
       await jimengApi.updateAsset(projectId, targetAsset.id, buildMetadataPayload());
       const selectedLlmModel = parseLlmModelValue(globalImageModelValue);
-      const referenceImages = splitReferenceImageUrls(referenceImageText);
+      const referenceImages = normalizeReferenceImageUrls(settings.styleReferenceImages);
       const response = await jimengApi.generateAssetImageWithLlm(projectId, targetAsset.id, {
         provider_id: selectedLlmModel?.providerId,
         model_id: selectedLlmModel?.modelId,
@@ -294,91 +294,21 @@ export default function AssetDetailPanel({
         </button>
       </div>
 
-      <div className="mt-3 flex items-stretch gap-2">
-        <div className="relative aspect-video min-w-0 flex-1 overflow-hidden rounded-lg border border-glass-border bg-surface-inset">
-          <button
-            type="button"
-            onClick={() => imageUrl && onPreview(asset)}
-            disabled={!imageUrl}
-            className="group h-full w-full disabled:cursor-default"
-          >
-            {imageUrl ? (
-              <img src={imageUrl} alt={asset.name} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
-            ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-muted">
-                <ImageIcon size={30} />
-                <span className="text-xs">未上传图片</span>
-              </div>
-            )}
-            {imageUrl ? (
-              <span className="absolute bottom-3 right-3 grid h-8 w-8 place-items-center rounded-md border border-glass-border bg-panel-bg/80 text-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
-                <Maximize2 size={15} />
-              </span>
-            ) : null}
-          </button>
-          <button
-            type="button"
-            title="粘贴剪贴板图片"
-            onClick={() => void pasteImageFromClipboard()}
-            disabled={uploadingImage}
-            className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full border border-glass-border bg-panel-bg/90 text-primary shadow-lg backdrop-blur transition-colors hover:bg-hover-bg disabled:cursor-wait disabled:opacity-60"
-          >
-            {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <ClipboardPaste size={16} />}
-          </button>
-        </div>
-        <label className="flex w-24 shrink-0 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2 text-center text-xs font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground">
-          {uploadingImage ? <Loader2 size={18} className="animate-spin" /> : <ImageIcon size={18} />}
-          <span>{asset.image_filename ? "替换图片" : "上传图片"}</span>
-          <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" className="sr-only" onChange={uploadImage} disabled={uploadingImage} />
-        </label>
-      </div>
+      <AssetImagePanel
+        asset={asset}
+        imageUrl={imageUrl}
+        uploadingImage={uploadingImage}
+        onPreview={onPreview}
+        onPaste={() => void pasteImageFromClipboard()}
+        onUpload={uploadImage}
+      />
 
-      <div className="mt-3 rounded-lg border border-glass-border bg-surface-inset p-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-foreground">历史生成图对比</span>
-          <span className="rounded border border-glass-border bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{availableHistoryRecords.length}</span>
-        </div>
-        {availableHistoryRecords.length > 0 ? (
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-            {availableHistoryRecords.map((record) => {
-              const historyImageUrl = jimengMediaUrl(record.asset_image_path || record.source_path, record.updated_at);
-              const applying = applyingHistoryRecordId === record.id;
-              return (
-                <div key={record.id} className="w-28 shrink-0 rounded-lg border border-glass-border bg-panel-bg p-1.5">
-                  <button
-                    type="button"
-                    onClick={() => historyImageUrl && window.open(historyImageUrl, "_blank", "noopener,noreferrer")}
-                    className="aspect-video w-full overflow-hidden rounded-md border border-glass-border bg-surface-inset text-text-muted"
-                    title="打开历史图对比"
-                  >
-                    {historyImageUrl ? (
-                      <img src={historyImageUrl} alt={`${asset.name} 历史生成图`} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="grid h-full place-items-center">
-                        <ImageIcon size={14} />
-                      </div>
-                    )}
-                  </button>
-                  <p className="mt-1 truncate text-[10px] text-text-muted" title={formatUpdatedAt(record.created_at || record.updated_at)}>
-                    {formatUpdatedAt(record.created_at || record.updated_at)}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => applyHistoryImage(record)}
-                    disabled={applying}
-                    className="mt-1 inline-flex h-7 w-full items-center justify-center gap-1 rounded-md border border-primary/30 bg-primary/10 text-[11px] font-medium text-primary hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {applying ? <Loader2 size={12} className="animate-spin" /> : <CheckSquare size={12} />}
-                    使用此图
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="mt-2 rounded-md border border-dashed border-glass-border px-2 py-2 text-xs text-text-muted">暂无历史生成图，后续 AI 生图成功后会保留在这里用于对比。</p>
-        )}
-      </div>
+      <AssetHistoryImageStrip
+        asset={asset}
+        records={availableHistoryRecords}
+        applyingRecordId={applyingHistoryRecordId}
+        onApply={(record) => void applyHistoryImage(record)}
+      />
 
       {groupedAssets.length > 1 ? (
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
@@ -408,13 +338,13 @@ export default function AssetDetailPanel({
 
       <div className="mt-3 space-y-2.5">
         {isCharacter ? (
-          <div className="rounded-lg border border-glass-border bg-surface-inset p-2">
-            <div className="flex items-center justify-between gap-2 text-xs text-text-secondary">
-              <span className="inline-flex min-w-0 items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-glass-border bg-surface-inset p-2 text-xs text-text-secondary">
+              <span className="inline-flex min-w-0 flex-1 items-center gap-2">
                 <FileAudio size={14} />
                 <span className="shrink-0">音色文件</span>
                 <span className="min-w-0 truncate font-mono text-foreground">{asset.audio_filename ?? "未上传"}</span>
               </span>
+              {voiceUrl ? <audio controls src={voiceUrl} className="h-8 min-w-[160px] flex-[1.2]" /> : null}
               <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-glass-border bg-panel-bg px-2 py-1 font-medium transition-colors hover:bg-hover-bg hover:text-foreground">
                 {uploadingVoice ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
                 <span>{asset.audio_filename ? "替换" : "上传"}</span>
@@ -426,19 +356,17 @@ export default function AssetDetailPanel({
                   disabled={uploadingVoice}
                 />
               </label>
-            </div>
-            {voiceUrl ? <audio controls src={voiceUrl} className="mt-2 h-8 w-full" /> : null}
           </div>
         ) : null}
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-text-secondary">资产/文件名</span>
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
+            <span className="w-20 shrink-0 text-xs font-medium text-text-secondary">资产/文件名</span>
             <input value={form.name} onChange={(event) => updateForm("name", event.target.value)} className="glass-input w-full text-sm text-foreground" />
           </label>
 
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-text-secondary">别名</span>
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
+            <span className="w-10 shrink-0 text-xs font-medium text-text-secondary">别名</span>
             <input
               value={form.aliasesText}
               onChange={(event) => updateForm("aliasesText", event.target.value)}
@@ -457,34 +385,38 @@ export default function AssetDetailPanel({
             placeholder="用于生成资产图片的提示词"
           />
         </label>
-        {isCharacter ? (
-          <div className="flex items-center gap-3 rounded-lg border border-glass-border bg-surface-inset p-2">
-            <span className="w-16 shrink-0 text-xs font-medium text-text-secondary">角色分类</span>
-            <div className="inline-flex h-9 min-w-0 flex-1 rounded-md border border-glass-border bg-panel-bg p-1">
-              {(["single", "group"] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => updateForm("characterKind", kind)}
-                  className={clsx(
-                    "flex-1 rounded px-3 text-xs font-medium transition-colors",
-                    form.characterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
-                  )}
-                >
-                  {CHARACTER_KIND_LABELS[kind]}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
 
         <div className="space-y-2">
-          <div className="flex items-center gap-3 rounded-lg border border-glass-border bg-surface-inset p-2">
-            <span className="w-20 shrink-0 text-xs font-medium text-text-secondary">全局生图模型</span>
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={globalImageModelLabel}>{globalImageModelLabel}</p>
-            <button type="button" onClick={onSettingsOpen} className="shrink-0 text-xs font-medium text-primary hover:text-primary/80">
-              设置
-            </button>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
+              <span className="w-16 shrink-0 text-xs font-medium text-text-secondary">角色分类</span>
+              {isCharacter ? (
+                <div className="inline-flex h-8 min-w-0 flex-1 rounded-md border border-glass-border bg-panel-bg p-1">
+                  {(["single", "group"] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => updateForm("characterKind", kind)}
+                      className={clsx(
+                        "flex-1 rounded px-3 text-xs font-medium transition-colors",
+                        form.characterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                      )}
+                    >
+                      {CHARACTER_KIND_LABELS[kind]}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">{JIMENG_ASSET_TYPE_LABELS[asset.type]}</span>
+              )}
+            </div>
+            <div className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
+              <span className="w-20 shrink-0 text-xs font-medium text-text-secondary">全局生图模型</span>
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={globalImageModelLabel}>{globalImageModelLabel}</p>
+              <button type="button" onClick={onSettingsOpen} className="shrink-0 text-xs font-medium text-primary hover:text-primary/80">
+                设置
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -534,20 +466,17 @@ export default function AssetDetailPanel({
                 ))}
               </select>
             </label>
-            <label className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
-              <span className="shrink-0 text-xs font-medium text-text-secondary">参考图地址</span>
-              <input
-                value={referenceImageText}
-                onChange={(event) => setReferenceImageText(event.target.value)}
-                className="glass-input h-8 min-w-0 flex-1 px-2 text-sm text-foreground"
-                placeholder="可空，多个用逗号/换行"
-              />
-            </label>
+            <div className="flex h-10 items-center justify-between gap-3 rounded-lg border border-glass-border bg-surface-inset px-3 text-xs">
+              <span className="min-w-0 truncate font-medium text-foreground">画风风格与类型前缀</span>
+              <button type="button" onClick={onSettingsOpen} className="shrink-0 font-medium text-primary hover:text-primary/80">
+                设置
+              </button>
+            </div>
           </div>
 
           <div className="flex h-10 items-center justify-between gap-3 rounded-lg border border-glass-border bg-surface-inset px-3 text-xs">
-            <span className="font-medium text-foreground">画风风格与类型前缀</span>
-            <button type="button" onClick={onSettingsOpen} className="shrink-0 font-medium text-primary hover:text-primary/80">设置</button>
+            <span className="font-medium text-foreground">全局风格参考图</span>
+            <span className="rounded border border-glass-border bg-panel-bg px-2 py-0.5 font-mono text-text-muted">{settings.styleReferenceImages.length} 张</span>
           </div>
         </div>
 

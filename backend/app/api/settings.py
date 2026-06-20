@@ -6,6 +6,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -34,7 +35,9 @@ _JIMENG_VIDEO_MODELS = [
     "seedance2.0fast",
     "seedance2.0",
 ]
-_JIMENG_IMAGE_MODELS = ["dreamina4.0", "dreamina4.1", "dreamina4.5", "dreamina4.6", "dreamina4.7", "dreamina5.0"]
+_DEFAULT_JIMENG_IMAGE_MODELS = ["dreamina4.0", "dreamina4.1", "dreamina4.5", "dreamina4.6", "dreamina4.7", "dreamina5.0"]
+_JIMENG_IMAGE_MODEL_REGISTRY_KEY = "jimeng_image_model_versions"
+_JIMENG_IMAGE_MODEL_RE = re.compile(r"^(?:dreamina)?\s*(\d+(?:\.\d+)?)$", re.IGNORECASE)
 _JIMENG_IMAGE_RESOLUTION_TYPES = ["2k", "4k"]
 _JIMENG_MULTIMODAL_LIMITS = {
     "max_images": 9,
@@ -244,6 +247,47 @@ def cli_paths():
     return {"config": paths.get("config"), "tasks": paths.get("tasks_db"), "logs": paths.get("logs")}
 
 
+def _normalize_jimeng_image_model(value: Any) -> str:
+    match = _JIMENG_IMAGE_MODEL_RE.fullmatch(str(value or "").strip())
+    return f"dreamina{match.group(1)}" if match else ""
+
+
+def _merge_jimeng_image_models(*groups: Any) -> list[str]:
+    models: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        if isinstance(group, str):
+            values = [group]
+        elif isinstance(group, list):
+            values = group
+        else:
+            values = []
+        for value in values:
+            model = _normalize_jimeng_image_model(value)
+            if model and model not in seen:
+                seen.add(model)
+                models.append(model)
+    return models
+
+
+def _discover_jimeng_image_models() -> list[str]:
+    try:
+        return _merge_jimeng_image_models(_cli(timeout=10).discover_image_models())
+    except Exception:
+        return []
+
+
+def _jimeng_image_model_versions() -> list[str]:
+    store = get_store()
+    persisted = store.get_runtime_settings().get(_JIMENG_IMAGE_MODEL_REGISTRY_KEY)
+    discovered = _discover_jimeng_image_models()
+    models = _merge_jimeng_image_models(_DEFAULT_JIMENG_IMAGE_MODELS, persisted, discovered)
+    persisted_models = _merge_jimeng_image_models(persisted)
+    if models != persisted_models:
+        store.update_runtime_settings({_JIMENG_IMAGE_MODEL_REGISTRY_KEY: models})
+    return models
+
+
 @router.get("/settings/cli_capabilities")
 def cli_capabilities():
     return {
@@ -264,7 +308,7 @@ def cli_capabilities():
         "supports_image2video": True,
         "supports_multimodal2video": True,
         "model_versions": _JIMENG_VIDEO_MODELS,
-        "image_model_versions": _JIMENG_IMAGE_MODELS,
+        "image_model_versions": _jimeng_image_model_versions(),
         "image_resolution_types": _JIMENG_IMAGE_RESOLUTION_TYPES,
         "ratios": _JIMENG_VIDEO_RATIOS,
         "multimodal_limits": _JIMENG_MULTIMODAL_LIMITS,

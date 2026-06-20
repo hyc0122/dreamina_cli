@@ -1,6 +1,6 @@
 """大模型资产生图记录。
 
-记录保存在 runtime data 的 llm/asset_image_records.json 中，用于在接口超时后继续按 task_id 获取远端结果。
+记录保存在 SQLite 的 llm_asset_image_records 表中；旧 JSON 文件会在首次访问时幂等导入一次，用于兼容早期版本。
 """
 
 import json
@@ -20,6 +20,7 @@ PENDING_RECORD_STATUSES = {"submitted", "running", "timeout", "poll_error"}
 FINAL_RECORD_STATUSES = {"succeeded", "failed", "canceled"}
 DEFAULT_AUTO_CANCEL_MINUTES = 20
 MAX_FEEDBACK_ITEMS = 80
+LEGACY_JSON_MIGRATION_KEY = "llm_asset_image_records_json_migrated"
 
 
 def _now() -> str:
@@ -44,6 +45,67 @@ def _records_path(store: JimengStore) -> Path:
     return store.db_path.parent / "llm" / "asset_image_records.json"
 
 
+def _record_json(record: dict[str, Any]) -> str:
+    return json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+
+
+def _record_row(record: dict[str, Any]) -> tuple[str, str, str, str, str, str, str, str, str, str, str, str]:
+    stamp = str(record.get("updated_at") or record.get("created_at") or _now())
+    record.setdefault("created_at", stamp)
+    record.setdefault("updated_at", stamp)
+    return (
+        str(record.get("id") or _record_id()),
+        str(record.get("project_id") or ""),
+        str(record.get("asset_id") or ""),
+        str(record.get("asset_name") or ""),
+        str(record.get("asset_type") or ""),
+        str(record.get("provider_id") or ""),
+        str(record.get("model_id") or ""),
+        str(record.get("status") or ""),
+        str(record.get("task_id") or ""),
+        str(record.get("created_at") or ""),
+        str(record.get("updated_at") or ""),
+        _record_json(record),
+    )
+
+
+def _insert_records(conn: Any, records: list[dict[str, Any]], *, replace: bool) -> None:
+    statement = "INSERT OR REPLACE" if replace else "INSERT OR IGNORE"
+    conn.executemany(
+        f"""
+        {statement} INTO llm_asset_image_records (
+            id, project_id, asset_id, asset_name, asset_type, provider_id, model_id,
+            status, task_id, created_at, updated_at, record_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [_record_row(record) for record in records if record.get("id")],
+    )
+
+
+def _legacy_records(store: JimengStore) -> list[dict[str, Any]]:
+    path = _records_path(store)
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"large model image record file has invalid JSON: {path}") from exc
+    if not isinstance(payload, list):
+        raise ValueError(f"large model image record file must be a list: {path}")
+    return [item for item in payload if isinstance(item, dict) and item.get("id")]
+
+
+def _import_legacy_records(store: JimengStore) -> None:
+    if store.get_runtime_settings().get(LEGACY_JSON_MIGRATION_KEY):
+        return
+    records = _legacy_records(store)
+    with store._connect() as conn:
+        if records:
+            _insert_records(conn, records, replace=False)
+    store.update_runtime_settings({LEGACY_JSON_MIGRATION_KEY: _now()})
+
+
 def _asset_type_value(value: Any) -> str:
     if isinstance(value, JimengAssetType):
         return value.value
@@ -51,24 +113,30 @@ def _asset_type_value(value: Any) -> str:
 
 
 def _read_records(store: JimengStore) -> list[dict[str, Any]]:
-    path = _records_path(store)
-    if not path.exists():
-        return []
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"大模型生图记录文件格式错误: {path}") from exc
-    if not isinstance(payload, list):
-        raise ValueError(f"大模型生图记录文件格式错误: {path}")
-    return [item for item in payload if isinstance(item, dict)]
+    _import_legacy_records(store)
+    with store._connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT record_json
+            FROM llm_asset_image_records
+            ORDER BY created_at DESC, updated_at DESC
+            """
+        ).fetchall()
+    records: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            record = json.loads(row["record_json"])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            records.append(record)
+    return records
 
 
 def _write_records(store: JimengStore, records: list[dict[str, Any]]) -> None:
-    path = _records_path(store)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_suffix(".tmp")
-    temp_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp_path.replace(path)
+    with store._connect() as conn:
+        conn.execute("DELETE FROM llm_asset_image_records")
+        _insert_records(conn, records, replace=True)
 
 
 def _feedback(message: str, level: str = "info", payload: dict[str, Any] | None = None) -> dict[str, Any]:

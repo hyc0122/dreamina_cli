@@ -673,6 +673,8 @@ export const jimengApi = {
     files.forEach((file) => formData.append("files", file));
     return axios.post<{ assets: JimengAsset[] }>(`${API_URL}/jimeng/projects/${projectId}/assets/batch_upload`, formData, multipartHeaders).then((res) => res.data);
   },
+  uploadAssetReferenceImage: (file: File) =>
+    axios.post<{ filename: string; path: string; url: string }>(`${API_URL}/jimeng/assets/reference_images`, formDataWithFile(file), multipartHeaders).then((res) => res.data),
   updateAsset: (projectId: string, assetId: string, data: Partial<Omit<JimengAssetMetadataInput, "type">>) =>
     axios.put<JimengAsset>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}`, data).then((res) => res.data),
   deleteAsset: (projectId: string, assetId: string) =>

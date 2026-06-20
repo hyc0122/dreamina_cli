@@ -34,6 +34,7 @@ AudioDurationProbe = Callable[[Path], Optional[float]]
 _VIDEO_RATIOS = {"1:1", "3:4", "16:9", "4:3", "9:16", "21:9"}
 _IMAGE_RATIOS = {"21:9", "16:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"}
 _IMAGE_MODELS = {"3.0", "3.1", "4.0", "4.1", "4.5", "4.6", "4.7", "5.0"}
+_IMAGE_MODEL_VERSION_RE = re.compile(r"^\d+(?:\.\d+)?$")
 _IMAGE_RESOLUTION_TYPES = {"1k", "2k", "4k"}
 
 
@@ -103,6 +104,15 @@ class DreaminaCli:
     def check_available(self) -> bool:
         result = self._run([self.executable, "--help"])
         return result.returncode == 0
+
+    def discover_image_models(self) -> list[str]:
+        outputs: list[str] = []
+        for args in ([self.executable, "text2image", "--help"], [self.executable, "--help"]):
+            result = self._run(args)
+            raw_output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+            if raw_output:
+                outputs.append(raw_output)
+        return _discover_image_models_from_text("\n".join(outputs))
 
     def login(self, debug: bool = False) -> DreaminaTaskResult:
         args = [self.executable, "login"]
@@ -426,9 +436,29 @@ def _normalize_image_model_version(model_version: str) -> str:
     value = str(model_version or "").strip().lower()
     if value.startswith("dreamina"):
         value = value.removeprefix("dreamina").strip(" _-")
-    if value and value not in _IMAGE_MODELS:
+    if value and value not in _IMAGE_MODELS and not _IMAGE_MODEL_VERSION_RE.fullmatch(value):
         raise ValueError(f"unsupported image model_version: {model_version}")
     return value
+
+
+def _discover_image_models_from_text(text: str) -> list[str]:
+    models: list[str] = []
+    seen: set[str] = set()
+    for line in str(text or "").splitlines():
+        lowered = line.lower()
+        if "model" not in lowered and "dreamina" not in lowered and "模型" not in line:
+            continue
+        versions = re.findall(r"dreamina\s*([0-9]+(?:\.[0-9]+)?)", lowered)
+        if not versions:
+            versions = re.findall(r"\b([0-9]+(?:\.[0-9]+)?)\b", lowered)
+        for version in versions:
+            if not _IMAGE_MODEL_VERSION_RE.fullmatch(version):
+                continue
+            model = f"dreamina{version}"
+            if model not in seen:
+                seen.add(model)
+                models.append(model)
+    return models
 
 
 def _validate_image_resolution_type(model_version: str, resolution_type: str) -> None:

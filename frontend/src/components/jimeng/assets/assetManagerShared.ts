@@ -1,15 +1,6 @@
 import type { JimengAsset, JimengAssetType, JimengCharacterKind, JimengStylePreset } from "@/lib/jimengApi";
 import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 
-export const IMAGE_MODELS = [
-  { value: "dreamina4.0", label: "Dreamina 4.0" },
-  { value: "dreamina4.1", label: "Dreamina 4.1" },
-  { value: "dreamina4.5", label: "Dreamina 4.5" },
-  { value: "dreamina4.6", label: "Dreamina 4.6" },
-  { value: "dreamina4.7", label: "Dreamina 4.7" },
-  { value: "dreamina5.0", label: "Dreamina 5.0" },
-];
-
 const ASSET_IMAGE_SETTINGS_KEY = "dreamina_cli_asset_image_settings";
 const PROMPT_LABEL_RE = /^\s*【[^】]+】\s*$/;
 
@@ -27,6 +18,7 @@ export interface AssetImageSettings {
   imageQuality: AssetImageQuality;
   imageModelValue: string;
   globalStylePrompt: string;
+  styleReferenceImages: string[];
   singleCharacterStylePrompt: string;
   groupCharacterStylePrompt: string;
   sceneStylePrompt: string;
@@ -42,6 +34,7 @@ export const DEFAULT_IMAGE_SETTINGS: AssetImageSettings = {
   imageQuality: "high",
   imageModelValue: "",
   globalStylePrompt: "统一画风，干净背景，主体清晰，适合作为漫剧资产参考图。",
+  styleReferenceImages: [],
   singleCharacterStylePrompt: "",
   groupCharacterStylePrompt: "",
   sceneStylePrompt: "",
@@ -124,6 +117,12 @@ export const splitReferenceImageUrls = (value: string): string[] =>
     .filter(Boolean)
     .slice(0, 10);
 
+export const normalizeReferenceImageUrls = (value: unknown): string[] => {
+  const values = Array.isArray(value) ? value : [value];
+  const urls = values.flatMap((item) => splitReferenceImageUrls(String(item ?? "")));
+  return urls.filter((url, index) => urls.indexOf(url) === index).slice(0, 10);
+};
+
 export const formatUpdatedAt = (value: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -173,6 +172,7 @@ const normalizeImageSettings = (
     ...DEFAULT_IMAGE_SETTINGS,
     ...rest,
     globalStylePrompt: migratedGlobalStyle,
+    styleReferenceImages: normalizeReferenceImageUrls(raw.styleReferenceImages),
     singleCharacterStylePrompt: raw.singleCharacterStylePrompt ?? "",
     groupCharacterStylePrompt: raw.groupCharacterStylePrompt ?? "",
     sceneStylePrompt: raw.sceneStylePrompt ?? "",
