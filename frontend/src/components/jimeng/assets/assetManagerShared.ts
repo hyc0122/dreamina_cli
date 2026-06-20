@@ -14,6 +14,7 @@ const ASSET_IMAGE_SETTINGS_KEY = "dreamina_cli_asset_image_settings";
 const PROMPT_LABEL_RE = /^\s*【[^】]+】\s*$/;
 
 export type AssetImageRatio = "16:9" | "9:16";
+export type AssetImageQuality = "auto" | "high" | "medium" | "low";
 export type AssetStylePromptField =
   | "globalStylePrompt"
   | "singleCharacterStylePrompt"
@@ -23,6 +24,7 @@ export type AssetStylePromptField =
 export interface AssetImageSettings {
   resolutionType: "2k" | "4k";
   defaultImageRatio: AssetImageRatio;
+  imageQuality: AssetImageQuality;
   imageModelValue: string;
   globalStylePrompt: string;
   singleCharacterStylePrompt: string;
@@ -37,6 +39,7 @@ export interface AssetImageSettings {
 export const DEFAULT_IMAGE_SETTINGS: AssetImageSettings = {
   resolutionType: "2k",
   defaultImageRatio: "16:9",
+  imageQuality: "high",
   imageModelValue: "",
   globalStylePrompt: "统一画风，干净背景，主体清晰，适合作为漫剧资产参考图。",
   singleCharacterStylePrompt: "",
@@ -63,6 +66,13 @@ export const CHARACTER_KIND_LABELS: Record<JimengCharacterKind, string> = {
   single: "单人",
   group: "群演",
 };
+
+export const ASSET_IMAGE_QUALITY_OPTIONS: Array<{ value: AssetImageQuality; label: string }> = [
+  { value: "high", label: "高 high" },
+  { value: "medium", label: "中 medium" },
+  { value: "low", label: "低 low" },
+  { value: "auto", label: "自动 auto" },
+];
 
 const STYLE_ACCENTS = ["#6478ff", "#22c55e", "#f59e0b", "#a855f7", "#06b6d4", "#ef4444", "#84cc16", "#ec4899"];
 
@@ -106,6 +116,13 @@ export const splitAliases = (value: string): string[] =>
     .split(/[,，、\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
+
+export const splitReferenceImageUrls = (value: string): string[] =>
+  value
+    .split(/[\n,，、\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 10);
 
 export const formatUpdatedAt = (value: string): string => {
   const date = new Date(value);

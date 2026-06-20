@@ -83,6 +83,8 @@ def create_asset_image_record(
     model: LlmModelSetting,
     prompt: str,
     size: str,
+    quality: str = "high",
+    reference_images: list[str] | None = None,
 ) -> dict[str, Any]:
     stamp = _now()
     record = {
@@ -96,6 +98,8 @@ def create_asset_image_record(
         "model_id": model.id,
         "model_name": model.name,
         "size": size,
+        "quality": quality,
+        "reference_images": list(reference_images or []),
         "prompt": prompt,
         "task_id": "",
         "status": "submitted",
