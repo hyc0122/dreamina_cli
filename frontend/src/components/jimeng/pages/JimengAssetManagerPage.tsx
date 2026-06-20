@@ -327,6 +327,16 @@ export default function JimengAssetManagerPage() {
             <Plus size={16} />
             <span>新建资产</span>
           </button>
+          <button
+            type="button"
+            onClick={toggleAllFilteredAssets}
+            disabled={filteredAssets.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary hover:bg-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {allFilteredSelected ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} />}
+            <span>{allFilteredSelected ? "取消全选当前" : "全选当前"}</span>
+            <span className="rounded border border-glass-border bg-panel-bg px-1.5 py-0.5 font-mono text-[11px] text-text-muted">{selectedAssetIds.length}</span>
+          </button>
           <button type="button" onClick={() => void batchDeleteAssets()} disabled={selectedAssetIds.length === 0} className="inline-flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-45">
             <Trash2 size={16} />
             <span>批量删除资产</span>
@@ -422,7 +432,7 @@ export default function JimengAssetManagerPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_500px]">
         <div className="min-h-[520px]">
           {filteredAssets.length > 0 ? (
             <div
