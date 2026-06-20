@@ -1,4 +1,4 @@
-import type { JimengAsset, JimengAssetType, JimengStylePreset } from "@/lib/jimengApi";
+import type { JimengAsset, JimengAssetType, JimengCharacterKind, JimengStylePreset } from "@/lib/jimengApi";
 import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 
 export const IMAGE_MODELS = [
@@ -11,14 +11,23 @@ export const IMAGE_MODELS = [
 ];
 
 const ASSET_IMAGE_SETTINGS_KEY = "dreamina_cli_asset_image_settings";
+const PROMPT_LABEL_RE = /^\s*【[^】]+】\s*$/;
 
 export type AssetImageRatio = "16:9" | "9:16";
+export type AssetStylePromptField =
+  | "globalStylePrompt"
+  | "singleCharacterStylePrompt"
+  | "groupCharacterStylePrompt"
+  | "sceneStylePrompt";
 
 export interface AssetImageSettings {
   resolutionType: "2k" | "4k";
   defaultImageRatio: AssetImageRatio;
   imageModelValue: string;
-  imagePromptTemplate: string;
+  globalStylePrompt: string;
+  singleCharacterStylePrompt: string;
+  groupCharacterStylePrompt: string;
+  sceneStylePrompt: string;
   characterPromptPrefix: string;
   scenePromptPrefix: string;
   propPromptPrefix: string;
@@ -28,7 +37,10 @@ export const DEFAULT_IMAGE_SETTINGS: AssetImageSettings = {
   resolutionType: "2k",
   defaultImageRatio: "16:9",
   imageModelValue: "",
-  imagePromptTemplate: "统一画风，干净背景，主体清晰，适合作为漫剧资产参考图。",
+  globalStylePrompt: "统一画风，干净背景，主体清晰，适合作为漫剧资产参考图。",
+  singleCharacterStylePrompt: "",
+  groupCharacterStylePrompt: "",
+  sceneStylePrompt: "",
   characterPromptPrefix: "角色资产图：保持人物五官、服装、发型稳定，适合作为后续视频参考。",
   scenePromptPrefix: "场景资产图：强调空间结构、光线、可复用背景，不要出现主体人物。",
   propPromptPrefix: "道具资产图：单体道具清晰居中，材质细节明确，背景简洁。",
@@ -40,10 +52,16 @@ export interface AssetFormState {
   description: string;
   imageModel: string;
   imageRatio: AssetImageRatio;
+  characterKind: JimengCharacterKind;
 }
 
 export type AssetViewMode = "compact" | "large" | "list";
 export type AssetStyleDraft = Pick<JimengStylePreset, "name" | "prompt" | "scope" | "accent"> & { id?: string };
+
+export const CHARACTER_KIND_LABELS: Record<JimengCharacterKind, string> = {
+  single: "单人",
+  group: "群演",
+};
 
 const STYLE_ACCENTS = ["#6478ff", "#22c55e", "#f59e0b", "#a855f7", "#06b6d4", "#ef4444", "#84cc16", "#ec4899"];
 
@@ -56,6 +74,31 @@ export const assetStyleDraftFromPreset = (preset: JimengStylePreset): AssetStyle
   scope: "image",
   accent: preset.accent || "#6478ff",
 });
+
+export const normalizeCharacterKind = (value: unknown): JimengCharacterKind => {
+  const normalized = String(value ?? "single").trim().toLowerCase();
+  return ["group", "extras", "extra", "crowd", "群演"].includes(normalized) ? "group" : "single";
+};
+
+export const sanitizePromptPart = (value: string): string =>
+  String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !PROMPT_LABEL_RE.test(line))
+    .join("\n")
+    .trim();
+
+export const appendPromptPart = (current: string, next: string): string => {
+  const prompt = sanitizePromptPart(next);
+  if (!prompt) {
+    return sanitizePromptPart(current);
+  }
+  const existing = sanitizePromptPart(current);
+  if (existing.split(/\n{2,}|\n/).map((item) => item.trim()).includes(prompt)) {
+    return existing;
+  }
+  return [existing, prompt].filter(Boolean).join("\n");
+};
 
 export const splitAliases = (value: string): string[] =>
   value
@@ -90,7 +133,21 @@ export const formFromAsset = (asset: JimengAsset): AssetFormState => ({
   description: asset.description ?? "",
   imageModel: asset.image_model || "dreamina4.0",
   imageRatio: asset.image_ratio === "9:16" ? "9:16" : "16:9",
+  characterKind: normalizeCharacterKind(asset.character_kind),
 });
+
+const normalizeImageSettings = (raw: Partial<AssetImageSettings> & { imagePromptTemplate?: string } = {}): AssetImageSettings => {
+  const { imagePromptTemplate, ...rest } = raw;
+  const migratedGlobalStyle = raw.globalStylePrompt ?? imagePromptTemplate ?? DEFAULT_IMAGE_SETTINGS.globalStylePrompt;
+  return {
+    ...DEFAULT_IMAGE_SETTINGS,
+    ...rest,
+    globalStylePrompt: migratedGlobalStyle,
+    singleCharacterStylePrompt: raw.singleCharacterStylePrompt ?? "",
+    groupCharacterStylePrompt: raw.groupCharacterStylePrompt ?? "",
+    sceneStylePrompt: raw.sceneStylePrompt ?? "",
+  };
+};
 
 export const readImageSettings = (): AssetImageSettings => {
   if (typeof window === "undefined") {
@@ -98,7 +155,7 @@ export const readImageSettings = (): AssetImageSettings => {
   }
   try {
     const raw = window.localStorage.getItem(ASSET_IMAGE_SETTINGS_KEY);
-    return raw ? { ...DEFAULT_IMAGE_SETTINGS, ...JSON.parse(raw) } : DEFAULT_IMAGE_SETTINGS;
+    return raw ? normalizeImageSettings(JSON.parse(raw)) : DEFAULT_IMAGE_SETTINGS;
   } catch {
     return DEFAULT_IMAGE_SETTINGS;
   }
@@ -106,7 +163,8 @@ export const readImageSettings = (): AssetImageSettings => {
 
 export const writeImageSettings = (settings: AssetImageSettings) => {
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(ASSET_IMAGE_SETTINGS_KEY, JSON.stringify(settings));
+    const normalized = normalizeImageSettings(settings);
+    window.localStorage.setItem(ASSET_IMAGE_SETTINGS_KEY, JSON.stringify(normalized));
   }
 };
 
@@ -128,16 +186,28 @@ export const resolveAssetImageModelOption = (
 export const assetImageModelLabel = (model: LlmModelOption | null): string => model?.label ?? "未选择可用模型";
 
 export const assetGroupKey = (asset: JimengAsset): string => {
-  const base = asset.name.split(/[-_—·：:]/)[0]?.trim();
+  const base = asset.name.split(/[-_—：:]/)[0]?.trim();
   return base || asset.name;
 };
 
-export const imagePromptForAsset = (settings: AssetImageSettings, assetType: JimengAssetType): string => {
+export const imagePromptForAsset = (
+  settings: AssetImageSettings,
+  assetType: JimengAssetType,
+  characterKind: JimengCharacterKind = "single",
+): string => {
   const typePrefix =
     assetType === "character"
       ? settings.characterPromptPrefix
       : assetType === "scene"
         ? settings.scenePromptPrefix
         : settings.propPromptPrefix;
-  return [typePrefix, settings.imagePromptTemplate].map((item) => item.trim()).filter(Boolean).join("\n");
+  const scopedStyle =
+    assetType === "character"
+      ? normalizeCharacterKind(characterKind) === "group"
+        ? settings.groupCharacterStylePrompt
+        : settings.singleCharacterStylePrompt
+      : assetType === "scene"
+        ? settings.sceneStylePrompt
+        : "";
+  return [typePrefix, settings.globalStylePrompt, scopedStyle].map(sanitizePromptPart).filter(Boolean).join("\n");
 };

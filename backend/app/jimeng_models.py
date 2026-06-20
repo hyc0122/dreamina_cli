@@ -83,6 +83,7 @@ class JimengAsset(BaseModel):
     image_ratio: str = "16:9"
     image_params: str = ""
     video_prompt: str = ""
+    character_kind: str = "single"
     image_filename: Optional[str] = None
     image_path: Optional[str] = None
     audio_filename: Optional[str] = None

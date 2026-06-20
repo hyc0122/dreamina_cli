@@ -1,5 +1,6 @@
 """资产图片纯文本生图。"""
 
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -16,16 +17,22 @@ _ASSET_TYPE_PREFIX = {
     JimengAssetType.scene: "scene_prefix",
     JimengAssetType.prop: "prop_prefix",
 }
+_PROMPT_LABEL_RE = re.compile(r"^\s*【[^】]+】\s*$")
+
+
+def _clean_prompt_part(value: str) -> str:
+    lines = [line.strip() for line in str(value or "").splitlines()]
+    return "\n".join(line for line in lines if line and not _PROMPT_LABEL_RE.match(line)).strip()
 
 
 def build_asset_image_prompt(asset: Any, settings: Any, extra_prompt: str = "") -> str:
     asset_type = JimengAssetType(asset.type)
     prefix_name = _ASSET_TYPE_PREFIX[asset_type]
-    type_prefix = str(getattr(settings.asset_image, prefix_name) or "").strip()
-    global_prompt = str(settings.asset_image.global_prompt or "").strip()
-    description = str(asset.description or "").strip()
-    image_params = str(asset.image_params or "").strip()
-    extra = str(extra_prompt or "").strip()
+    extra = _clean_prompt_part(extra_prompt)
+    type_prefix = "" if extra else _clean_prompt_part(getattr(settings.asset_image, prefix_name) or "")
+    global_prompt = "" if extra else _clean_prompt_part(settings.asset_image.global_prompt or "")
+    description = _clean_prompt_part(asset.description or "")
+    image_params = _clean_prompt_part(asset.image_params or "")
     if not description:
         raise ValueError("请先填写资产详情描述 / 生图提示词")
     return "\n".join(part for part in (type_prefix, global_prompt, extra, description, image_params) if part)

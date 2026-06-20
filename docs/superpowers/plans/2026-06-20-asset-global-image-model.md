@@ -27,7 +27,7 @@
 - Create: `frontend/src/components/jimeng/assets/AssetImageModelSettingsSection.tsx`
   - 全局模型、默认画幅、分辨率。
 - Create: `frontend/src/components/jimeng/assets/AssetImagePromptSettingsSection.tsx`
-  - 全局必填提示词。
+  - 全局画风。
 - Create: `frontend/src/components/jimeng/assets/AssetImageTypePrefixSettingsSection.tsx`
   - 人物、场景、道具前缀提示词。
 - Create: `frontend/src/components/jimeng/assets/AssetImageStyleSettingsSection.tsx`

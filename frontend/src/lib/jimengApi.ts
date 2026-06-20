@@ -4,6 +4,7 @@ import { API_URL } from "@/lib/api";
 export type JimengProjectStatus = "draft" | "working" | "has_failed" | "completed";
 export type JimengShotStatus = "draft" | "asset_missing" | "queued" | "running" | "failed" | "completed" | "locked";
 export type JimengAssetType = "character" | "scene" | "prop";
+export type JimengCharacterKind = "single" | "group";
 export type JimengQueueStatus =
   | "waiting"
   | "submitting"
@@ -74,6 +75,7 @@ export interface JimengAsset {
   image_ratio: "16:9" | "9:16";
   image_params: string;
   video_prompt: string;
+  character_kind: JimengCharacterKind;
   image_filename: string | null;
   image_path: string | null;
   audio_filename: string | null;
@@ -504,6 +506,7 @@ export interface JimengAssetMetadataInput {
   image_ratio?: "16:9" | "9:16";
   image_params?: string;
   video_prompt?: string;
+  character_kind?: JimengCharacterKind;
 }
 
 export interface JimengAssetImageGenerationResponse {

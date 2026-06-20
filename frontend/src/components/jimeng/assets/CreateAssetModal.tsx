@@ -1,12 +1,21 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, CheckSquare, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Maximize2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
-import { type ChangeEvent, useEffect, useState } from "react";
-import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
+import { FileAudio, Image as ImageIcon, Loader2, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { JIMENG_ASSET_TYPE_LABELS } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
-import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+import { jimengApi, type JimengAsset, type JimengAssetType } from "@/lib/jimengApi";
+import { CHARACTER_KIND_LABELS, type AssetFormState, type AssetImageRatio, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+
+const createEmptyDraft = (imageRatio: AssetImageRatio): AssetFormState => ({
+  name: "",
+  aliasesText: "",
+  description: "",
+  imageModel: "dreamina4.0",
+  imageRatio,
+  characterKind: "single",
+});
 
 export default function CreateAssetModal({
   projectId,
@@ -23,13 +32,7 @@ export default function CreateAssetModal({
   onClose: () => void;
   onCreated: (asset: JimengAsset) => Promise<void> | void;
 }) {
-  const [draft, setDraft] = useState<AssetFormState>({
-    name: "",
-    aliasesText: "",
-    description: "",
-    imageModel: "dreamina4.0",
-    imageRatio: defaultImageRatio,
-  });
+  const [draft, setDraft] = useState<AssetFormState>(() => createEmptyDraft(defaultImageRatio));
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -43,7 +46,7 @@ export default function CreateAssetModal({
 
   useEffect(() => {
     if (open) {
-      setDraft({ name: "", aliasesText: "", description: "", imageModel: "dreamina4.0", imageRatio: defaultImageRatio });
+      setDraft(createEmptyDraft(defaultImageRatio));
       setImageFile(null);
       setVoiceFile(null);
       setError(null);
@@ -75,6 +78,7 @@ export default function CreateAssetModal({
         description: draft.description.trim(),
         image_model: draft.imageModel,
         image_ratio: draft.imageRatio,
+        ...(assetType === "character" ? { character_kind: draft.characterKind } : {}),
       });
       let finalAsset = created;
       if (imageFile) {
@@ -128,7 +132,28 @@ export default function CreateAssetModal({
                 </button>
               ))}
             </div>
-          </div>          <div className={clsx("grid gap-3", assetType === "character" ? "md:grid-cols-2" : "md:grid-cols-1")}>
+          </div>
+          {assetType === "character" ? (
+            <div className="space-y-1.5">
+              <span className="block text-xs font-medium text-text-secondary">角色分类</span>
+              <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
+                {(["single", "group"] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => updateDraft("characterKind", kind)}
+                    className={clsx(
+                      "flex-1 rounded px-3 text-xs font-medium transition-colors",
+                      draft.characterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                    )}
+                  >
+                    {CHARACTER_KIND_LABELS[kind]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div className={clsx("grid gap-3", assetType === "character" ? "md:grid-cols-2" : "md:grid-cols-1")}>
             <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-lg border border-dashed border-glass-border bg-surface-inset px-4 py-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
               <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
                 <ImageIcon size={16} className="text-primary" />

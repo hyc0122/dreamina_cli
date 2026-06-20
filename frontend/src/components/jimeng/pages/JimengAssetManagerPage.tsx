@@ -12,7 +12,7 @@ import AssetPreviewModal from "@/components/jimeng/assets/AssetPreviewModal";
 import AssetToolbar from "@/components/jimeng/assets/AssetToolbar";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
 import CreateAssetModal from "@/components/jimeng/assets/CreateAssetModal";
-import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, imagePromptForAsset, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
+import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
 import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import OperationOverlay from "@/components/jimeng/OperationOverlay";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
@@ -130,7 +130,7 @@ export default function JimengAssetManagerPage() {
         if (!normalizedQuery) {
           return true;
         }
-        const haystack = [asset.name, ...asset.aliases, asset.description, asset.image_model].join(" ").toLowerCase();
+        const haystack = [asset.name, ...asset.aliases, asset.description, asset.image_model, asset.character_kind].join(" ").toLowerCase();
         return haystack.includes(normalizedQuery);
       });
   }, [activeType, assets, query]);
@@ -220,7 +220,7 @@ export default function JimengAssetManagerPage() {
       setNotice("已导出资产描述 JSON");
       return;
     }
-    const headers = ["type", "name", "aliases", "description", "image_model", "image_ratio", "image_params", "image_filename", "image_path", "audio_filename", "audio_path"];
+    const headers = ["type", "name", "aliases", "description", "character_kind", "image_model", "image_ratio", "image_params", "image_filename", "image_path", "audio_filename", "audio_path"];
     const rows = response.assets.map((asset) =>
       headers
         .map((key) => {
@@ -258,13 +258,31 @@ export default function JimengAssetManagerPage() {
     setNotice(null);
     try {
       const selectedLlmModel = parseLlmModelValue(resolvedImageModelValue);
-      const result = await jimengApi.batchGenerateAssetImagesWithLlm(currentProject.id, {
-        asset_ids: targets.map((asset) => asset.id),
-        asset_type: activeType,
-        provider_id: selectedLlmModel?.providerId,
-        model_id: selectedLlmModel?.modelId,
-        extra_prompt: imagePromptForAsset(imageSettings, activeType),
-      });      setNotice(`批量生图完成：成功 ${result.success_count}，失败 ${result.failed_count}`);
+      let successCount = 0;
+      let failedCount = 0;
+      const runBatch = async (batchTargets: JimengAsset[], extraPrompt: string) => {
+        if (batchTargets.length === 0) {
+          return;
+        }
+        const result = await jimengApi.batchGenerateAssetImagesWithLlm(currentProject.id, {
+          asset_ids: batchTargets.map((asset) => asset.id),
+          asset_type: activeType,
+          provider_id: selectedLlmModel?.providerId,
+          model_id: selectedLlmModel?.modelId,
+          extra_prompt: extraPrompt,
+        });
+        successCount += result.success_count;
+        failedCount += result.failed_count;
+      };
+      if (activeType === "character") {
+        for (const kind of ["single", "group"] as const) {
+          const kindTargets = targets.filter((asset) => normalizeCharacterKind(asset.character_kind) === kind);
+          await runBatch(kindTargets, imagePromptForAsset(imageSettings, activeType, kind));
+        }
+      } else {
+        await runBatch(targets, imagePromptForAsset(imageSettings, activeType));
+      }
+      setNotice(`批量生图完成：成功 ${successCount}，失败 ${failedCount}`);
       await refreshProject();
     } catch (caught) {
       setNotice(requestErrorMessage(caught, "批量生图失败"));

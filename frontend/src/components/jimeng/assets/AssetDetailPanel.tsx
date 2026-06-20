@@ -6,7 +6,7 @@ import { type ChangeEvent, useEffect, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
 import { parseLlmModelValue } from "@/components/jimeng/llm/modelOptions";
 
 export default function AssetDetailPanel({
@@ -62,6 +62,7 @@ export default function AssetDetailPanel({
     aliases: splitAliases(form?.aliasesText ?? ""),
     description: form?.description ?? "",
     image_ratio: form?.imageRatio ?? "16:9",
+    ...(isCharacter ? { character_kind: form?.characterKind ?? "single" } : {}),
   });
 
   const saveMetadata = async () => {
@@ -107,7 +108,7 @@ export default function AssetDetailPanel({
       const response = await jimengApi.generateAssetImageWithLlm(projectId, asset.id, {
         provider_id: selectedLlmModel?.providerId,
         model_id: selectedLlmModel?.modelId,
-        extra_prompt: imagePromptForAsset(settings, asset.type),
+        extra_prompt: imagePromptForAsset(settings, asset.type, form.characterKind),
       });
       const submitId = response.result.submit_id ? `，submit_id：${response.result.submit_id}` : "";
       setNotice(`${response.message || "资产图片已生成"}${submitId}`);
@@ -312,6 +313,26 @@ export default function AssetDetailPanel({
             placeholder="用于生成资产图片的提示词"
           />
         </label>
+        {isCharacter ? (
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-text-secondary">角色分类</span>
+            <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
+              {(["single", "group"] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => updateForm("characterKind", kind)}
+                  className={clsx(
+                    "flex-1 rounded px-3 text-xs font-medium transition-colors",
+                    form.characterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                  )}
+                >
+                  {CHARACTER_KIND_LABELS[kind]}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-2 sm:grid-cols-3 sm:items-end">
           <div className="rounded-lg border border-glass-border bg-surface-inset p-2.5 sm:col-span-3">
@@ -355,10 +376,10 @@ export default function AssetDetailPanel({
         </div>
         <div className="rounded-lg border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-secondary">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-foreground">全局必填提示词与专属前缀</span>
+            <span className="font-medium text-foreground">画风风格与类型前缀</span>
             <button type="button" onClick={onSettingsOpen} className="text-primary hover:text-primary/80">设置</button>
           </div>
-          <p className="mt-1 line-clamp-3">{imagePromptForAsset(settings, asset.type) || "未设置，将只发送资产详情描述。"}</p>
+          <p className="mt-1 line-clamp-3">{imagePromptForAsset(settings, asset.type, form.characterKind) || "未设置，将只发送资产详情描述。"}</p>
           <p className="mt-1 text-text-muted">发送给大模型纯文本生图时，会按资产类型拼接在资产详情描述前。</p>
         </div>
 

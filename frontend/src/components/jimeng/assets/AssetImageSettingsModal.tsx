@@ -10,15 +10,15 @@ import AssetImageStyleSettingsSection from "@/components/jimeng/assets/AssetImag
 import AssetImageTypePrefixSettingsSection from "@/components/jimeng/assets/AssetImageTypePrefixSettingsSection";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
-import { type AssetImageSettings, imagePromptForAsset } from "@/components/jimeng/assets/assetManagerShared";
-import type { JimengAssetType, JimengStylePreset } from "@/lib/jimengApi";
+import { appendPromptPart, type AssetImageSettings, type AssetStylePromptField, imagePromptForAsset } from "@/components/jimeng/assets/assetManagerShared";
+import type { JimengAssetType, JimengCharacterKind, JimengStylePreset } from "@/lib/jimengApi";
 
 export type AssetImageSettingsDraftSetter = Dispatch<SetStateAction<AssetImageSettings>>;
 export type AssetImageSettingsTab = "model" | "prompt" | "prefix" | "style" | "preview";
 
 const SETTINGS_TABS: Array<{ id: AssetImageSettingsTab; label: string; description: string }> = [
   { id: "model", label: "模型与尺寸", description: "模型、画幅、分辨率" },
-  { id: "prompt", label: "全局提示词", description: "所有资产都会追加" },
+  { id: "prompt", label: "画风风格", description: "全局、单人、群演、场景" },
   { id: "prefix", label: "类型前缀", description: "人物、场景、道具" },
   { id: "style", label: "风格库", description: "复用资产风格" },
   { id: "preview", label: "发送预览", description: "检查最终组合" },
@@ -47,6 +47,7 @@ export default function AssetImageSettingsModal({
   const [activeTab, setActiveTab] = useState<AssetImageSettingsTab>("model");
   const [activePrefixType, setActivePrefixType] = useState<JimengAssetType>("character");
   const [previewType, setPreviewType] = useState<JimengAssetType>("character");
+  const [previewCharacterKind, setPreviewCharacterKind] = useState<JimengCharacterKind>("single");
   const [selectedStyleId, setSelectedStyleId] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -63,13 +64,14 @@ export default function AssetImageSettingsModal({
       setActiveTab("model");
       setActivePrefixType("character");
       setPreviewType("character");
+      setPreviewCharacterKind("single");
       setSelectedStyleId("");
       setStatusMessage(null);
       setSaveError(null);
     }
   }, [normalizedValue, open]);
 
-  const promptPreview = useMemo(() => imagePromptForAsset(draft, previewType), [draft, previewType]);
+  const promptPreview = useMemo(() => imagePromptForAsset(draft, previewType, previewCharacterKind), [draft, previewCharacterKind, previewType]);
 
   if (!open) {
     return null;
@@ -80,32 +82,20 @@ export default function AssetImageSettingsModal({
     setSaveError(null);
   };
 
-  const appendStylePrompt = (promptValue: string) => {
+  const appendStylePrompt = (promptValue: string, target: AssetStylePromptField) => {
     const preset = stylePresets.find((item) => item.id === promptValue);
     setSelectedStyleId(preset?.id ?? "");
     const prompt = (preset?.prompt ?? promptValue).trim();
     if (!prompt) {
       return;
     }
-    setDraft((state) => {
-      if (state.imagePromptTemplate.includes(prompt)) {
-        return state;
-      }
-      const next = [state.imagePromptTemplate.trim(), prompt].filter(Boolean).join("\n");
-      return { ...state, imagePromptTemplate: next };
-    });
+    setDraft((state) => ({ ...state, [target]: appendPromptPart(state[target], prompt) }));
     setActiveTab("prompt");
     setStatusMessage(`已读取风格「${preset?.name ?? "未命名风格"}」的提示词`);
     setSaveError(null);
   };
 
   const saveSettings = () => {
-    if (!draft.imagePromptTemplate.trim()) {
-      setSaveError("请填写全局必填提示词");
-      setStatusMessage(null);
-      setActiveTab("prompt");
-      return;
-    }
     onSave({ ...draft, imageModelValue: draft.imageModelValue || resolvedImageModelValue });
     setSaveError(null);
     setStatusMessage("生图设置已保存");
@@ -118,7 +108,7 @@ export default function AssetImageSettingsModal({
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Image Prompt</p>
             <h2 className="mt-2 font-display text-xl font-semibold text-foreground">资产生图设置</h2>
-            <p className="mt-2 text-sm leading-6 text-text-secondary">按小页面管理模型、提示词、类型前缀、风格和发送预览。</p>
+            <p className="mt-2 text-sm leading-6 text-text-secondary">按小页面管理模型、画风、类型前缀、风格和发送预览。</p>
           </div>
           <button type="button" title="关闭" onClick={requestClose} className="grid h-9 w-9 place-items-center rounded-lg border border-glass-border text-text-secondary hover:bg-hover-bg hover:text-foreground">
             <X size={18} />
@@ -158,7 +148,16 @@ export default function AssetImageSettingsModal({
                 onStylePresetsChanged={onStylePresetsChanged}
               />
             ) : null}
-            {activeTab === "preview" ? <AssetImageSendPreviewSection draft={draft} previewType={previewType} onPreviewTypeChange={setPreviewType} promptPreview={promptPreview} /> : null}
+            {activeTab === "preview" ? (
+              <AssetImageSendPreviewSection
+                draft={draft}
+                previewType={previewType}
+                previewCharacterKind={previewCharacterKind}
+                onPreviewTypeChange={setPreviewType}
+                onPreviewCharacterKindChange={setPreviewCharacterKind}
+                promptPreview={promptPreview}
+              />
+            ) : null}
           </div>
         </div>
 

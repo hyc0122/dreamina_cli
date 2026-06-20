@@ -31,7 +31,7 @@
 拆分的小页面模块：
 
 - `AssetImageModelSettingsSection.tsx`：全局生图模型、默认资产画幅、分辨率。
-- `AssetImagePromptSettingsSection.tsx`：全局必填提示词。
+- `AssetImagePromptSettingsSection.tsx`：全局画风。
 - `AssetImageTypePrefixSettingsSection.tsx`：人物、场景、道具前缀提示词。
 - `AssetImageStyleSettingsSection.tsx`：风格库应用入口。
 - `AssetImageSendPreviewSection.tsx`：展示最终发送规则和当前类型组合预览。

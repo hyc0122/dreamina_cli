@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { Image as ImageIcon, Lock, MapPin, Package, Settings2, User, Volume2, VolumeX, X, type LucideIcon } from "lucide-react";
 import { API_URL } from "@/lib/api";
+import { CHARACTER_KIND_LABELS, normalizeCharacterKind } from "@/components/jimeng/assets/assetManagerShared";
 import type { JimengAsset, JimengAssetBinding, JimengAssetType } from "@/lib/jimengApi";
 
 export const JIMENG_ASSET_TYPE_LABELS: Record<JimengAssetType, string> = {
@@ -81,6 +82,7 @@ export default function AssetMiniCard({
   const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
   const hasVoice = resolvedType === "character" && Boolean(asset?.audio_path);
   const voiceEnabled = binding?.voice_enabled ?? true;
+  const characterKindLabel = resolvedType === "character" ? CHARACTER_KIND_LABELS[normalizeCharacterKind(asset?.character_kind)] : null;
 
   return (
     <div
@@ -142,7 +144,7 @@ export default function AssetMiniCard({
           ) : null}
         </div>
         <p className="mt-0.5 truncate font-mono text-[10px] uppercase text-text-muted">
-          {JIMENG_ASSET_TYPE_LABELS[resolvedType]}
+          {characterKindLabel ? `${JIMENG_ASSET_TYPE_LABELS[resolvedType]} · ${characterKindLabel}` : JIMENG_ASSET_TYPE_LABELS[resolvedType]}
         </p>
       </div>
       {onRemove ? (
