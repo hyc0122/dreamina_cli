@@ -1,5 +1,6 @@
 """资产图片纯文本生图。"""
 
+import inspect
 import re
 from typing import Any
 
@@ -24,6 +25,7 @@ _ASSET_TYPE_PREFIX = {
 }
 _PROMPT_LABEL_RE = re.compile(r"^\s*【[^】]+】\s*$")
 _TASK_ID_ERROR_RE = re.compile(r"task_id=([^\s,，。;；]+)")
+_IMAGE_QUALITIES = {"auto", "high", "medium", "low"}
 
 
 def _clean_prompt_part(value: str) -> str:
@@ -56,6 +58,30 @@ def _task_id_from_error(error: Exception) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _normalize_quality(value: str) -> str:
+    quality = str(value or "high").strip().lower()
+    return quality if quality in _IMAGE_QUALITIES else "high"
+
+
+def _normalize_reference_images(values: list[str] | None) -> list[str]:
+    result: list[str] = []
+    for value in values or []:
+        url = str(value or "").strip()
+        if url:
+            result.append(url)
+        if len(result) >= 10:
+            break
+    return result
+
+
+def _call_text_to_image_provider(provider: Any, prompt: str, model_id: str, size: str, quality: str, reference_images: list[str]):
+    # 测试里会 monkeypatch 旧的 4 参数函数；真实函数支持 quality/reference_images。
+    parameters = inspect.signature(call_text_to_image).parameters
+    if "quality" not in parameters:
+        return call_text_to_image(provider, prompt, model_id, size)
+    return call_text_to_image(provider, prompt, model_id, size, quality=quality, reference_images=reference_images)
+
+
 def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, request: LlmAssetImageGenerateRequest):
     store.get_project(project_id)
     asset = store._get_asset(asset_id)
@@ -66,6 +92,8 @@ def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, req
     provider, model = resolve_provider_and_model(settings, request.provider_id, request.model_id)
     _assert_image_model(model)
     size = request.size or settings.asset_image.size
+    quality = _normalize_quality(request.quality)
+    reference_images = _normalize_reference_images(request.reference_images)
     prompt = build_asset_image_prompt(asset, settings, request.extra_prompt)
     record = create_asset_image_record(
         store,
@@ -75,9 +103,11 @@ def generate_asset_image(store: JimengStore, project_id: str, asset_id: str, req
         model=model,
         prompt=prompt,
         size=size,
+        quality=quality,
+        reference_images=reference_images,
     )
     try:
-        generated = call_text_to_image(provider, prompt, model.id, size)
+        generated = _call_text_to_image_provider(provider, prompt, model.id, size, quality, reference_images)
     except ValueError as exc:
         task_id = _task_id_from_error(exc)
         if not task_id:
@@ -124,6 +154,8 @@ def batch_generate_asset_images(store: JimengStore, project_id: str, request: Ll
         provider_id=request.provider_id,
         model_id=request.model_id,
         size=request.size,
+        quality=request.quality,
+        reference_images=request.reference_images,
         extra_prompt=request.extra_prompt,
     )
     for asset in assets:

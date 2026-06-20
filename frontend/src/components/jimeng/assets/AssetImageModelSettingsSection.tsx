@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
-import type { AssetImageSettings, AssetImageRatio } from "@/components/jimeng/assets/assetManagerShared";
+import { ASSET_IMAGE_QUALITY_OPTIONS, type AssetImageQuality, type AssetImageSettings, type AssetImageRatio } from "@/components/jimeng/assets/assetManagerShared";
 import type { AssetImageSettingsDraftSetter } from "@/components/jimeng/assets/AssetImageSettingsModal";
 
 export default function AssetImageModelSettingsSection({
@@ -46,7 +46,7 @@ export default function AssetImageModelSettingsSection({
         <span className="block text-xs leading-5 text-text-muted">模型来自“大模型设置”里已启用的图片模型。</span>
       </label>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-3">
         <div className="rounded-lg border border-glass-border bg-panel-bg p-3">
           <span className="block text-sm font-medium text-text-secondary">默认资产画幅</span>
           <div className="mt-2 inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
@@ -74,6 +74,18 @@ export default function AssetImageModelSettingsSection({
             <option value="4k">4k</option>
           </select>
           <span className="block text-xs leading-5 text-text-muted">用于资产生图设置里的默认分辨率。</span>
+        </label>
+
+        <label className="block space-y-2 rounded-lg border border-glass-border bg-panel-bg p-3">
+          <span className="text-sm font-medium text-text-secondary">图片质量</span>
+          <select value={draft.imageQuality} onChange={(event) => updateDraft({ imageQuality: event.target.value as AssetImageQuality })} className="glass-input h-10 w-full text-sm text-foreground">
+            {ASSET_IMAGE_QUALITY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <span className="block text-xs leading-5 text-text-muted">默认高质量 high，发送给大模型 params.quality。</span>
         </label>
       </div>
     </section>

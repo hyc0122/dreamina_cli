@@ -44,6 +44,8 @@ class LlmAssetImageGenerateRequest(BaseModel):
     provider_id: str | None = None
     model_id: str | None = None
     size: str | None = None
+    quality: str = "high"
+    reference_images: list[str] = Field(default_factory=list)
     extra_prompt: str = ""
 
 
@@ -56,6 +58,10 @@ class LlmAssetImageRecordPollRequest(BaseModel):
     project_id: str | None = None
     record_ids: list[str] = Field(default_factory=list)
     limit: int = 20
+
+
+class LlmAssetImageRecordBatchDeleteRequest(BaseModel):
+    record_ids: list[str] = Field(default_factory=list)
 
 
 @dataclass

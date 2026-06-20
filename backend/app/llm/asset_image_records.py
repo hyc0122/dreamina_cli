@@ -83,6 +83,8 @@ def create_asset_image_record(
     model: LlmModelSetting,
     prompt: str,
     size: str,
+    quality: str = "high",
+    reference_images: list[str] | None = None,
 ) -> dict[str, Any]:
     stamp = _now()
     record = {
@@ -96,6 +98,8 @@ def create_asset_image_record(
         "model_id": model.id,
         "model_name": model.name,
         "size": size,
+        "quality": quality,
+        "reference_images": list(reference_images or []),
         "prompt": prompt,
         "task_id": "",
         "status": "submitted",
@@ -121,7 +125,7 @@ def list_asset_image_records(store: JimengStore, project_id: str | None = None) 
     records = _read_records(store)
     if project_id:
         records = [record for record in records if record.get("project_id") == project_id]
-    return sorted(records, key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+    return sorted(records, key=lambda item: str(item.get("created_at") or item.get("updated_at") or ""), reverse=True)
 
 
 def get_asset_image_record(store: JimengStore, record_id: str) -> dict[str, Any]:
@@ -169,6 +173,22 @@ def delete_asset_image_record(store: JimengStore, record_id: str) -> dict[str, A
         kept.append(record)
     if deleted is None:
         raise KeyError(f"大模型生图记录不存在: {record_id}")
+    _write_records(store, kept)
+    return deleted
+
+
+def delete_asset_image_records(store: JimengStore, record_ids: list[str]) -> list[dict[str, Any]]:
+    wanted = set(record_ids)
+    if not wanted:
+        return []
+    records = _read_records(store)
+    kept: list[dict[str, Any]] = []
+    deleted: list[dict[str, Any]] = []
+    for record in records:
+        if record.get("id") in wanted:
+            deleted.append(record)
+            continue
+        kept.append(record)
     _write_records(store, kept)
     return deleted
 

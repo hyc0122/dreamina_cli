@@ -6,7 +6,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+import { ASSET_IMAGE_QUALITY_OPTIONS, type AssetFormState, type AssetImageQuality, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, CHARACTER_KIND_LABELS, assetImageSizeFromSettings, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases, splitReferenceImageUrls } from "@/components/jimeng/assets/assetManagerShared";
 import { parseLlmModelValue } from "@/components/jimeng/llm/modelOptions";
 
 export default function AssetDetailPanel({
@@ -16,9 +16,11 @@ export default function AssetDetailPanel({
   settings,
   globalImageModelValue,
   globalImageModelLabel,
+  assetImagePending = false,
   onSettingsOpen,
   onSettingsChange,
   onRefresh,
+  onLlmImageRecordsChanged,
   onPreview,
   onSelectAsset,
 }: {
@@ -28,9 +30,11 @@ export default function AssetDetailPanel({
   settings: AssetImageSettings;
   globalImageModelValue: string;
   globalImageModelLabel: string;
+  assetImagePending?: boolean;
   onSettingsOpen: () => void;
   onSettingsChange: (settings: AssetImageSettings) => void;
   onRefresh: () => Promise<void>;
+  onLlmImageRecordsChanged?: () => Promise<void>;
   onPreview: (asset: JimengAsset) => void;
   onSelectAsset: (assetId: string) => void;
 }) {
@@ -42,16 +46,18 @@ export default function AssetDetailPanel({
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [referenceImageText, setReferenceImageText] = useState("");
   const activeAssetIdRef = useRef(asset?.id ?? "");
 
   const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
   const voiceUrl = jimengMediaUrl(asset?.audio_path, asset?.updated_at);
   const isCharacter = asset?.type === "character";
-  const generatingImage = asset ? generatingImageAssetIds.includes(asset.id) : false;
+  const generatingImage = asset ? generatingImageAssetIds.includes(asset.id) || assetImagePending : false;
 
   useEffect(() => {
     activeAssetIdRef.current = asset?.id ?? "";
     setForm(asset ? formFromAsset(asset) : null);
+    setReferenceImageText("");
     setNotice(null);
     setError(null);
   }, [asset]);
@@ -110,10 +116,13 @@ export default function AssetDetailPanel({
     try {
       await jimengApi.updateAsset(projectId, targetAsset.id, buildMetadataPayload());
       const selectedLlmModel = parseLlmModelValue(globalImageModelValue);
+      const referenceImages = splitReferenceImageUrls(referenceImageText);
       const response = await jimengApi.generateAssetImageWithLlm(projectId, targetAsset.id, {
         provider_id: selectedLlmModel?.providerId,
         model_id: selectedLlmModel?.modelId,
         size: assetImageSizeFromSettings(settings.resolutionType, targetForm.imageRatio),
+        quality: settings.imageQuality,
+        ...(referenceImages.length > 0 ? { reference_images: referenceImages } : {}),
         extra_prompt: imagePromptForAsset(settings, targetAsset.type, targetForm.characterKind),
       });
       const resultSubmitId = typeof response.result.submit_id === "string" ? response.result.submit_id : "";
@@ -121,6 +130,7 @@ export default function AssetDetailPanel({
       if (activeAssetIdRef.current === targetAsset.id) {
         setNotice(`${response.message || "资产图片已生成"}${submitId}`);
       }
+      await onLlmImageRecordsChanged?.();
       await onRefresh();
     } catch (caught) {
       if (activeAssetIdRef.current === targetAsset.id) {
@@ -383,6 +393,32 @@ export default function AssetDetailPanel({
                 <option value="2k">2k</option>
                 <option value="4k">4k</option>
               </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
+              <span className="shrink-0 text-xs font-medium text-text-secondary">质量</span>
+              <select
+                value={settings.imageQuality}
+                onChange={(event) => onSettingsChange({ ...settings, imageQuality: event.target.value as AssetImageQuality })}
+                className="glass-input h-8 min-w-0 flex-1 px-2 text-sm text-foreground"
+              >
+                {ASSET_IMAGE_QUALITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex h-10 items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-2">
+              <span className="shrink-0 text-xs font-medium text-text-secondary">参考图地址</span>
+              <input
+                value={referenceImageText}
+                onChange={(event) => setReferenceImageText(event.target.value)}
+                className="glass-input h-8 min-w-0 flex-1 px-2 text-sm text-foreground"
+                placeholder="可空，多个用逗号/换行"
+              />
             </label>
           </div>
 

@@ -8,12 +8,13 @@ from ..llm.asset_image import batch_generate_asset_images, generate_asset_image
 from ..llm.asset_image_records import (
     cancel_asset_image_record,
     delete_asset_image_record,
+    delete_asset_image_records,
     list_asset_image_records,
     poll_asset_image_record,
     poll_pending_asset_image_records,
     public_asset_image_record,
 )
-from ..llm.models import LlmAssetImageBatchGenerateRequest, LlmAssetImageGenerateRequest, LlmAssetImageRecordPollRequest, LlmSettings
+from ..llm.models import LlmAssetImageBatchGenerateRequest, LlmAssetImageGenerateRequest, LlmAssetImageRecordBatchDeleteRequest, LlmAssetImageRecordPollRequest, LlmSettings
 from ..llm.settings import load_llm_settings, model_dump, save_llm_settings
 from .context import _call, _dump, get_store
 
@@ -75,6 +76,16 @@ def poll_llm_asset_image_record(record_id: str):
 @router.post("/llm/asset_image_records/{record_id}/cancel")
 def cancel_llm_asset_image_record(record_id: str):
     return _call(lambda: _dump(public_asset_image_record(cancel_asset_image_record(get_store(), record_id))))
+
+
+@router.post("/llm/asset_image_records/batch_delete")
+def batch_delete_llm_asset_image_records(request: Optional[LlmAssetImageRecordBatchDeleteRequest] = None):
+    def delete_records():
+        payload = request or LlmAssetImageRecordBatchDeleteRequest()
+        deleted = delete_asset_image_records(get_store(), payload.record_ids)
+        return {"deleted": [record.get("id") for record in deleted]}
+
+    return _call(delete_records)
 
 
 @router.delete("/llm/asset_image_records/{record_id}")

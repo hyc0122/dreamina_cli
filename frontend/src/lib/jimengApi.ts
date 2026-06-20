@@ -416,6 +416,8 @@ export interface JimengLlmAssetImageRecord {
   model_id: string;
   model_name: string;
   size: string;
+  quality?: string;
+  reference_images?: string[];
   prompt: string;
   task_id: string;
   status: "submitted" | "running" | "timeout" | "poll_error" | "succeeded" | "failed" | "canceled" | string;
@@ -682,7 +684,7 @@ export const jimengApi = {
   generateAssetImageWithLlm: (
     projectId: string,
     assetId: string,
-    data: { provider_id?: string; model_id?: string; size?: string; extra_prompt?: string } = {},
+    data: { provider_id?: string; model_id?: string; size?: string; quality?: string; reference_images?: string[]; extra_prompt?: string } = {},
   ) =>
     axios
       .post<JimengLlmAssetImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}/llm_image/generate`, data)
@@ -694,7 +696,7 @@ export const jimengApi = {
     axios.post<JimengAssetBatchImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/batch_generate_images`, data).then((res) => res.data),
   batchGenerateAssetImagesWithLlm: (
     projectId: string,
-    data: { provider_id?: string; model_id?: string; size?: string; extra_prompt?: string; asset_ids?: string[]; asset_type?: JimengAssetType } = {},
+    data: { provider_id?: string; model_id?: string; size?: string; quality?: string; reference_images?: string[]; extra_prompt?: string; asset_ids?: string[]; asset_type?: JimengAssetType } = {},
   ) =>
     axios
       .post<JimengAssetBatchImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/llm_image/batch_generate`, data)
@@ -709,6 +711,8 @@ export const jimengApi = {
     axios.post<JimengLlmAssetImageRecord>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}/cancel`).then((res) => res.data),
   deleteLlmAssetImageRecord: (recordId: string) =>
     axios.delete<{ deleted: string }>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}`).then((res) => res.data),
+  batchDeleteLlmAssetImageRecords: (recordIds: string[]) =>
+    axios.post<{ deleted: string[] }>(`${API_URL}/jimeng/llm/asset_image_records/batch_delete`, { record_ids: recordIds }).then((res) => res.data),
   uploadAssetVoice: (projectId: string, assetId: string, file: File) =>
     axios.post<JimengAsset>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}/voice`, formDataWithFile(file), multipartHeaders).then((res) => res.data),
   getAssetVoiceUrl: (projectId: string, assetId: string) =>

@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { ArrowLeft, CheckSquare, Download, FileInput, Image as ImageIcon, Plus, RefreshCw, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AssetBrowser from "@/components/jimeng/assets/AssetBrowser";
+import AssetBatchImageGenerateModal, { type AssetBatchImageGenerateOptions } from "@/components/jimeng/assets/AssetBatchImageGenerateModal";
 import AssetDetailPanel from "@/components/jimeng/assets/AssetDetailPanel";
 import AssetImageSettingsModal from "@/components/jimeng/assets/AssetImageSettingsModal";
 import AssetMetadataImportModal from "@/components/jimeng/assets/AssetMetadataImportModal";
@@ -12,10 +13,12 @@ import AssetPreviewModal from "@/components/jimeng/assets/AssetPreviewModal";
 import AssetToolbar from "@/components/jimeng/assets/AssetToolbar";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
 import CreateAssetModal from "@/components/jimeng/assets/CreateAssetModal";
-import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
+import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, splitReferenceImageUrls, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
 import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
-import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
+import { jimengApi, type JimengAsset, type JimengAssetType, type JimengLlmAssetImageRecord, type JimengStylePreset } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
+
+const LLM_PENDING_RECORD_STATUSES = new Set(["submitted", "running", "timeout", "poll_error"]);
 
 const ASSET_TABS: Array<{ type: JimengAssetType; icon: LucideIcon }> = [
   { type: "character", icon: Volume2 },
@@ -57,6 +60,7 @@ export default function JimengAssetManagerPage() {
   const [activeType, setActiveType] = useState<JimengAssetType>("character");
   const [query, setQuery] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
+  const [batchGenerateOpen, setBatchGenerateOpen] = useState(false);
   const [metadataImportOpen, setMetadataImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -71,6 +75,7 @@ export default function JimengAssetManagerPage() {
   const [stylePresets, setStylePresets] = useState<JimengStylePreset[]>([]);
   const [imageModelOptions, setImageModelOptions] = useState<LlmModelOption[]>([]);
   const [fallbackImageModelValue, setFallbackImageModelValue] = useState("");
+  const [llmImageRecords, setLlmImageRecords] = useState<JimengLlmAssetImageRecord[]>([]);
 
   const refreshProject = useCallback(async () => {
     if (currentProject?.id) {
@@ -78,9 +83,26 @@ export default function JimengAssetManagerPage() {
     }
   }, [currentProject?.id, loadProjectData]);
 
+  const loadLlmImageRecords = useCallback(async () => {
+    if (!currentProject?.id) {
+      setLlmImageRecords([]);
+      return;
+    }
+    try {
+      const response = await jimengApi.listLlmAssetImageRecords(currentProject.id);
+      setLlmImageRecords(response.records);
+    } catch {
+      setLlmImageRecords([]);
+    }
+  }, [currentProject?.id]);
+
   useEffect(() => {
     void refreshProject();
   }, [refreshProject]);
+
+  useEffect(() => {
+    void loadLlmImageRecords();
+  }, [loadLlmImageRecords]);
 
   useEffect(() => {
     jimengApi
@@ -167,6 +189,15 @@ export default function JimengAssetManagerPage() {
     () => assets.filter((asset) => asset.type === activeType && selectedAssetIds.includes(asset.id)),
     [activeType, assets, selectedAssetIds],
   );
+  const pendingImageAssetIds = useMemo(
+    () =>
+      new Set(
+        llmImageRecords
+          .filter((record) => LLM_PENDING_RECORD_STATUSES.has(record.status))
+          .map((record) => record.asset_id),
+      ),
+    [llmImageRecords],
+  );
   const allFilteredSelected = filteredAssets.length > 0 && filteredAssets.every((asset) => selectedAssetIds.includes(asset.id));
 
   const saveImageSettings = (settings: AssetImageSettings) => {
@@ -246,7 +277,7 @@ export default function JimengAssetManagerPage() {
     setNotice("已导出资产图片包");
   };
 
-  const batchGenerateImages = async () => {
+  const openBatchGenerateModal = () => {
     if (!currentProject) {
       return;
     }
@@ -254,19 +285,30 @@ export default function JimengAssetManagerPage() {
       setNotice(`请先勾选要批量生图的${JIMENG_ASSET_TYPE_LABELS[activeType]}资产`);
       return;
     }
-    const targets = selectedCurrentTypeAssets.filter((asset) => asset.description.trim());
-    if (targets.length === 0) {
-      setNotice("选中的资产没有可生图内容，请先填写详情描述");
+    setBatchGenerateOpen(true);
+  };
+
+  const batchGenerateImages = async (options: AssetBatchImageGenerateOptions) => {
+    if (!currentProject) {
       return;
     }
-    if (!window.confirm(`将为选中的 ${targets.length} 个${JIMENG_ASSET_TYPE_LABELS[activeType]}资产批量生图，是否继续？`)) {
-      return;
+    if (selectedCurrentTypeAssets.length === 0) {
+      const message = `请先勾选要批量生图的${JIMENG_ASSET_TYPE_LABELS[activeType]}资产`;
+      setNotice(message);
+      throw new Error(message);
+    }
+    const targets = selectedCurrentTypeAssets.filter((asset) => asset.description.trim());
+    if (targets.length === 0) {
+      const message = "选中的资产没有可生图内容，请先填写详情描述";
+      setNotice(message);
+      throw new Error(message);
     }
     setBatchGenerating(true);
     setNotice(null);
     setBatchProgressMessage(`批量生图进度：准备生成 ${targets.length} 个${JIMENG_ASSET_TYPE_LABELS[activeType]}资产。`);
     try {
       const selectedLlmModel = parseLlmModelValue(resolvedImageModelValue);
+      const referenceImages = splitReferenceImageUrls(options.referenceImageText);
       let successCount = 0;
       let failedCount = 0;
       let processedCount = 0;
@@ -288,7 +330,9 @@ export default function JimengAssetManagerPage() {
             asset_type: activeType,
             provider_id: selectedLlmModel?.providerId,
             model_id: selectedLlmModel?.modelId,
-            size: assetImageSizeFromSettings(imageSettings.resolutionType, ratio),
+            size: assetImageSizeFromSettings(options.resolutionType, ratio),
+            quality: options.quality,
+            ...(referenceImages.length > 0 ? { reference_images: referenceImages } : {}),
             extra_prompt: extraPrompt,
           });
           successCount += result.success_count;
@@ -306,9 +350,13 @@ export default function JimengAssetManagerPage() {
         await runBatch(targets, imagePromptForAsset(imageSettings, activeType));
       }
       setNotice(`批量生图完成：成功 ${successCount}，失败 ${failedCount}`);
+      setBatchGenerateOpen(false);
+      await loadLlmImageRecords();
       await refreshProject();
     } catch (caught) {
-      setNotice(requestErrorMessage(caught, "批量生图失败"));
+      const message = requestErrorMessage(caught, "批量生图失败");
+      setNotice(message);
+      throw new Error(message);
     } finally {
       setBatchGenerating(false);
       setBatchProgressMessage(null);
@@ -342,7 +390,7 @@ export default function JimengAssetManagerPage() {
             <Settings2 size={16} />
             <span>生图设置</span>
           </button>
-          <button type="button" onClick={batchGenerateImages} disabled={batchGenerating} className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60">
+          <button type="button" onClick={openBatchGenerateModal} disabled={batchGenerating} className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60">
             <Sparkles size={16} />
             <span>{batchGenerating ? "批量生图中" : "批量生图"}</span>
           </button>
@@ -503,12 +551,24 @@ export default function JimengAssetManagerPage() {
           onSettingsOpen={() => setSettingsOpen(true)}
           onSettingsChange={saveImageSettings}
           onRefresh={refreshProject}
+          assetImagePending={selectedAsset ? pendingImageAssetIds.has(selectedAsset.id) : false}
+          onLlmImageRecordsChanged={loadLlmImageRecords}
           onPreview={setPreviewAsset}
           onSelectAsset={setSelectedAssetId}
         />
       </div>
 
       <BatchUploadAssetsModal projectId={currentProject.id} open={batchOpen} defaultImageRatio={imageSettings.defaultImageRatio} onClose={() => setBatchOpen(false)} onUploaded={refreshProject} />
+      <AssetBatchImageGenerateModal
+        open={batchGenerateOpen}
+        assetType={activeType}
+        selectedCount={selectedCurrentTypeAssets.length}
+        modelLabel={resolvedImageModelLabel}
+        settings={imageSettings}
+        generating={batchGenerating}
+        onClose={() => setBatchGenerateOpen(false)}
+        onSubmit={batchGenerateImages}
+      />
       <AssetMetadataImportModal projectId={currentProject.id} open={metadataImportOpen} onClose={() => setMetadataImportOpen(false)} onImported={refreshProject} />
       <AssetImageSettingsModal open={settingsOpen} value={imageSettings} imageModelOptions={imageModelOptions} resolvedImageModelValue={resolvedImageModelValue} stylePresets={stylePresets} onStylePresetsChanged={reloadAssetStylePresets} onClose={() => setSettingsOpen(false)} onSave={saveImageSettings} />
       <CreateAssetModal

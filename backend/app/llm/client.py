@@ -25,6 +25,7 @@ JIASU_RATIO_SIZE_MAP = {
     "4:3": "1280x960",
     "3:4": "960x1280",
 }
+JIASU_IMAGE_QUALITIES = {"auto", "high", "medium", "low"}
 
 
 def _join_url(base_url: str, suffix: str) -> str:
@@ -204,14 +205,42 @@ def _require_image_payload(payload: dict[str, Any]) -> LlmGeneratedImage:
     return result
 
 
-def _jiasu_media_generate_body(prompt: str, model_id: str, size: str) -> dict[str, Any]:
+def _normalize_image_quality(quality: str) -> str:
+    value = str(quality or "high").strip().lower()
+    return value if value in JIASU_IMAGE_QUALITIES else "high"
+
+
+def _normalize_reference_images(reference_images: list[str] | tuple[str, ...] | None) -> list[str]:
+    if not reference_images:
+        return []
+    result: list[str] = []
+    for item in reference_images:
+        url = str(item or "").strip()
+        if url:
+            result.append(url)
+        if len(result) >= 10:
+            break
+    return result
+
+
+def _jiasu_media_generate_body(
+    prompt: str,
+    model_id: str,
+    size: str,
+    quality: str = "high",
+    reference_images: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "size": _normalize_jiasu_image_size(size),
+        "quality": _normalize_image_quality(quality),
+    }
+    images = _normalize_reference_images(reference_images)
+    if images:
+        params["images"] = images
     return {
         "model": model_id,
         "prompt": prompt,
-        "params": {
-            "size": _normalize_jiasu_image_size(size),
-            "quality": "auto",
-        },
+        "params": params,
     }
 
 
@@ -262,11 +291,12 @@ def _normalize_jiasu_image_size(size: str) -> str:
     return _nearest_jiasu_size_for_ratio(width, height)
 
 
-def _openai_image_generate_body(prompt: str, model_id: str, size: str) -> dict[str, Any]:
+def _openai_image_generate_body(prompt: str, model_id: str, size: str, quality: str = "auto") -> dict[str, Any]:
     return {
         "model": model_id,
         "prompt": prompt,
         "size": size,
+        "quality": _normalize_image_quality(quality),
         "n": 1,
         "response_format": "b64_json",
     }
@@ -287,10 +317,17 @@ def _poll_jiasu_media_task(settings: LlmProviderSetting, task_id: object) -> Llm
     raise ValueError(f"大模型生图任务超时未完成: task_id={task_id}")
 
 
-def _start_jiasu_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmImageTaskStart:
+def _start_jiasu_text_to_image(
+    settings: LlmProviderSetting,
+    prompt: str,
+    model_id: str,
+    size: str,
+    quality: str = "high",
+    reference_images: list[str] | tuple[str, ...] | None = None,
+) -> LlmImageTaskStart:
     request = urllib.request.Request(
         _media_generate_endpoint(settings.base_url),
-        data=json.dumps(_jiasu_media_generate_body(prompt, model_id, size), ensure_ascii=False).encode("utf-8"),
+        data=json.dumps(_jiasu_media_generate_body(prompt, model_id, size, quality, reference_images), ensure_ascii=False).encode("utf-8"),
         headers=_auth_headers(settings),
         method="POST",
     )
@@ -332,8 +369,15 @@ def _poll_jiasu_media_status(settings: LlmProviderSetting, task_id: object) -> L
     )
 
 
-def _call_jiasu_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmGeneratedImage:
-    started = _start_jiasu_text_to_image(settings, prompt, model_id, size)
+def _call_jiasu_text_to_image(
+    settings: LlmProviderSetting,
+    prompt: str,
+    model_id: str,
+    size: str,
+    quality: str = "high",
+    reference_images: list[str] | tuple[str, ...] | None = None,
+) -> LlmGeneratedImage:
+    started = _start_jiasu_text_to_image(settings, prompt, model_id, size, quality, reference_images)
     if started.image is not None:
         return started.image
     task_id = started.task_id
@@ -342,34 +386,54 @@ def _call_jiasu_text_to_image(settings: LlmProviderSetting, prompt: str, model_i
     return _poll_jiasu_media_task(settings, task_id)
 
 
-def _call_openai_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmGeneratedImage:
+def _call_openai_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str, size: str, quality: str = "auto") -> LlmGeneratedImage:
     request = urllib.request.Request(
         _openai_image_endpoint(settings.base_url),
-        data=json.dumps(_openai_image_generate_body(prompt, model_id, size), ensure_ascii=False).encode("utf-8"),
+        data=json.dumps(_openai_image_generate_body(prompt, model_id, size, quality), ensure_ascii=False).encode("utf-8"),
         headers=_auth_headers(settings),
         method="POST",
     )
     return _require_image_payload(_urlopen_json(request, timeout=180))
 
 
-def call_text_to_image(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmGeneratedImage:
+def call_text_to_image(
+    settings: LlmProviderSetting,
+    prompt: str,
+    model_id: str,
+    size: str,
+    *,
+    quality: str = "auto",
+    reference_images: list[str] | tuple[str, ...] | None = None,
+) -> LlmGeneratedImage:
     if settings.kind != "openai_compatible":
         raise ValueError("当前仅支持 OpenAI 兼容图片接口")
     if not _normalized_api_key(settings.api_key):
         raise ValueError("大模型供应商缺少 API Key")
     if _is_jiasu_provider(settings):
-        return _call_jiasu_text_to_image(settings, prompt, model_id, size)
-    return _call_openai_text_to_image(settings, prompt, model_id, size)
+        return _call_jiasu_text_to_image(settings, prompt, model_id, size, quality, reference_images)
+    if _normalize_reference_images(reference_images):
+        raise ValueError("当前供应商暂不支持通过参考图地址生成资产图片")
+    return _call_openai_text_to_image(settings, prompt, model_id, size, quality)
 
 
-def start_text_to_image_task(settings: LlmProviderSetting, prompt: str, model_id: str, size: str) -> LlmImageTaskStart:
+def start_text_to_image_task(
+    settings: LlmProviderSetting,
+    prompt: str,
+    model_id: str,
+    size: str,
+    *,
+    quality: str = "auto",
+    reference_images: list[str] | tuple[str, ...] | None = None,
+) -> LlmImageTaskStart:
     if settings.kind != "openai_compatible":
         raise ValueError("当前仅支持 OpenAI 兼容图片接口")
     if not _normalized_api_key(settings.api_key):
         raise ValueError("大模型供应商缺少 API Key")
     if _is_jiasu_provider(settings):
-        return _start_jiasu_text_to_image(settings, prompt, model_id, size)
-    return LlmImageTaskStart(raw={}, image=_call_openai_text_to_image(settings, prompt, model_id, size))
+        return _start_jiasu_text_to_image(settings, prompt, model_id, size, quality, reference_images)
+    if _normalize_reference_images(reference_images):
+        raise ValueError("当前供应商暂不支持通过参考图地址生成资产图片")
+    return LlmImageTaskStart(raw={}, image=_call_openai_text_to_image(settings, prompt, model_id, size, quality))
 
 
 def poll_text_to_image_task(settings: LlmProviderSetting, task_id: object) -> LlmImageTaskStatus:
