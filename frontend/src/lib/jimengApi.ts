@@ -623,6 +623,13 @@ export const jimengApi = {
     data: { resolution_type?: "2k" | "4k"; poll_seconds?: number; extra_prompt?: string; asset_ids?: string[]; asset_type?: JimengAssetType } = {},
   ) =>
     axios.post<JimengAssetBatchImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/batch_generate_images`, data).then((res) => res.data),
+  batchGenerateAssetImagesWithLlm: (
+    projectId: string,
+    data: { provider_id?: string; model_id?: string; size?: string; extra_prompt?: string; asset_ids?: string[]; asset_type?: JimengAssetType } = {},
+  ) =>
+    axios
+      .post<JimengAssetBatchImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/llm_image/batch_generate`, data)
+      .then((res) => res.data),
   uploadAssetVoice: (projectId: string, assetId: string, file: File) =>
     axios.post<JimengAsset>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}/voice`, formDataWithFile(file), multipartHeaders).then((res) => res.data),
   getAssetVoiceUrl: (projectId: string, assetId: string) =>

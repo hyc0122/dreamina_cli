@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ..jimeng_models import JimengAssetType
+
 
 class LlmModelSetting(BaseModel):
     id: str = Field(min_length=1)
@@ -44,6 +46,10 @@ class LlmAssetImageGenerateRequest(BaseModel):
     size: str | None = None
     extra_prompt: str = ""
 
+
+class LlmAssetImageBatchGenerateRequest(LlmAssetImageGenerateRequest):
+    asset_ids: list[str] = Field(default_factory=list)
+    asset_type: JimengAssetType | None = None
 
 @dataclass
 class LlmGeneratedImage:
