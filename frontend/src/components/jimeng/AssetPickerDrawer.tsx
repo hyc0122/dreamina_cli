@@ -6,7 +6,8 @@ import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import AssetMiniCard, { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/AssetMiniCard";
 import AssetMetadataImportModal from "@/components/jimeng/assets/AssetMetadataImportModal";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
-import { jimengApi, type JimengAsset, type JimengAssetBinding, type JimengAssetType, type JimengShot } from "@/lib/jimengApi";
+import { jimengApi, type JimengAsset, type JimengAssetBinding, type JimengAssetType, type JimengShot, type JimengCharacterKind } from "@/lib/jimengApi";
+import { CHARACTER_KIND_LABELS, normalizeCharacterKind } from "@/components/jimeng/assets/assetManagerShared";
 
 export interface AssetPickerTarget {
   shot: JimengShot;
@@ -39,6 +40,7 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
   const [uploading, setUploading] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
+  const [draftCharacterKind, setDraftCharacterKind] = useState<JimengCharacterKind>("single");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -53,6 +55,7 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
   const [assetImageResolution, setAssetImageResolution] = useState<"2k" | "4k">("2k");
   const [newAssetName, setNewAssetName] = useState("");
   const [newAssetDescription, setNewAssetDescription] = useState("");
+  const [newAssetCharacterKind, setNewAssetCharacterKind] = useState<JimengCharacterKind>("single");
 
   const boundAssetIds = useMemo(
     () => new Set(bindings.filter((binding) => binding.asset_type === target.assetType).map((binding) => binding.asset_id)),
@@ -97,6 +100,7 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
     if (selectedAsset) {
       setDraftName(selectedAsset.name);
       setDraftDescription(selectedAsset.description ?? "");
+      setDraftCharacterKind(normalizeCharacterKind(selectedAsset.character_kind));
     }
   }, [selectedAsset]);
 
@@ -143,6 +147,7 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
       await jimengApi.updateAsset(projectId, selectedAsset.id, {
         name: trimmedName,
         description: draftDescription,
+        ...(target.assetType === "character" ? { character_kind: draftCharacterKind } : {}),
       });
       setNotice("资产信息已保存");
       await onBound();
@@ -206,11 +211,13 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
         description: newAssetDescription,
         image_model: "dreamina4.6",
         image_ratio: "16:9",
+        ...(target.assetType === "character" ? { character_kind: newAssetCharacterKind } : {}),
       });
       setSelectedAssetId(created.id);
       setCheckedAssetIds([created.id]);
       setNewAssetName("");
       setNewAssetDescription("");
+      setNewAssetCharacterKind("single");
       setCreateOpen(false);
       setNotice(`已新建${JIMENG_ASSET_TYPE_LABELS[target.assetType]}：${created.name}`);
       await onBound();
@@ -388,6 +395,26 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
                 className="glass-input min-h-[72px] resize-y text-xs leading-5 text-foreground"
                 placeholder="详情描述 / 生图提示词"
               />
+              {target.assetType === "character" ? (
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-text-secondary">新建角色分类</span>
+                  <div className="inline-flex h-9 w-full rounded-md border border-glass-border bg-panel-bg p-1">
+                    {(["single", "group"] as const).map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => setNewAssetCharacterKind(kind)}
+                        className={clsx(
+                          "flex-1 rounded px-3 text-xs font-medium transition-colors",
+                          newAssetCharacterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                        )}
+                      >
+                        {CHARACTER_KIND_LABELS[kind]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div className="flex justify-end">
                 <button
                   type="button"
@@ -443,6 +470,26 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
                 className="glass-input min-h-[64px] w-full resize-y text-xs leading-5 text-foreground"
                 placeholder="详情描述 / 生图提示词"
               />
+              {target.assetType === "character" ? (
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-text-secondary">当前角色分类</span>
+                  <div className="inline-flex h-9 w-full rounded-md border border-glass-border bg-panel-bg p-1">
+                    {(["single", "group"] as const).map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => setDraftCharacterKind(kind)}
+                        className={clsx(
+                          "flex-1 rounded px-3 text-xs font-medium transition-colors",
+                          draftCharacterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                        )}
+                      >
+                        {CHARACTER_KIND_LABELS[kind]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"

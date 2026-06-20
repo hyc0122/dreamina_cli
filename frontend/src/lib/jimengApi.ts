@@ -4,6 +4,7 @@ import { API_URL } from "@/lib/api";
 export type JimengProjectStatus = "draft" | "working" | "has_failed" | "completed";
 export type JimengShotStatus = "draft" | "asset_missing" | "queued" | "running" | "failed" | "completed" | "locked";
 export type JimengAssetType = "character" | "scene" | "prop";
+export type JimengCharacterKind = "single" | "group";
 export type JimengQueueStatus =
   | "waiting"
   | "submitting"
@@ -74,6 +75,7 @@ export interface JimengAsset {
   image_ratio: "16:9" | "9:16";
   image_params: string;
   video_prompt: string;
+  character_kind: JimengCharacterKind;
   image_filename: string | null;
   image_path: string | null;
   audio_filename: string | null;
@@ -388,6 +390,18 @@ export const JIMENG_VIDEO_MODELS = [
 ] as const;
 
 export const JIMENG_VIDEO_RATIOS = ["1:1", "3:4", "16:9", "4:3", "9:16", "21:9"] as const;
+export const JIMENG_VIDEO_DURATION_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 4);
+
+export const clampJimengVideoDuration = (value: unknown): number => {
+  if (value === null || value === undefined || value === "") {
+    return 5;
+  }
+  const duration = Number(value);
+  if (!Number.isFinite(duration)) {
+    return 5;
+  }
+  return Math.min(15, Math.max(4, Math.round(duration)));
+};
 
 export const DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS: JimengVideoGenerationSettings = {
   provider: "dreamina_cli",
@@ -492,6 +506,7 @@ export interface JimengAssetMetadataInput {
   image_ratio?: "16:9" | "9:16";
   image_params?: string;
   video_prompt?: string;
+  character_kind?: JimengCharacterKind;
 }
 
 export interface JimengAssetImageGenerationResponse {
@@ -611,6 +626,13 @@ export const jimengApi = {
     data: { resolution_type?: "2k" | "4k"; poll_seconds?: number; extra_prompt?: string; asset_ids?: string[]; asset_type?: JimengAssetType } = {},
   ) =>
     axios.post<JimengAssetBatchImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/batch_generate_images`, data).then((res) => res.data),
+  batchGenerateAssetImagesWithLlm: (
+    projectId: string,
+    data: { provider_id?: string; model_id?: string; size?: string; extra_prompt?: string; asset_ids?: string[]; asset_type?: JimengAssetType } = {},
+  ) =>
+    axios
+      .post<JimengAssetBatchImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/llm_image/batch_generate`, data)
+      .then((res) => res.data),
   uploadAssetVoice: (projectId: string, assetId: string, file: File) =>
     axios.post<JimengAsset>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}/voice`, formDataWithFile(file), multipartHeaders).then((res) => res.data),
   getAssetVoiceUrl: (projectId: string, assetId: string) =>

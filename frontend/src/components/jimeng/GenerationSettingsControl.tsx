@@ -3,8 +3,10 @@
 import clsx from "clsx";
 import {
   DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
+  JIMENG_VIDEO_DURATION_OPTIONS,
   JIMENG_VIDEO_MODELS,
   JIMENG_VIDEO_RATIOS,
+  clampJimengVideoDuration,
   type JimengVideoGenerationSettings,
 } from "@/lib/jimengApi";
 import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
@@ -40,7 +42,7 @@ export function normalizeGenerationSettings(
     ...value,
     provider: "dreamina_cli",
     account_id: "",
-    duration: Math.max(1, Number(value?.duration ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.duration) || 5),
+    duration: clampJimengVideoDuration(value?.duration ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.duration),
     poll_seconds: Math.max(5, Number(value?.poll_seconds ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.poll_seconds) || 30),
   };
 }
@@ -129,13 +131,17 @@ export default function GenerationSettingsControl({
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1.5">
           <span className="text-xs font-medium text-text-muted">时长</span>
-          <input
-            type="number"
-            min={1}
+          <select
             value={normalizedValue.duration}
-            onChange={(event) => update("duration", Number(event.target.value) || 5)}
+            onChange={(event) => update("duration", Number(event.target.value))}
             className="glass-input h-10 w-full text-sm text-foreground"
-          />
+          >
+            {JIMENG_VIDEO_DURATION_OPTIONS.map((duration) => (
+              <option key={duration} value={duration}>
+                {duration} 秒
+              </option>
+            ))}
+          </select>
         </label>
         <label className="space-y-1.5">
           <span className="text-xs font-medium text-text-muted">轮询秒</span>

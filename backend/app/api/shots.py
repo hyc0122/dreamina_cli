@@ -12,7 +12,9 @@ from .context import (
     _detect_duration_seconds,
     _dump,
     _model_data,
+    clamp_video_duration_seconds,
     get_store,
+    normalize_optional_video_duration_seconds,
 )
 from .schemas import (
     BatchReplaceRequest,
@@ -27,6 +29,10 @@ from ..jimeng_matching import calculate_highlights, match_assets_for_prompt, par
 
 router = APIRouter(prefix="/jimeng", tags=["jimeng-shots"])
 DEFAULT_DURATION_WHEN_UNDETECTED = 15
+
+
+def _normalize_detected_duration(duration: int | None) -> int:
+    return clamp_video_duration_seconds(duration, default=DEFAULT_DURATION_WHEN_UNDETECTED)
 
 
 @router.get("/projects/{project_id}/shots")
@@ -95,7 +101,14 @@ def match_assets(project_id: str):
 
 @router.put("/projects/{project_id}/shots/{shot_id}")
 def update_shot(project_id: str, shot_id: str, request: ShotUpdate):
-    return _call(lambda: (get_store().get_shot(project_id, shot_id), _dump(get_store().update_shot(shot_id, **_model_data(request, exclude_unset=True))))[1])
+    def update():
+        get_store().get_shot(project_id, shot_id)
+        updates = _model_data(request, exclude_unset=True)
+        if "default_duration" in updates:
+            updates["default_duration"] = normalize_optional_video_duration_seconds(updates["default_duration"])
+        return _dump(get_store().update_shot(shot_id, **updates))
+
+    return _call(update)
 
 
 @router.post("/projects/{project_id}/shots/{shot_id}/detect_duration")
@@ -104,8 +117,7 @@ def detect_shot_duration(project_id: str, shot_id: str):
         shot = get_store().get_shot(project_id, shot_id)
         duration = _detect_duration_seconds(shot.prompt)
         detected = duration is not None
-        if duration is None:
-            duration = DEFAULT_DURATION_WHEN_UNDETECTED
+        duration = _normalize_detected_duration(duration)
         updated = get_store().update_shot(shot_id, default_duration=duration)
         return {"duration": duration, "detected": detected, "shot": _dump(updated)}
 
@@ -121,8 +133,7 @@ def batch_detect_project_durations(project_id: str):
         for shot in get_store().list_shots(project_id):
             duration = _detect_duration_seconds(shot.prompt)
             detected = duration is not None
-            if duration is None:
-                duration = DEFAULT_DURATION_WHEN_UNDETECTED
+            duration = _normalize_detected_duration(duration)
             updated = get_store().update_shot(shot.id, default_duration=duration)
             updated_count += 1
             results.append(

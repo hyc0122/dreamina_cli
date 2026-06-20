@@ -1,6 +1,8 @@
 runtime_data/
 build_cache/
 releases/
+!docs/releases/
+!docs/releases/**
 backend/data/
 backend/1/
 build_exe/
@@ -16,3 +18,4 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .superpowers/
+.worktrees/

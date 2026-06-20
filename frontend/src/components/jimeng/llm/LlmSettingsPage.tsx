@@ -115,8 +115,8 @@ export default function LlmSettingsPage() {
             <div>
               <h3 className="font-display text-lg font-semibold text-foreground">资产图片生图默认项</h3>
               <p className="mt-2 text-sm leading-6 text-text-secondary">
-                这里是大模型接口侧的兜底提示词和图片尺寸；资产管理里的“生图设置”是操作侧提示词。
-                实际生图会把两处提示词与资产详情描述拼接后发送，不是互相覆盖或冲突。
+                这里是大模型接口侧的兜底画风和图片尺寸；资产管理里的“生图设置”是操作侧画风。
+                资产管理传入画风时会优先使用资产管理设置；这里保留为接口兜底项，不和资产管理冲突。
               </p>
             </div>
             <span className="rounded-md border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs text-primary">纯文本生图</span>
@@ -124,7 +124,7 @@ export default function LlmSettingsPage() {
 
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
             <label className="space-y-2 lg:col-span-2">
-              <span className="text-xs font-medium text-text-muted">全局必填提示词</span>
+              <span className="text-xs font-medium text-text-muted">默认画风提示词</span>
               <textarea
                 value={settings.asset_image.global_prompt}
                 onChange={(event) =>

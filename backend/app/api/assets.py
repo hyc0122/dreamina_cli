@@ -69,6 +69,7 @@ def create_asset(project_id: str, request: AssetCreate):
                 request.image_ratio,
                 request.image_params,
                 request.video_prompt,
+                request.character_kind,
             )
         )
     )
@@ -140,6 +141,7 @@ async def batch_upload_assets(project_id: str, request: Request):
                         item.image_ratio,
                         item.image_params,
                         item.video_prompt,
+                        item.character_kind,
                     )
                     for item in assets
                 ]
@@ -165,6 +167,7 @@ def import_asset_metadata(project_id: str, request: AssetMetadataImport):
                 item.image_ratio,
                 item.image_params,
                 item.video_prompt,
+                item.character_kind,
             )
             for item in assets
         ]
@@ -343,6 +346,10 @@ def _asset_create_from_mapping(item: Mapping[str, Any], index: int | None = None
         data["image_ratio"] = data["ratio"]
     if "model" in data and "image_model" not in data:
         data["image_model"] = data["model"]
+    for role_kind in ("kind", "role_kind", "角色分类", "人物分类"):
+        if role_kind in data and "character_kind" not in data:
+            data["character_kind"] = data[role_kind]
+            break
     data["aliases"] = _split_aliases(data.get("aliases"))
     try:
         return AssetCreate(**data)

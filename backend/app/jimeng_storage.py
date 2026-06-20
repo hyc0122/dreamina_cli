@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import shutil
 import sqlite3
@@ -136,6 +136,7 @@ class JimengStore:
                     image_ratio TEXT NOT NULL DEFAULT '16:9',
                     image_params TEXT NOT NULL DEFAULT '',
                     video_prompt TEXT NOT NULL DEFAULT '',
+                    character_kind TEXT NOT NULL DEFAULT 'single',
                     image_filename TEXT,
                     image_path TEXT,
                     audio_filename TEXT,
@@ -286,6 +287,7 @@ class JimengStore:
                     "image_ratio": "TEXT NOT NULL DEFAULT '16:9'",
                     "image_params": "TEXT NOT NULL DEFAULT ''",
                     "video_prompt": "TEXT NOT NULL DEFAULT ''",
+                    "character_kind": "TEXT NOT NULL DEFAULT 'single'",
                 },
             )
             self._ensure_columns(
@@ -413,6 +415,7 @@ class JimengStore:
         image_ratio: str = "16:9",
         image_params: str = "",
         video_prompt: str = "",
+        character_kind: str = "single",
     ) -> JimengAsset:
         return asset_storage.create_asset(
             self,
@@ -425,6 +428,7 @@ class JimengStore:
             image_ratio,
             image_params,
             video_prompt,
+            character_kind,
         )
 
     def upsert_asset_metadata(
@@ -438,6 +442,7 @@ class JimengStore:
         image_ratio: str = "16:9",
         image_params: str = "",
         video_prompt: str = "",
+        character_kind: str = "single",
     ) -> JimengAsset:
         return asset_storage.upsert_asset_metadata(
             self,
@@ -450,6 +455,7 @@ class JimengStore:
             image_ratio,
             image_params,
             video_prompt,
+            character_kind,
         )
 
     def update_asset(self, asset_id: str, updates: dict[str, Any]) -> JimengAsset:

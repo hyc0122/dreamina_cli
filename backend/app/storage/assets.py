@@ -34,6 +34,25 @@ def _loads(value: str | None, fallback: Any) -> Any:
     return json.loads(value)
 
 
+def _normalize_character_kind(asset_type: JimengAssetType | str, value: str | None = None) -> str:
+    if JimengAssetType(asset_type) != JimengAssetType.character:
+        return "single"
+    normalized = str(value or "single").strip().lower()
+    aliases = {
+        "single": "single",
+        "solo": "single",
+        "person": "single",
+        "单人": "single",
+        "group": "group",
+        "extras": "group",
+        "extra": "group",
+        "crowd": "group",
+        "群演": "group",
+    }
+    if normalized not in aliases:
+        raise ValueError("character_kind must be single or group")
+    return aliases[normalized]
+
 def upsert_asset_file(
     store: Any,
     project_id: str,
@@ -45,6 +64,7 @@ def upsert_asset_file(
     image_ratio: str = "16:9",
 ) -> JimengAsset:
     asset_type = JimengAssetType(asset_type)
+    character_kind = _normalize_character_kind(asset_type)
     store._validate_asset_name(name)
     store._validate_asset_image_ratio(image_ratio)
     store._ensure_project_exists(project_id)
@@ -100,10 +120,10 @@ def upsert_asset_file(
                     """
                     INSERT INTO assets (
                         id, project_id, type, name, aliases, description, image_model,
-                        image_ratio, image_params, video_prompt, image_filename, image_path,
+                        image_ratio, image_params, video_prompt, character_kind, image_filename, image_path,
                         audio_filename, audio_path, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, '', 'dreamina4.0', ?, '', '', ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, '', 'dreamina4.0', ?, '', '', ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         asset_id,
@@ -112,6 +132,7 @@ def upsert_asset_file(
                         name,
                         "[]",
                         image_ratio,
+                        character_kind,
                         filename if file_kind == "image" else None,
                         str(target_path) if file_kind == "image" else None,
                         filename if file_kind == "audio" else None,
@@ -151,8 +172,10 @@ def create_asset(
     image_ratio: str = "16:9",
     image_params: str = "",
     video_prompt: str = "",
+    character_kind: str = "single",
 ) -> JimengAsset:
     asset_type = JimengAssetType(asset_type)
+    character_kind = _normalize_character_kind(asset_type, character_kind)
     store._validate_asset_name(name)
     store._validate_asset_image_ratio(image_ratio)
     store._ensure_project_exists(project_id)
@@ -171,10 +194,10 @@ def create_asset(
                 """
                 INSERT INTO assets (
                     id, project_id, type, name, aliases, description, image_model,
-                    image_ratio, image_params, video_prompt, image_filename, image_path,
+                    image_ratio, image_params, video_prompt, character_kind, image_filename, image_path,
                     audio_filename, audio_path, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)
                 """,
                 (
                     asset_id,
@@ -187,6 +210,7 @@ def create_asset(
                     image_ratio,
                     image_params,
                     video_prompt,
+                    character_kind,
                     stamp,
                     stamp,
                 ),
@@ -208,8 +232,10 @@ def upsert_asset_metadata(
     image_ratio: str = "16:9",
     image_params: str = "",
     video_prompt: str = "",
+    character_kind: str = "single",
 ) -> JimengAsset:
     asset_type = JimengAssetType(asset_type)
+    character_kind = _normalize_character_kind(asset_type, character_kind)
     store._validate_asset_name(name)
     store._validate_asset_image_ratio(image_ratio)
     store._ensure_project_exists(project_id)
@@ -229,6 +255,7 @@ def upsert_asset_metadata(
             image_ratio=image_ratio,
             image_params=image_params,
             video_prompt=video_prompt,
+            character_kind=character_kind,
         )
     return store.update_asset(
         existing["id"],
@@ -239,6 +266,7 @@ def upsert_asset_metadata(
             "image_ratio": image_ratio,
             "image_params": image_params,
             "video_prompt": video_prompt,
+            "character_kind": character_kind,
         },
     )
 
@@ -253,6 +281,7 @@ def update_asset(store: Any, asset_id: str, updates: dict[str, Any]) -> JimengAs
         "image_ratio",
         "image_params",
         "video_prompt",
+        "character_kind",
     }
     values = {key: value for key, value in updates.items() if key in allowed}
     if not values:
@@ -263,6 +292,8 @@ def update_asset(store: Any, asset_id: str, updates: dict[str, Any]) -> JimengAs
         store._validate_asset_name(str(new_name))
     if "image_ratio" in values:
         store._validate_asset_image_ratio(str(values["image_ratio"]))
+    if "character_kind" in values:
+        values["character_kind"] = _normalize_character_kind(asset.type, values["character_kind"])
     if "aliases" in values:
         values["aliases"] = _json(values["aliases"] or [])
 
@@ -401,6 +432,7 @@ def asset_from_row(row: sqlite3.Row) -> JimengAsset:
         image_ratio=row["image_ratio"],
         image_params=row["image_params"],
         video_prompt=row["video_prompt"],
+        character_kind=row["character_kind"] if "character_kind" in row.keys() else "single",
         image_filename=row["image_filename"],
         image_path=row["image_path"],
         audio_filename=row["audio_filename"],

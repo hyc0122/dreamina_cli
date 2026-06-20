@@ -29,6 +29,8 @@ import OperationOverlay from "@/components/jimeng/OperationOverlay";
 import ShotPromptCell from "@/components/jimeng/workbench/ShotPromptCell";
 import { summarizeJimengError } from "@/components/jimeng/jimengUiHelpers";
 import {
+  JIMENG_VIDEO_DURATION_OPTIONS,
+  clampJimengVideoDuration,
   jimengApi,
   type JimengAsset,
   type JimengAssetBinding,
@@ -215,9 +217,8 @@ export default function ShotProductionTable({
 
   const updateDuration = (shot: JimengShot, value: string) =>
     runOperation("保存分镜时长中", async () => {
-      const parsed = Number(value);
       await jimengApi.updateShot(project.id, shot.id, {
-        default_duration: value ? Math.max(1, parsed || 1) : null,
+        default_duration: value ? clampJimengVideoDuration(Number(value)) : null,
       });
       await refreshProject();
     });
@@ -501,15 +502,19 @@ export default function ShotProductionTable({
                       </button>
                       <div className="flex w-full items-center gap-1 rounded-md border border-glass-border bg-surface-inset px-2 py-1" onClick={(event) => event.stopPropagation()}>
                         <Timer size={13} className="shrink-0 text-primary" />
-                        <input
-                          type="number"
-                          min={1}
-                          value={shot.default_duration ?? ""}
+                        <select
+                          value={shot.default_duration === null ? "" : clampJimengVideoDuration(shot.default_duration)}
                           onChange={(event) => updateDuration(shot, event.target.value)}
                           className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none"
-                          placeholder="秒"
                           title="默认分镜时长"
-                        />
+                        >
+                          <option value="">--</option>
+                          {JIMENG_VIDEO_DURATION_OPTIONS.map((duration) => (
+                            <option key={duration} value={duration}>
+                              {duration} 秒
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
                           onClick={() => detectDuration(shot)}

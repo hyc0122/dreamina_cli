@@ -1,12 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, CheckSquare, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Maximize2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { CheckSquare, Image as ImageIcon, Square } from "lucide-react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
-import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
-import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { IMAGE_MODELS, type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+import type { JimengAsset } from "@/lib/jimengApi";
+import { type AssetViewMode, CHARACTER_KIND_LABELS } from "@/components/jimeng/assets/assetManagerShared";
 
 export default function AssetBrowser({
   asset,
@@ -61,6 +59,7 @@ export default function AssetBrowser({
           {checked ? <CheckSquare size={15} /> : <Square size={15} />}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{asset.name}</span>
+        {asset.type === "character" ? <span className="shrink-0 rounded border border-glass-border bg-surface-inset px-2 py-1 text-[11px] text-text-secondary">{CHARACTER_KIND_LABELS[asset.character_kind]}</span> : null}
         {groupCount > 1 ? <span className="shrink-0 rounded border border-primary/25 bg-primary/10 px-2 py-1 text-[11px] text-primary">{groupCount} 阶段</span> : null}
       </button>
     );
@@ -106,7 +105,7 @@ export default function AssetBrowser({
           </div>
         )}
         <span className="absolute bottom-2 left-2 rounded border border-glass-border bg-panel-bg/85 px-2 py-1 text-[11px] text-text-secondary backdrop-blur">
-          {JIMENG_ASSET_TYPE_LABELS[asset.type]}
+          {asset.type === "character" ? CHARACTER_KIND_LABELS[asset.character_kind] : JIMENG_ASSET_TYPE_LABELS[asset.type]}
         </span>
         {groupCount > 1 ? (
           <span className="absolute right-2 top-2 rounded border border-primary/30 bg-primary/15 px-2 py-1 text-[11px] text-primary">

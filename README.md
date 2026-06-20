@@ -2,6 +2,14 @@
 
 [![说明文档](https://img.shields.io/badge/说明文档-README-0ea5e9)](https://github.com/hyc0122/dreamina_cli#readme)
 
+当前版本：`v1.00.002`
+
+更新时间：`2026-06-20 13:30:12 +08:00`
+
+最近更新：资产画风分类与佳速媒体生图接口适配
+
+更新日志：[CHANGELOG.md](./CHANGELOG.md)
+
 这是一个独立的即梦 CLI 批量分镜生产工具，用于管理剧本、分镜提示词、角色/场景/道具资产、即梦 CLI 视频生成队列、候选视频回收和本地导出。
 
 ## 主要功能
@@ -224,7 +232,7 @@ $env:DREAMINA_CLI_DATA_DIR="D:\dreamina-data"
 - 即梦资产图片模型后端能力列表：`backend/app/api/settings.py` 中的 `_JIMENG_IMAGE_MODELS`。
 - 即梦 CLI 图片模型校验：`backend/app/jimeng_cli.py` 中的 `_IMAGE_MODELS`。
 
-“大模型设置”里新增的图片模型会出现在资产管理的生图模型选择中；新增的视频模型会出现在分镜工作台和即梦设置的视频模型选择中。
+“大模型设置”里新增的图片模型会出现在资产管理“生图设置”的全局模型选择中；新增的视频模型会出现在分镜工作台和即梦设置的视频模型选择中。
 
 ## 即梦 CLI 设置
 

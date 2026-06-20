@@ -50,6 +50,24 @@ _REMOVED_RUNTIME_SETTING_KEYS = {
     "llm_providers",
 }
 _runtime_settings: dict[str, Any] = dict(_DEFAULT_RUNTIME_SETTINGS)
+MIN_VIDEO_DURATION_SECONDS = 4
+MAX_VIDEO_DURATION_SECONDS = 15
+
+
+def clamp_video_duration_seconds(value: Any, default: int = _DEFAULT_RUNTIME_SETTINGS["duration"]) -> int:
+    if value is None or value == "":
+        return default
+    try:
+        duration = int(round(float(value)))
+    except (TypeError, ValueError):
+        return default
+    return min(MAX_VIDEO_DURATION_SECONDS, max(MIN_VIDEO_DURATION_SECONDS, duration))
+
+
+def normalize_optional_video_duration_seconds(value: Any) -> int | None:
+    if value is None:
+        return None
+    return clamp_video_duration_seconds(value)
 
 
 def get_store() -> JimengStore:
@@ -99,7 +117,15 @@ def runtime_settings() -> dict[str, Any]:
 
 
 def _sanitize_runtime_settings(values: dict[str, Any]) -> dict[str, Any]:
-    cleaned = {key: value for key, value in values.items() if key in _STABLE_RUNTIME_SETTING_KEYS and value is not None}
+    cleaned: dict[str, Any] = {}
+    for key, value in values.items():
+        if key not in _STABLE_RUNTIME_SETTING_KEYS:
+            continue
+        if key == "duration":
+            cleaned[key] = clamp_video_duration_seconds(value)
+            continue
+        if value is not None:
+            cleaned[key] = value
     cleaned["generation_provider"] = "dreamina_cli"
     return cleaned
 

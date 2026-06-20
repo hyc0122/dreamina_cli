@@ -12,8 +12,8 @@ import AssetPreviewModal from "@/components/jimeng/assets/AssetPreviewModal";
 import AssetToolbar from "@/components/jimeng/assets/AssetToolbar";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
 import CreateAssetModal from "@/components/jimeng/assets/CreateAssetModal";
-import { type AssetImageSettings, type AssetViewMode, assetGroupKey, imagePromptForAsset, readImageSettings, requestErrorMessage, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
-import { buildLlmModelOptions, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
+import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, imagePromptForAsset, normalizeCharacterKind, readImageSettings, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
+import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import OperationOverlay from "@/components/jimeng/OperationOverlay";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
@@ -70,6 +70,7 @@ export default function JimengAssetManagerPage() {
   const [imageSettings, setImageSettings] = useState<AssetImageSettings>(() => readImageSettings());
   const [stylePresets, setStylePresets] = useState<JimengStylePreset[]>([]);
   const [imageModelOptions, setImageModelOptions] = useState<LlmModelOption[]>([]);
+  const [fallbackImageModelValue, setFallbackImageModelValue] = useState("");
 
   const refreshProject = useCallback(async () => {
     if (currentProject?.id) {
@@ -91,8 +92,17 @@ export default function JimengAssetManagerPage() {
   useEffect(() => {
     jimengApi
       .getLlmSettings()
-      .then((settings) => setImageModelOptions(buildLlmModelOptions(settings, "image")))
-      .catch(() => setImageModelOptions([]));
+      .then((settings) => {
+        const options = buildLlmModelOptions(settings, "image");
+        const defaultValue = encodeLlmModelValue(settings.default_provider_id, settings.default_model_id);
+        const fallback = options.find((model) => model.value === defaultValue)?.value ?? options[0]?.value ?? "";
+        setImageModelOptions(options);
+        setFallbackImageModelValue(fallback);
+      })
+      .catch(() => {
+        setImageModelOptions([]);
+        setFallbackImageModelValue("");
+      });
   }, []);
 
   const reloadAssetStylePresets = async () => {
@@ -120,7 +130,7 @@ export default function JimengAssetManagerPage() {
         if (!normalizedQuery) {
           return true;
         }
-        const haystack = [asset.name, ...asset.aliases, asset.description, asset.image_model].join(" ").toLowerCase();
+        const haystack = [asset.name, ...asset.aliases, asset.description, asset.image_model, asset.character_kind].join(" ").toLowerCase();
         return haystack.includes(normalizedQuery);
       });
   }, [activeType, assets, query]);
@@ -143,6 +153,13 @@ export default function JimengAssetManagerPage() {
     }
     return groups;
   }, [activeType, assets]);
+
+  const resolvedImageModelOption = useMemo(
+    () => resolveAssetImageModelOption(imageSettings, imageModelOptions, fallbackImageModelValue),
+    [fallbackImageModelValue, imageModelOptions, imageSettings],
+  );
+  const resolvedImageModelValue = resolvedImageModelOption?.value ?? "";
+  const resolvedImageModelLabel = assetImageModelLabel(resolvedImageModelOption);
 
   const selectedAsset = useMemo(() => assets.find((asset) => asset.id === selectedAssetId) ?? null, [assets, selectedAssetId]);
   const selectedGroup = useMemo(() => (selectedAsset ? (groupedByName.get(assetGroupKey(selectedAsset)) ?? [selectedAsset]) : []), [groupedByName, selectedAsset]);
@@ -203,7 +220,7 @@ export default function JimengAssetManagerPage() {
       setNotice("已导出资产描述 JSON");
       return;
     }
-    const headers = ["type", "name", "aliases", "description", "image_model", "image_ratio", "image_params", "image_filename", "image_path", "audio_filename", "audio_path"];
+    const headers = ["type", "name", "aliases", "description", "character_kind", "image_model", "image_ratio", "image_params", "image_filename", "image_path", "audio_filename", "audio_path"];
     const rows = response.assets.map((asset) =>
       headers
         .map((key) => {
@@ -240,13 +257,32 @@ export default function JimengAssetManagerPage() {
     setBatchGenerating(true);
     setNotice(null);
     try {
-      const result = await jimengApi.batchGenerateAssetImages(currentProject.id, {
-        asset_ids: targets.map((asset) => asset.id),
-        asset_type: activeType,
-        resolution_type: imageSettings.resolutionType,
-        extra_prompt: imagePromptForAsset(imageSettings, activeType),
-      });
-      setNotice(`批量生图完成：成功 ${result.success_count}，失败 ${result.failed_count}`);
+      const selectedLlmModel = parseLlmModelValue(resolvedImageModelValue);
+      let successCount = 0;
+      let failedCount = 0;
+      const runBatch = async (batchTargets: JimengAsset[], extraPrompt: string) => {
+        if (batchTargets.length === 0) {
+          return;
+        }
+        const result = await jimengApi.batchGenerateAssetImagesWithLlm(currentProject.id, {
+          asset_ids: batchTargets.map((asset) => asset.id),
+          asset_type: activeType,
+          provider_id: selectedLlmModel?.providerId,
+          model_id: selectedLlmModel?.modelId,
+          extra_prompt: extraPrompt,
+        });
+        successCount += result.success_count;
+        failedCount += result.failed_count;
+      };
+      if (activeType === "character") {
+        for (const kind of ["single", "group"] as const) {
+          const kindTargets = targets.filter((asset) => normalizeCharacterKind(asset.character_kind) === kind);
+          await runBatch(kindTargets, imagePromptForAsset(imageSettings, activeType, kind));
+        }
+      } else {
+        await runBatch(targets, imagePromptForAsset(imageSettings, activeType));
+      }
+      setNotice(`批量生图完成：成功 ${successCount}，失败 ${failedCount}`);
       await refreshProject();
     } catch (caught) {
       setNotice(requestErrorMessage(caught, "批量生图失败"));
@@ -271,7 +307,7 @@ export default function JimengAssetManagerPage() {
 
   return (
     <section className="h-full overflow-y-auto pr-1">
-      <OperationOverlay open={batchGenerating} title="批量生图中，请等待..." subtitle="正在调用即梦生成资产图片，完成后会自动刷新资产库。" />
+      <OperationOverlay open={batchGenerating} title="批量生图中，请等待..." subtitle="正在调用大模型生成资产图片，完成后会自动刷新资产库。" />
       <div className="flex flex-col gap-5 pb-4">
       <AssetToolbar projectName={currentProject.name}>
         <div className="flex flex-wrap gap-2">
@@ -428,7 +464,8 @@ export default function JimengAssetManagerPage() {
           asset={selectedAsset}
           groupedAssets={selectedGroup}
           settings={imageSettings}
-          imageModelOptions={imageModelOptions}
+          globalImageModelValue={resolvedImageModelValue}
+          globalImageModelLabel={resolvedImageModelLabel}
           onSettingsOpen={() => setSettingsOpen(true)}
           onSettingsChange={saveImageSettings}
           onRefresh={refreshProject}
@@ -439,12 +476,11 @@ export default function JimengAssetManagerPage() {
 
       <BatchUploadAssetsModal projectId={currentProject.id} open={batchOpen} defaultImageRatio={imageSettings.defaultImageRatio} onClose={() => setBatchOpen(false)} onUploaded={refreshProject} />
       <AssetMetadataImportModal projectId={currentProject.id} open={metadataImportOpen} onClose={() => setMetadataImportOpen(false)} onImported={refreshProject} />
-      <AssetImageSettingsModal open={settingsOpen} value={imageSettings} stylePresets={stylePresets} onStylePresetsChanged={reloadAssetStylePresets} onClose={() => setSettingsOpen(false)} onSave={saveImageSettings} />
+      <AssetImageSettingsModal open={settingsOpen} value={imageSettings} imageModelOptions={imageModelOptions} resolvedImageModelValue={resolvedImageModelValue} stylePresets={stylePresets} onStylePresetsChanged={reloadAssetStylePresets} onClose={() => setSettingsOpen(false)} onSave={saveImageSettings} />
       <CreateAssetModal
         projectId={currentProject.id}
         assetType={activeType}
         defaultImageRatio={imageSettings.defaultImageRatio}
-        imageModelOptions={imageModelOptions}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={handleAssetCreated}

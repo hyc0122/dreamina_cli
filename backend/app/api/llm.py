@@ -7,8 +7,8 @@ from typing import Optional
 
 from fastapi import APIRouter
 
-from ..llm.asset_image import generate_asset_image
-from ..llm.models import LlmAssetImageGenerateRequest, LlmSettings
+from ..llm.asset_image import batch_generate_asset_images, generate_asset_image
+from ..llm.models import LlmAssetImageBatchGenerateRequest, LlmAssetImageGenerateRequest, LlmSettings
 from ..llm.settings import load_llm_settings, model_dump, save_llm_settings
 from .context import _call, _dump, get_store
 
@@ -33,3 +33,11 @@ def generate_llm_asset_image(
     request: Optional[LlmAssetImageGenerateRequest] = None,
 ):
     return _call(lambda: _dump(generate_asset_image(get_store(), project_id, asset_id, request or LlmAssetImageGenerateRequest())))
+
+
+@router.post("/projects/{project_id}/assets/llm_image/batch_generate")
+def batch_generate_llm_asset_images(
+    project_id: str,
+    request: Optional[LlmAssetImageBatchGenerateRequest] = None,
+):
+    return _call(lambda: _dump(batch_generate_asset_images(get_store(), project_id, request or LlmAssetImageBatchGenerateRequest())))

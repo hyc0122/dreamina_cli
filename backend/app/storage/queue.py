@@ -361,6 +361,7 @@ def asset_snapshot_for_shot(conn: sqlite3.Connection, shot_id: str) -> dict[str,
             {
                 "id": row["id"],
                 "name": row["name"],
+                "character_kind": row["character_kind"] if "character_kind" in row.keys() else "single",
                 "image_path": row["image_path"],
                 "audio_path": row["audio_path"] if bool(row["voice_enabled"]) else None,
                 "voice_enabled": bool(row["voice_enabled"]),

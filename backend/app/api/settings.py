@@ -55,7 +55,11 @@ def get_settings():
 
 @router.put("/settings")
 def update_settings(request: SettingsUpdate):
-    updates = {key: value for key, value in _model_data(request, exclude_unset=True).items() if value is not None}
+    updates = {
+        key: value
+        for key, value in _model_data(request, exclude_unset=True).items()
+        if value is not None or key == "duration"
+    }
     return save_runtime_settings(updates)
 
 

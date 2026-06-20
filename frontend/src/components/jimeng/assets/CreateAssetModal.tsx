@@ -1,19 +1,26 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, CheckSquare, Download, FileAudio, FileInput, Image as ImageIcon, Loader2, Maximize2, Palette, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, X } from "lucide-react";
-import { type ChangeEvent, useEffect, useState } from "react";
-import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
+import { FileAudio, Image as ImageIcon, Loader2, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { JIMENG_ASSET_TYPE_LABELS } from "@/components/jimeng/assets/AssetMiniCard";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
-import { jimengApi, type JimengAsset, type JimengAssetType, type JimengStylePreset } from "@/lib/jimengApi";
-import { IMAGE_MODELS, type AssetFormState, type AssetImageRatio, type AssetImageSettings, type AssetStyleDraft, type AssetViewMode, assetStyleDraftFromPreset, formatUpdatedAt, formFromAsset, imagePromptForAsset, randomStyleAccent, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
-import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
+import { jimengApi, type JimengAsset, type JimengAssetType } from "@/lib/jimengApi";
+import { CHARACTER_KIND_LABELS, type AssetFormState, type AssetImageRatio, requestErrorMessage, splitAliases } from "@/components/jimeng/assets/assetManagerShared";
+
+const createEmptyDraft = (imageRatio: AssetImageRatio): AssetFormState => ({
+  name: "",
+  aliasesText: "",
+  description: "",
+  imageModel: "dreamina4.0",
+  imageRatio,
+  characterKind: "single",
+});
 
 export default function CreateAssetModal({
   projectId,
   assetType,
   defaultImageRatio,
-  imageModelOptions = [],
   open,
   onClose,
   onCreated,
@@ -21,18 +28,11 @@ export default function CreateAssetModal({
   projectId: string;
   assetType: JimengAssetType;
   defaultImageRatio: AssetImageRatio;
-  imageModelOptions?: LlmModelOption[];
   open: boolean;
   onClose: () => void;
   onCreated: (asset: JimengAsset) => Promise<void> | void;
 }) {
-  const [draft, setDraft] = useState<AssetFormState>({
-    name: "",
-    aliasesText: "",
-    description: "",
-    imageModel: "dreamina4.0",
-    imageRatio: defaultImageRatio,
-  });
+  const [draft, setDraft] = useState<AssetFormState>(() => createEmptyDraft(defaultImageRatio));
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -46,7 +46,7 @@ export default function CreateAssetModal({
 
   useEffect(() => {
     if (open) {
-      setDraft({ name: "", aliasesText: "", description: "", imageModel: "dreamina4.0", imageRatio: defaultImageRatio });
+      setDraft(createEmptyDraft(defaultImageRatio));
       setImageFile(null);
       setVoiceFile(null);
       setError(null);
@@ -78,6 +78,7 @@ export default function CreateAssetModal({
         description: draft.description.trim(),
         image_model: draft.imageModel,
         image_ratio: draft.imageRatio,
+        ...(assetType === "character" ? { character_kind: draft.characterKind } : {}),
       });
       let finalAsset = created;
       if (imageFile) {
@@ -114,59 +115,44 @@ export default function CreateAssetModal({
         </div>
 
         <div className="mt-4 grid gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium text-text-secondary">资产/文件名 <span className="text-red-300">*</span></span>
-              <input value={draft.name} onChange={(event) => updateDraft("name", event.target.value)} className="glass-input w-full text-sm text-foreground" placeholder="必填，例如：许禾" required />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium text-text-secondary">别名</span>
-              <input value={draft.aliasesText} onChange={(event) => updateDraft("aliasesText", event.target.value)} className="glass-input w-full text-sm text-foreground" placeholder="逗号、顿号或换行分隔" />
-            </label>
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-text-secondary">画幅</span>
+            <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
+              {(["16:9", "9:16"] as const).map((ratio) => (
+                <button
+                  key={ratio}
+                  type="button"
+                  onClick={() => updateDraft("imageRatio", ratio)}
+                  className={clsx(
+                    "flex-1 rounded px-3 text-xs font-medium transition-colors",
+                    draft.imageRatio === ratio ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                  )}
+                >
+                  {ratio}
+                </button>
+              ))}
+            </div>
           </div>
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-text-secondary">详情描述 / 生图提示词</span>
-            <textarea value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} className="glass-input min-h-[120px] w-full resize-y text-sm leading-6 text-foreground" />
-          </label>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5">
-              <span className="block text-xs font-medium text-text-secondary">生图模型</span>
-              <select value={draft.imageModel} onChange={(event) => updateDraft("imageModel", event.target.value)} className="glass-input h-10 w-full text-sm text-foreground">
-                {IMAGE_MODELS.map((model) => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))}
-                {imageModelOptions.length > 0 ? (
-                  <optgroup label="大模型图片模型">
-                    {imageModelOptions.map((model) => (
-                      <option key={model.value} value={model.value}>
-                        {model.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-              </select>
-            </label>
+          {assetType === "character" ? (
             <div className="space-y-1.5">
-              <span className="block text-xs font-medium text-text-secondary">画幅</span>
+              <span className="block text-xs font-medium text-text-secondary">角色分类</span>
               <div className="inline-flex h-10 w-full rounded-md border border-glass-border bg-surface-inset p-1">
-                {(["16:9", "9:16"] as const).map((ratio) => (
+                {(["single", "group"] as const).map((kind) => (
                   <button
-                    key={ratio}
+                    key={kind}
                     type="button"
-                    onClick={() => updateDraft("imageRatio", ratio)}
+                    onClick={() => updateDraft("characterKind", kind)}
                     className={clsx(
                       "flex-1 rounded px-3 text-xs font-medium transition-colors",
-                      draft.imageRatio === ratio ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                      draft.characterKind === kind ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
                     )}
                   >
-                    {ratio}
+                    {CHARACTER_KIND_LABELS[kind]}
                   </button>
                 ))}
               </div>
             </div>
-          </div>
+          ) : null}
           <div className={clsx("grid gap-3", assetType === "character" ? "md:grid-cols-2" : "md:grid-cols-1")}>
             <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-lg border border-dashed border-glass-border bg-surface-inset px-4 py-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
               <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">

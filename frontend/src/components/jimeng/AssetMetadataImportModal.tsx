@@ -13,6 +13,7 @@ const JSON_SAMPLE = `[
     "name": "许禾",
     "aliases": ["小禾", "女主"],
     "description": "年轻女性，白色衬衫，清冷但坚定，电影感写实风格",
+    "character_kind": "single",
     "image_model": "dreamina4.6",
     "image_ratio": "9:16",
     "image_params": "高清，细节稳定，统一角色脸",
@@ -30,10 +31,10 @@ const JSON_SAMPLE = `[
   }
 ]`;
 
-const CSV_SAMPLE = `type,name,aliases,description,image_model,image_ratio,image_params,video_prompt
-character,许禾,小禾|女主,年轻女性，白色衬衫，清冷但坚定,dreamina4.6,9:16,高清，统一角色脸,许禾站在雨夜街口，镜头慢推
-scene,老许农资,农资店,县城街边农资店，旧招牌，暖黄色灯光,dreamina4.5,16:9,横版场景图，空间层次清晰,夜晚街边店铺灯光微闪
-prop,银色钥匙,钥匙|旧钥匙,磨损的银色钥匙，边缘有划痕,dreamina4.1,9:16,单体道具图，白底或简洁背景,钥匙从手心滑落到桌面`;
+const CSV_SAMPLE = `type,name,aliases,description,character_kind,image_model,image_ratio,image_params,video_prompt
+character,许禾,小禾|女主,年轻女性，白色衬衫，清冷但坚定,single,dreamina4.6,9:16,高清，统一角色脸,许禾站在雨夜街口，镜头慢推
+scene,老许农资,农资店,县城街边农资店，旧招牌，暖黄色灯光,,dreamina4.5,16:9,横版场景图，空间层次清晰,夜晚街边店铺灯光微闪
+prop,银色钥匙,钥匙|旧钥匙,磨损的银色钥匙，边缘有划痕,,dreamina4.1,9:16,单体道具图，白底或简洁背景,钥匙从手心滑落到桌面`;
 
 interface AssetMetadataImportModalProps {
   projectId: string;
@@ -204,6 +205,7 @@ export default function AssetMetadataImportModal({ projectId, open, onClose, onI
               <div className="rounded-md border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-muted">
                 <p>type 支持：character、scene、prop。</p>
                 <p>image_ratio 支持：16:9、9:16。</p>
+                <p>character_kind 只对角色有效，支持 single（单人）和 group（群演）。</p>
                 <p>description 就是生图提示词；video_prompt 会随资产一起导入导出。</p>
               </div>
             </div>

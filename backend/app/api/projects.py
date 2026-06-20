@@ -101,6 +101,7 @@ def duplicate_project(project_id: str):
                 asset.image_ratio,
                 asset.image_params,
                 asset.video_prompt,
+                asset.character_kind,
             )
             asset_map[asset.id] = copied.id
         for shot in get_store().list_shots(project_id):

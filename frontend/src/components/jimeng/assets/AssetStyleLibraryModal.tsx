@@ -101,7 +101,7 @@ export default function AssetStyleLibraryModal({
           新增风格
         </button>
       </div>
-      <p className="mt-2 text-xs leading-5 text-text-muted">这套风格只用于资产生图，可一键附加到上方“全局必填提示词”，不会影响剧本视频风格。</p>
+      <p className="mt-2 text-xs leading-5 text-text-muted">这套风格只用于资产生图，可一键附加到指定画风，不会影响剧本视频风格。</p>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {draft.map((styleItem, index) => (
@@ -127,7 +127,7 @@ export default function AssetStyleLibraryModal({
             <input value={active.name} onChange={(event) => updateActive({ name: event.target.value })} className="glass-input min-w-0 text-sm text-foreground" placeholder="风格名称" />
             <input value={active.accent} onChange={(event) => updateActive({ accent: event.target.value })} className="glass-input h-10 w-full text-sm text-foreground" type="color" />
             <button type="button" onClick={() => onApply(active.prompt)} disabled={!active.prompt.trim()} className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-45">
-              附加到必填词
+              附加到画风
             </button>
             <button type="button" onClick={removeActive} className="rounded-lg border border-red-500/25 px-3 py-2 text-xs font-medium text-red-300 hover:bg-red-500/10">
               删除

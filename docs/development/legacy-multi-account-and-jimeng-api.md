@@ -11,7 +11,7 @@
 
 历史代码或数据迁移时请注意：
 
-- 旧 `runtime_data/output/jimeng/cli_profiles` 不再参与稳定版提交。
+- 旧 `runtime_data/output/jimeng/cli_profiles` 仅用于历史迁移参考。
 - `jimeng_api_*` 设置会在保存稳定版设置时清理。
 - 队列、生成记录和候选视频始终以本工具的 `jimeng.sqlite3` 为准。
 - 将来若恢复多账号，必须先由官方 CLI 提供可验证的凭证目录隔离能力，并重新做端到端授权、积分、素材提交和结果回传测试。

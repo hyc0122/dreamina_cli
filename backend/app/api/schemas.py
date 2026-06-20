@@ -73,6 +73,7 @@ class AssetCreate(BaseModel):
     image_ratio: str = "16:9"
     image_params: str = ""
     video_prompt: str = ""
+    character_kind: str = "single"
 
 
 class AssetUpdate(BaseModel):
@@ -83,6 +84,7 @@ class AssetUpdate(BaseModel):
     image_ratio: Optional[str] = None
     image_params: Optional[str] = None
     video_prompt: Optional[str] = None
+    character_kind: Optional[str] = None
 
 
 class AssetBatchDelete(BaseModel):
