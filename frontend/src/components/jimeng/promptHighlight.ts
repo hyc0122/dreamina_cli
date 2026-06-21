@@ -21,9 +21,6 @@ type CandidateSpan = {
   end: number;
 };
 
-const CHARACTER_FIELD_PATTERN = /^[ \t]*人物[ \t]*[：:][ \t]*(.*)$/gm;
-const NAME_SPLIT_PATTERN = /[、;,，；]/g;
-const NAME_QUOTE_CHARS = new Set(['"', "'", "“", "”", "‘", "’", "「", "」", "『", "』", "《", "》"]);
 const BRACKET_MAP: Record<string, string> = {
   "[": "(",
   "【": "(",
@@ -86,39 +83,6 @@ const assetKeywords = (asset: JimengAsset): string[] => {
   return keywords.sort((left, right) => right.length - left.length);
 };
 
-const cleanNameTokenSpan = (value: string, valueStart: number, start: number, end: number): { text: string; start: number; end: number }[] => {
-  while (start < end && (/\s/.test(value[start]) || NAME_QUOTE_CHARS.has(value[start]))) {
-    start += 1;
-  }
-  while (end > start && (/\s/.test(value[end - 1]) || NAME_QUOTE_CHARS.has(value[end - 1]))) {
-    end -= 1;
-  }
-  if (start >= end) {
-    return [];
-  }
-  return [{ text: value.slice(start, end), start: valueStart + start, end: valueStart + end }];
-};
-
-const promptCharacterNameSpans = (prompt: string): { text: string; start: number; end: number }[] => {
-  const spans: { text: string; start: number; end: number }[] = [];
-  CHARACTER_FIELD_PATTERN.lastIndex = 0;
-
-  for (const match of prompt.matchAll(CHARACTER_FIELD_PATTERN)) {
-    const fullMatch = match[0] ?? "";
-    const value = match[1] ?? "";
-    const valueStart = (match.index ?? 0) + fullMatch.length - value.length;
-    let tokenStart = 0;
-    NAME_SPLIT_PATTERN.lastIndex = 0;
-    for (const separator of value.matchAll(NAME_SPLIT_PATTERN)) {
-      spans.push(...cleanNameTokenSpan(value, valueStart, tokenStart, separator.index ?? tokenStart));
-      tokenStart = (separator.index ?? tokenStart) + separator[0].length;
-    }
-    spans.push(...cleanNameTokenSpan(value, valueStart, tokenStart, value.length));
-  }
-
-  return spans;
-};
-
 const isValidCharacterFallbackSpan = (prompt: string, start: number, end: number): boolean => {
   let nextIndex = end;
   while (nextIndex < prompt.length && /\s/.test(prompt[nextIndex])) {
@@ -149,26 +113,6 @@ const normalizedKeywordSpans = (prompt: string, asset: JimengAsset, keyword: str
   return spans;
 };
 
-const characterCandidateSpans = (
-  prompt: string,
-  asset: JimengAsset,
-  characterNameSpans: { text: string; start: number; end: number }[],
-): CandidateSpan[] => {
-  const keywords = assetKeywords(asset);
-  if (keywords.length === 0) {
-    return [];
-  }
-
-  const normalizedKeywords = new Set(keywords.map(normalizeNameForMatch).filter(Boolean));
-  if (characterNameSpans.length > 0) {
-    return characterNameSpans
-      .filter((span) => normalizedKeywords.has(normalizeNameForMatch(span.text)))
-      .map((span) => ({ assetId: asset.id, assetType: asset.type, start: span.start, end: span.end }));
-  }
-
-  return keywords.flatMap((keyword) => normalizedKeywordSpans(prompt, asset, keyword));
-};
-
 const exactKeywordSpans = (prompt: string, asset: JimengAsset, keyword: string): CandidateSpan[] => {
   const spans: CandidateSpan[] = [];
   let start = prompt.indexOf(keyword);
@@ -180,10 +124,9 @@ const exactKeywordSpans = (prompt: string, asset: JimengAsset, keyword: string):
 };
 
 const candidateSpans = (prompt: string, assets: JimengAsset[]): CandidateSpan[] => {
-  const characterNameSpans = promptCharacterNameSpans(prompt);
   return assets.flatMap((asset) => {
     if (asset.type === "character") {
-      return characterCandidateSpans(prompt, asset, characterNameSpans);
+      return assetKeywords(asset).flatMap((keyword) => normalizedKeywordSpans(prompt, asset, keyword));
     }
     return assetKeywords(asset).flatMap((keyword) => exactKeywordSpans(prompt, asset, keyword));
   });
@@ -199,19 +142,14 @@ const selectNonOverlappingSpans = (prompt: string, assets: JimengAsset[]): Candi
   );
 
   const selected: CandidateSpan[] = [];
-  const selectedAssetIds = new Set<string>();
   const occupied: Array<{ start: number; end: number }> = [];
 
   for (const candidate of candidates) {
-    if (selectedAssetIds.has(candidate.assetId)) {
-      continue;
-    }
     if (occupied.some((span) => overlaps(candidate.start, candidate.end, span.start, span.end))) {
       continue;
     }
 
     selected.push(candidate);
-    selectedAssetIds.add(candidate.assetId);
     occupied.push({ start: candidate.start, end: candidate.end });
   }
 
