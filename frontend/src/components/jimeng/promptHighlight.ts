@@ -32,6 +32,14 @@ const BRACKET_MAP: Record<string, string> = {
   "］": ")",
 };
 const BRACKET_OPEN_CHARS = new Set(["(", "[", "（", "【", "［"]);
+const BRACKET_CLOSE_BY_OPEN: Record<string, string> = {
+  "(": ")",
+  "[": "]",
+  "（": "）",
+  "【": "】",
+  "［": "］",
+};
+const VOICE_MARKER_TOKENS = new Set(["os", "vo", "o.s", "v.o", "旁白", "内心", "独白", "画外音", "内心os", "os旁白"]);
 const ASSET_TYPE_PRIORITY: Record<JimengAssetType, number> = {
   character: 0,
   scene: 1,
@@ -50,6 +58,24 @@ const overlaps = (firstStart: number, firstEnd: number, secondStart: number, sec
 
 const normalizeNameForMatch = (value: string): string =>
   [...value.trim()].map((char) => BRACKET_MAP[char] ?? char).filter((char) => !/\s/.test(char)).join("").toLowerCase();
+
+const keywordHasBracketQualification = (keyword: string): boolean => [...keyword].some((char) => BRACKET_OPEN_CHARS.has(char));
+
+const bracketContentAt = (prompt: string, openIndex: number): string | null => {
+  const closeChar = BRACKET_CLOSE_BY_OPEN[prompt[openIndex]];
+  if (!closeChar) {
+    return null;
+  }
+  const closeIndex = prompt.indexOf(closeChar, openIndex + 1);
+  return closeIndex === -1 ? null : prompt.slice(openIndex + 1, closeIndex);
+};
+
+const normalizeVoiceMarker = (value: string): string => value.trim().toLowerCase().replace(/[.\s。．·_-]/g, "");
+
+const isVoiceMarkerSuffix = (prompt: string, openIndex: number): boolean => {
+  const content = bracketContentAt(prompt, openIndex);
+  return content === null ? false : VOICE_MARKER_TOKENS.has(normalizeVoiceMarker(content));
+};
 
 const normalizeTextWithOffsets = (text: string): { text: string; offsets: number[] } => {
   const chars: string[] = [];
@@ -83,12 +109,15 @@ const assetKeywords = (asset: JimengAsset): string[] => {
   return keywords.sort((left, right) => right.length - left.length);
 };
 
-const isValidCharacterFallbackSpan = (prompt: string, start: number, end: number): boolean => {
+const isValidCharacterFallbackSpan = (prompt: string, start: number, end: number, keyword: string): boolean => {
   let nextIndex = end;
   while (nextIndex < prompt.length && /\s/.test(prompt[nextIndex])) {
     nextIndex += 1;
   }
-  return nextIndex >= prompt.length || !BRACKET_OPEN_CHARS.has(prompt[nextIndex]);
+  if (nextIndex >= prompt.length || !BRACKET_OPEN_CHARS.has(prompt[nextIndex])) {
+    return true;
+  }
+  return keywordHasBracketQualification(keyword) || isVoiceMarkerSuffix(prompt, nextIndex);
 };
 
 const normalizedKeywordSpans = (prompt: string, asset: JimengAsset, keyword: string): CandidateSpan[] => {
@@ -104,7 +133,7 @@ const normalizedKeywordSpans = (prompt: string, asset: JimengAsset, keyword: str
     const normalizedEnd = normalizedStart + normalizedKeyword.length;
     const start = normalizedPrompt.offsets[normalizedStart];
     const end = normalizedPrompt.offsets[normalizedEnd - 1] + 1;
-    if (isValidCharacterFallbackSpan(prompt, start, end)) {
+    if (isValidCharacterFallbackSpan(prompt, start, end, keyword)) {
       spans.push({ assetId: asset.id, assetType: asset.type, start, end });
     }
     normalizedStart = normalizedPrompt.text.indexOf(normalizedKeyword, normalizedStart + 1);
