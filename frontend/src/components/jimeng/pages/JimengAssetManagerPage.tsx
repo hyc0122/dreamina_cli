@@ -271,6 +271,7 @@ export default function JimengAssetManagerPage() {
     const filenameBase = `${currentProject.name || "jimeng"}-assets`;
     const assetsForExport = response.assets.map((asset) => ({
       ...asset,
+      character_kind: asset.type === "character" ? CHARACTER_KIND_LABELS[normalizeCharacterKind(asset.character_kind)] : "",
       角色分类: asset.type === "character" ? CHARACTER_KIND_LABELS[normalizeCharacterKind(asset.character_kind)] : "",
     }));
     if (format === "json") {

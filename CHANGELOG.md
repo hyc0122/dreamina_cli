@@ -1,7 +1,10 @@
 # 更新日志
 
+## v1.00.030 - 2026-06-21 15:10:08 +08:00
+- 角色分类导入导出中文化：资产导出 JSON/CSV 的 `character_kind` 直接输出“单人/群演”，导入示例和使用说明也改为中文值，避免用户在格式里看到英文枚举。详细说明：docs/releases/v1.00.030-character-kind-chinese-values.md
+
 ## v1.00.029 - 2026-06-21 14:46:41 +08:00
-- 资产角色分类导入导出格式完善：资产导出 CSV 新增中文“角色分类”列，JSON 导出补充中文角色分类字段，导入示例和使用说明补齐 `character_kind`，明确 `single=单人`、`group=群演`。详细说明：docs/releases/v1.00.029-asset-character-kind-export-format.md
+- 资产角色分类导入导出格式完善：资产导出 CSV 新增中文“角色分类”列，JSON 导出补充中文角色分类字段，导入示例和使用说明补齐 `character_kind`，明确角色分类中文写法。详细说明：docs/releases/v1.00.029-asset-character-kind-export-format.md
 
 ## v1.00.028 - 2026-06-21 13:56:00 +08:00
 - 分镜角色音色试听与提交校验优化：已绑定角色和右侧角色选择列表新增音色试听；提交分镜前检查全能参考音频最多 3 段，超出时直接拦截并提示关闭多余音色，避免入队后 worker 才失败；有错误信息的分镜不再继续显示“视频制作中”；已取消队列记录支持删除。详细说明：docs/releases/v1.00.028-queue-audio-preview-submit-guard.md
