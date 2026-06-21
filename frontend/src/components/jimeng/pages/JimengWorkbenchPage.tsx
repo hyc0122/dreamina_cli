@@ -386,6 +386,7 @@ export default function JimengWorkbenchPage() {
               promptPresetName={promptPresetName}
               selectedCount={selectedShotIds.length}
               submitting={submitting}
+              submitError={submitError}
               generationSettings={generationSettings}
               videoModelOptions={videoModelOptions}
               onGenerationSettingsChange={setGenerationSettings}

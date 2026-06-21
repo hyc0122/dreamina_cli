@@ -15,6 +15,7 @@ interface ShotDetailPanelProps {
   promptPresetName: string;
   selectedCount: number;
   submitting: boolean;
+  submitError?: string | null;
   generationSettings: JimengVideoGenerationSettings;
   videoModelOptions?: LlmModelOption[];
   onGenerationSettingsChange: (settings: JimengVideoGenerationSettings) => void;
@@ -37,6 +38,7 @@ export default function ShotDetailPanel({
   promptPresetName,
   selectedCount,
   submitting,
+  submitError = null,
   generationSettings,
   videoModelOptions = [],
   onGenerationSettingsChange,
@@ -240,9 +242,10 @@ export default function ShotDetailPanel({
             disabled={!shot || submitting}
             className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:border-glass-border disabled:bg-black/20 disabled:text-text-muted"
           >
-            <Send size={15} />
-            {submitting ? "提交中..." : shot ? `提交当前分镜${shot.shot_index}` : "请选择分镜"}
+            {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            {submitting ? "分镜制作中..." : shot ? `提交当前分镜${shot.shot_index}` : "请选择分镜"}
           </button>
+          {submitError ? <p className="rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-200">{submitError}</p> : null}
           {selectedCount > 0 ? (
             <p className="text-center text-xs text-text-muted">已勾选 {selectedCount} 个分镜；批量提交请用左侧工具栏。</p>
           ) : null}

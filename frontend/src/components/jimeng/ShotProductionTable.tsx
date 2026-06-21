@@ -59,9 +59,10 @@ interface ToolbarButtonProps {
   disabled?: boolean;
   busy?: boolean;
   tone?: "default" | "primary";
+  iconClassName?: string;
 }
 
-function ToolbarButton({ icon: Icon, children, onClick, disabled = false, busy = false, tone = "default" }: ToolbarButtonProps) {
+function ToolbarButton({ icon: Icon, children, onClick, disabled = false, busy = false, tone = "default", iconClassName }: ToolbarButtonProps) {
   return (
     <button
       type="button"
@@ -74,7 +75,7 @@ function ToolbarButton({ icon: Icon, children, onClick, disabled = false, busy =
           : "border-glass-border bg-black/20 text-text-secondary hover:bg-hover-bg hover:text-foreground",
       )}
     >
-      {busy ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
+      {busy ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} className={iconClassName} />}
       {children}
     </button>
   );
@@ -350,8 +351,8 @@ export default function ShotProductionTable({
         <ToolbarButton icon={Settings2} onClick={onOpenBatchSettings} disabled={submitting} tone="primary">
           参数设置
         </ToolbarButton>
-        <ToolbarButton icon={Send} onClick={onBatchSubmit} disabled={selectedShotIds.length === 0 || submitting} tone="primary">
-          {submitting ? "提交中..." : "批量提交"}
+        <ToolbarButton icon={submitting ? Loader2 : Send} iconClassName={submitting ? "animate-spin" : undefined} onClick={onBatchSubmit} disabled={selectedShotIds.length === 0 || submitting} tone="primary">
+          {submitting ? "分镜制作中..." : "批量提交"}
         </ToolbarButton>
         <span className="w-full rounded border border-glass-border bg-black/20 px-2 py-1 text-right font-mono text-xs text-text-muted sm:ml-auto sm:w-auto">
           已选 {selectedShotIds.length}
