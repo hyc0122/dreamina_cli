@@ -13,7 +13,7 @@ import AssetPreviewModal from "@/components/jimeng/assets/AssetPreviewModal";
 import AssetToolbar from "@/components/jimeng/assets/AssetToolbar";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
 import CreateAssetModal from "@/components/jimeng/assets/CreateAssetModal";
-import { type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, referenceImagesForAssetType, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
+import { CHARACTER_KIND_LABELS, type AssetImageSettings, type AssetViewMode, assetGroupKey, assetImageModelLabel, assetImageSizeFromSettings, imagePromptForAsset, normalizeCharacterKind, readImageSettings, referenceImagesForAssetType, requestErrorMessage, resolveAssetImageModelOption, writeImageSettings } from "@/components/jimeng/assets/assetManagerShared";
 import { buildLlmModelOptions, encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 import { jimengApi, type JimengAsset, type JimengAssetType, type JimengLlmAssetImageRecord, type JimengStylePreset } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
@@ -269,13 +269,17 @@ export default function JimengAssetManagerPage() {
     }
     const response = await jimengApi.exportAssetMetadata(currentProject.id);
     const filenameBase = `${currentProject.name || "jimeng"}-assets`;
+    const assetsForExport = response.assets.map((asset) => ({
+      ...asset,
+      角色分类: asset.type === "character" ? CHARACTER_KIND_LABELS[normalizeCharacterKind(asset.character_kind)] : "",
+    }));
     if (format === "json") {
-      downloadTextFile(`${filenameBase}.json`, JSON.stringify({ assets: response.assets }, null, 2), "application/json;charset=utf-8");
+      downloadTextFile(`${filenameBase}.json`, JSON.stringify({ assets: assetsForExport }, null, 2), "application/json;charset=utf-8");
       setNotice("已导出资产描述 JSON");
       return;
     }
-    const headers = ["type", "name", "aliases", "description", "character_kind", "image_model", "image_ratio", "image_params", "image_filename", "image_path", "audio_filename", "audio_path"];
-    const rows = response.assets.map((asset) =>
+    const headers = ["type", "name", "aliases", "description", "character_kind", "角色分类", "image_model", "image_ratio", "image_params", "image_filename", "image_path", "audio_filename", "audio_path"];
+    const rows = assetsForExport.map((asset) =>
       headers
         .map((key) => {
           const value = key === "aliases" ? asset.aliases.join("|") : (asset as unknown as Record<string, unknown>)[key];
