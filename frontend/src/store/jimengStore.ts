@@ -16,8 +16,16 @@ import {
   type JimengQueueItem,
   type JimengRightPanelMode,
   type JimengShot,
+  type JimengVideoCandidate,
   type JimengVideoGenerationSettings,
 } from "@/lib/jimengApi";
+import { calculatePromptHighlights } from "@/components/jimeng/promptHighlight";
+
+export interface JimengVideoState {
+  hasVideo: boolean;
+  defaultCandidateId: string | null;
+  lockedCandidateId: string | null;
+}
 
 export interface JimengStateData {
   activePage: JimengPageMode;
@@ -28,6 +36,7 @@ export interface JimengStateData {
   assets: JimengAsset[];
   bindingsByShotId: Record<string, JimengAssetBinding[]>;
   highlightsByShotId: Record<string, JimengHighlightSpan[]>;
+  videoStateByShotId: Record<string, JimengVideoState>;
   queue: JimengQueueItem[];
   queueStatus: JimengQueueEnvelope["status"] | null;
   promptPresets: JimengPromptPreset[];
@@ -72,6 +81,7 @@ export const createJimengInitialState = (): JimengStateData => ({
   assets: [],
   bindingsByShotId: {},
   highlightsByShotId: {},
+  videoStateByShotId: {},
   queue: [],
   queueStatus: null,
   promptPresets: [],
@@ -109,6 +119,24 @@ const buildBindingsByShotId = async (projectId: string, shots: JimengShot[]): Pr
   return Object.fromEntries(shots.map((shot) => [shot.id, response.bindings_by_shot_id[shot.id] ?? []]));
 };
 
+const videoStateFromCandidates = (shot: JimengShot, candidates: JimengVideoCandidate[]): JimengVideoState => {
+  const lockedCandidateId = candidates.find((candidate) => candidate.is_locked)?.id ?? shot.locked_video_candidate_id ?? null;
+  const defaultCandidateId = candidates.find((candidate) => candidate.is_default)?.id ?? shot.default_video_candidate_id ?? null;
+  return {
+    hasVideo: candidates.length > 0 || Boolean(lockedCandidateId || defaultCandidateId),
+    defaultCandidateId,
+    lockedCandidateId,
+  };
+};
+
+const buildVideoStateByShotId = async (projectId: string, shots: JimengShot[]): Promise<Record<string, JimengVideoState>> => {
+  if (shots.length === 0) {
+    return {};
+  }
+  const response = await jimengApi.listCandidatesByShotIds(projectId, shots.map((shot) => shot.id));
+  return Object.fromEntries(shots.map((shot) => [shot.id, videoStateFromCandidates(shot, response.candidates_by_shot_id[shot.id] ?? [])]));
+};
+
 const buildQueueItemsForShots = async (
   project: JimengProject,
   knownShots: JimengShot[],
@@ -138,6 +166,47 @@ const buildQueueItemsForShots = async (
 };
 
 let latestProjectDataRequestId = 0;
+let latestHighlightRefreshId = 0;
+
+const runWhenIdle = (callback: () => void): void => {
+  if (typeof window !== "undefined") {
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (handler: () => void, options?: { timeout: number }) => number;
+    };
+    if (idleWindow.requestIdleCallback) {
+      idleWindow.requestIdleCallback(callback, { timeout: 250 });
+      return;
+    }
+  }
+  globalThis.setTimeout(callback, 16);
+};
+
+const schedulePromptHighlightRefresh = (
+  shots: JimengShot[],
+  assets: JimengAsset[],
+  applyHighlights: (highlightsByShotId: Record<string, JimengHighlightSpan[]>) => void,
+): void => {
+  const refreshId = ++latestHighlightRefreshId;
+  const batchSize = 8;
+  let cursor = 0;
+
+  const runBatch = () => {
+    if (refreshId !== latestHighlightRefreshId) {
+      return;
+    }
+
+    const batch = shots.slice(cursor, cursor + batchSize);
+    cursor += batchSize;
+    if (batch.length > 0) {
+      applyHighlights(Object.fromEntries(batch.map((shot) => [shot.id, calculatePromptHighlights(shot.prompt, assets)])));
+    }
+    if (cursor < shots.length) {
+      runWhenIdle(runBatch);
+    }
+  };
+
+  runWhenIdle(runBatch);
+};
 
 export const useJimengStore = create<JimengStore>((set, get) => ({
   ...createJimengInitialState(),
@@ -180,7 +249,10 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         jimengApi.listQueue(targetProjectId),
         jimengApi.listPromptPresets(),
       ]);
-      const bindingsByShotId = await buildBindingsByShotId(targetProjectId, shots);
+      const [bindingsByShotId, videoStateByShotId] = await Promise.all([
+        buildBindingsByShotId(targetProjectId, shots),
+        buildVideoStateByShotId(targetProjectId, shots),
+      ]);
 
       if (requestId !== latestProjectDataRequestId) {
         return;
@@ -191,6 +263,7 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         shots,
         assets,
         bindingsByShotId,
+        videoStateByShotId,
         highlightsByShotId: Object.fromEntries(
           shots
             .filter((shot) => shot.id in get().highlightsByShotId)
@@ -202,6 +275,14 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         selectedShotIds: get().selectedShotIds.filter((id) => shots.some((shot) => shot.id === id)),
         selectedShotId: shots.some((shot) => shot.id === get().selectedShotId) ? get().selectedShotId : null,
         loading: false,
+      });
+      schedulePromptHighlightRefresh(shots, assets, (nextHighlightsByShotId) => {
+        set((state) => ({
+          highlightsByShotId: {
+            ...state.highlightsByShotId,
+            ...nextHighlightsByShotId,
+          },
+        }));
       });
     } catch (error) {
       if (requestId === latestProjectDataRequestId) {
@@ -228,6 +309,14 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         assets,
         loading: false,
       });
+      schedulePromptHighlightRefresh(get().shots, assets, (nextHighlightsByShotId) => {
+        set((state) => ({
+          highlightsByShotId: {
+            ...state.highlightsByShotId,
+            ...nextHighlightsByShotId,
+          },
+        }));
+      });
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });
     }
@@ -246,6 +335,10 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
           ...state.bindingsByShotId,
           [shotId]: bindings,
         },
+        highlightsByShotId: {
+          ...state.highlightsByShotId,
+          [shotId]: calculatePromptHighlights(state.shots.find((shot) => shot.id === shotId)?.prompt ?? "", assets),
+        },
         loading: false,
       }));
     } catch (error) {
@@ -260,7 +353,7 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         shots: state.shots.map((shot) => (shot.id === updatedShot.id ? updatedShot : shot)),
         highlightsByShotId: {
           ...state.highlightsByShotId,
-          [updatedShot.id]: [],
+          [updatedShot.id]: calculatePromptHighlights(updatedShot.prompt, state.assets),
         },
         error: null,
       }));
@@ -338,11 +431,13 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         shot_ids: targetShotIds,
         clear_existing_auto: options?.clearExistingAuto ?? false,
       });
+      const fullBindingsResponse = await jimengApi.listBindingsByShotIds(projectId, targetShotIds);
+      const fullBindingsByShotId = Object.fromEntries(targetShotIds.map((shotId) => [shotId, fullBindingsResponse.bindings_by_shot_id[shotId] ?? []]));
       const highlightsByShotId = buildHighlightsByShotId(matchResponse);
       set((state) => ({
         bindingsByShotId: {
           ...state.bindingsByShotId,
-          ...Object.fromEntries(matchResponse.shots.map((shot) => [shot.shot_id, shot.bindings])),
+          ...fullBindingsByShotId,
         },
         highlightsByShotId: {
           ...state.highlightsByShotId,

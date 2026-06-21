@@ -39,7 +39,7 @@ import {
   type JimengProject,
   type JimengShot,
 } from "@/lib/jimengApi";
-import { useJimengStore } from "@/store/jimengStore";
+import { useJimengStore, type JimengVideoState } from "@/store/jimengStore";
 
 const STATUS_LABELS: Record<JimengShot["status"], string> = {
   draft: "草稿",
@@ -107,6 +107,7 @@ interface ShotProductionTableProps {
   assets: JimengAsset[];
   bindingsByShotId: Record<string, JimengAssetBinding[]>;
   highlightsByShotId: Record<string, JimengHighlightSpan[]>;
+  videoStateByShotId: Record<string, JimengVideoState>;
   selectedShotIds: string[];
   focusedShotId: string | null;
   submitError: string | null;
@@ -123,6 +124,7 @@ export default function ShotProductionTable({
   assets,
   bindingsByShotId,
   highlightsByShotId,
+  videoStateByShotId,
   selectedShotIds,
   focusedShotId,
   submitError,
@@ -385,11 +387,16 @@ export default function ShotProductionTable({
             const hasFailure = shot.status === "failed" || Boolean(shot.last_error);
             const isFocused = focusedShotId === shot.id;
             const isSelected = selectedShotSet.has(shot.id);
-            const hasVideo = Boolean(shot.locked_video_candidate_id || shot.default_video_candidate_id);
+            const videoState = videoStateByShotId[shot.id];
+            const defaultCandidateId = videoState?.defaultCandidateId ?? shot.default_video_candidate_id;
+            const lockedCandidateId = videoState?.lockedCandidateId ?? shot.locked_video_candidate_id;
+            const hasVideo = videoState?.hasVideo ?? Boolean(lockedCandidateId || defaultCandidateId);
             const videoStateLabel = hasVideo
-              ? shot.locked_video_candidate_id
+              ? lockedCandidateId
                 ? "已有锁定视频"
-                : "已有默认视频"
+                : defaultCandidateId
+                  ? "已有默认视频"
+                  : "已有候选视频"
               : "暂无视频";
 
             return (
@@ -567,16 +574,16 @@ export default function ShotProductionTable({
                   </div>
                 </div>
 
-                {(shot.default_video_candidate_id || shot.locked_video_candidate_id || shot.last_error) && (
+                {(defaultCandidateId || lockedCandidateId || shot.last_error) && (
                   <div className="mt-3 flex flex-wrap gap-2 border-t border-glass-border pt-3 text-xs">
-                    {shot.default_video_candidate_id ? (
+                    {defaultCandidateId ? (
                       <span className="rounded border border-glass-border bg-black/20 px-2 py-1 text-text-muted">
-                        默认 {shot.default_video_candidate_id.slice(0, 8)}
+                        默认 {defaultCandidateId.slice(0, 8)}
                       </span>
                     ) : null}
-                    {shot.locked_video_candidate_id ? (
+                    {lockedCandidateId ? (
                       <span className="rounded border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">
-                        锁定 {shot.locked_video_candidate_id.slice(0, 8)}
+                        锁定 {lockedCandidateId.slice(0, 8)}
                       </span>
                     ) : null}
                     {shot.last_error ? (

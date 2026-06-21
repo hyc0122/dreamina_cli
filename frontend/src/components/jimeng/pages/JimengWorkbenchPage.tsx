@@ -69,6 +69,7 @@ export default function JimengWorkbenchPage() {
   const assets = useJimengStore((state) => state.assets);
   const bindingsByShotId = useJimengStore((state) => state.bindingsByShotId);
   const highlightsByShotId = useJimengStore((state) => state.highlightsByShotId);
+  const videoStateByShotId = useJimengStore((state) => state.videoStateByShotId);
   const promptPresets = useJimengStore((state) => state.promptPresets);
   const selectedShotIds = useJimengStore((state) => state.selectedShotIds);
   const selectedShotId = useJimengStore((state) => state.selectedShotId);
@@ -419,6 +420,7 @@ export default function JimengWorkbenchPage() {
             assets={assets}
             bindingsByShotId={bindingsByShotId}
             highlightsByShotId={highlightsByShotId}
+            videoStateByShotId={videoStateByShotId}
             selectedShotIds={selectedShotIds}
             focusedShotId={focusedShot?.id ?? null}
             submitError={submitError}
