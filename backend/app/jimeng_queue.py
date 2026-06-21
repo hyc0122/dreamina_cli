@@ -252,6 +252,15 @@ class JimengQueueWorker:
             self._save_result_snapshot(item_id, result)
             status = self._normalized_status(result)
 
+        if status in _RUNNING_STATUSES and result.submit_id:
+            return self.store.update_queue_item(
+                item_id,
+                status=JimengQueueStatus.polling,
+                error_message=None,
+                lease_owner=None,
+                lease_expires_at=None,
+            )
+
         if self._is_success(result, status):
             return self._complete_item(item_id, result)
         if self._is_failure(result, status):
@@ -263,14 +272,6 @@ class JimengQueueWorker:
                 error_message="running queue item has no submit_id",
             )
             return self._fail_item(item_id, missing_submit_id)
-
-        if status in _RUNNING_STATUSES and result.submit_id:
-            return self.store.update_queue_item(
-                item_id,
-                status=JimengQueueStatus.polling,
-                lease_owner=None,
-                lease_expires_at=None,
-            )
 
         return self.store.get_queue_item(item_id)
 
