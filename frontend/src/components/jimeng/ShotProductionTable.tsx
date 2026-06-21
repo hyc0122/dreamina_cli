@@ -15,7 +15,6 @@ import {
   Plus,
   Replace,
   Send,
-  Settings2,
   Square,
   Timer,
   Trash2,
@@ -45,8 +44,8 @@ import { useJimengStore } from "@/store/jimengStore";
 const STATUS_LABELS: Record<JimengShot["status"], string> = {
   draft: "草稿",
   asset_missing: "缺资产",
-  queued: "排队中",
-  running: "生成中",
+  queued: "视频制作中",
+  running: "视频制作中",
   failed: "失败",
   completed: "已完成",
   locked: "已锁定",
@@ -59,10 +58,9 @@ interface ToolbarButtonProps {
   disabled?: boolean;
   busy?: boolean;
   tone?: "default" | "primary";
-  iconClassName?: string;
 }
 
-function ToolbarButton({ icon: Icon, children, onClick, disabled = false, busy = false, tone = "default", iconClassName }: ToolbarButtonProps) {
+function ToolbarButton({ icon: Icon, children, onClick, disabled = false, busy = false, tone = "default" }: ToolbarButtonProps) {
   return (
     <button
       type="button"
@@ -75,7 +73,7 @@ function ToolbarButton({ icon: Icon, children, onClick, disabled = false, busy =
           : "border-glass-border bg-black/20 text-text-secondary hover:bg-hover-bg hover:text-foreground",
       )}
     >
-      {busy ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} className={iconClassName} />}
+      {busy ? <Loader2 size={15} className="animate-spin" /> : <Icon size={15} />}
       {children}
     </button>
   );
@@ -109,7 +107,7 @@ interface ShotProductionTableProps {
   onPreviewShot: (shotId: string) => void;
   onOpenAssetPicker: (shot: JimengShot, assetType: JimengAssetType, assetId?: string) => void;
   onOpenBatchSettings: () => void;
-  onBatchSubmit: () => void;
+  onSaveShotPrompt: (shotId: string, prompt: string) => Promise<void>;
 }
 
 export default function ShotProductionTable({
@@ -125,7 +123,7 @@ export default function ShotProductionTable({
   onPreviewShot,
   onOpenAssetPicker,
   onOpenBatchSettings,
-  onBatchSubmit,
+  onSaveShotPrompt,
 }: ShotProductionTableProps) {
   const loading = useJimengStore((state) => state.loading);
   const toggleShotSelection = useJimengStore((state) => state.toggleShotSelection);
@@ -348,11 +346,8 @@ export default function ShotProductionTable({
         <ToolbarButton icon={Download} onClick={() => exportShots("csv")} disabled={shots.length === 0}>
           导出分镜CSV
         </ToolbarButton>
-        <ToolbarButton icon={Settings2} onClick={onOpenBatchSettings} disabled={submitting} tone="primary">
-          参数设置
-        </ToolbarButton>
-        <ToolbarButton icon={submitting ? Loader2 : Send} iconClassName={submitting ? "animate-spin" : undefined} onClick={onBatchSubmit} disabled={selectedShotIds.length === 0 || submitting} tone="primary">
-          {submitting ? "分镜制作中..." : "批量提交"}
+        <ToolbarButton icon={Send} onClick={onOpenBatchSettings} disabled={submitting} tone="primary">
+          批量提交
         </ToolbarButton>
         <span className="w-full rounded border border-glass-border bg-black/20 px-2 py-1 text-right font-mono text-xs text-text-muted sm:ml-auto sm:w-auto">
           已选 {selectedShotIds.length}
@@ -431,10 +426,9 @@ export default function ShotProductionTable({
                     <div className="min-w-0">
                       <p className="mb-1.5 text-xs font-medium text-text-muted">分镜提示词</p>
                       <ShotPromptCell
-                        projectId={project.id}
                         shot={shot}
                         highlights={highlightsByShotId[shot.id] ?? []}
-                        onSaved={refreshProject}
+                        onSavePrompt={onSaveShotPrompt}
                       />
                     </div>
                     <div className="min-w-0">

@@ -4,13 +4,28 @@
 不要在这里创建资产文件，也不要触发视频生成。
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from .context import _call, _dump, _model_data, _now, get_store
 from .schemas import BindingCreate, BindingReorder, BindingUpdate
 
 
 router = APIRouter(prefix="/jimeng", tags=["jimeng-bindings"])
+
+
+def _parse_ids(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+@router.get("/projects/{project_id}/bindings")
+def list_project_bindings(project_id: str, shot_ids: str | None = Query(default=None)):
+    def list_bulk():
+        bindings_by_shot_id = get_store().list_bindings_for_shots(project_id, _parse_ids(shot_ids))
+        return {"bindings_by_shot_id": {shot_id: _dump(bindings) for shot_id, bindings in bindings_by_shot_id.items()}}
+
+    return _call(list_bulk)
 
 
 @router.get("/projects/{project_id}/shots/{shot_id}/bindings")

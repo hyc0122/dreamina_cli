@@ -11,7 +11,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
 from .context import _async_call, _call, _dump, _settings, get_store
@@ -31,6 +31,36 @@ _VIDEO_MIME_TYPES = {
     "application/octet-stream",
 }
 _WINDOWS_ILLEGAL_ASSET_NAME_CHARS = set('\\/:*?"<>|')
+
+
+def _parse_ids(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+@router.get("/projects/{project_id}/candidates")
+def list_project_candidates(
+    project_id: str,
+    shot_ids: str | None = Query(default=None),
+    limit_per_shot: int = Query(default=0, ge=0, le=100),
+):
+    def list_bulk():
+        candidates_by_shot_id = get_store().list_candidates_for_shots(
+            project_id,
+            _parse_ids(shot_ids),
+            limit_per_shot or None,
+        )
+        flat_candidates = [candidate for candidates in candidates_by_shot_id.values() for candidate in candidates]
+        return {
+            "candidates": _dump(flat_candidates),
+            "candidates_by_shot_id": {
+                shot_id: _dump(candidates)
+                for shot_id, candidates in candidates_by_shot_id.items()
+            },
+        }
+
+    return _call(list_bulk)
 
 
 @router.get("/projects/{project_id}/shots/{shot_id}/candidates")

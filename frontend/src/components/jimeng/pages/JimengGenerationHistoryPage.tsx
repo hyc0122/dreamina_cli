@@ -128,7 +128,15 @@ export default function JimengGenerationHistoryPage() {
         jimengApi.listLlmAssetImageRecords(),
       ]);
       const nextShots = shotGroups.flat();
-      const candidateGroups = await Promise.all(nextShots.map((shot) => jimengApi.listCandidates(shot.project_id, shot.id)));
+      const shotIdsByProject = nextShots.reduce((result, shot) => {
+        result.set(shot.project_id, [...(result.get(shot.project_id) ?? []), shot.id]);
+        return result;
+      }, new Map<string, string[]>());
+      const candidateGroups = await Promise.all(
+        Array.from(shotIdsByProject, ([targetProjectId, targetShotIds]) =>
+          jimengApi.listCandidatesByShotIds(targetProjectId, targetShotIds).then((response) => response.candidates),
+        ),
+      );
       const queueEnvelope = await jimengApi.listQueue();
       setHistoryShots(nextShots);
       setAllAssets(assetGroups.flat());
@@ -733,7 +741,13 @@ export default function JimengGenerationHistoryPage() {
                       title={imageUrl ? "打开图片预览" : "暂无图片"}
                     >
                       {imageUrl ? (
-                        <img src={imageUrl} alt={asset.name} className="h-full w-full object-cover transition-transform hover:scale-[1.03]" />
+                        <img
+                          src={imageUrl}
+                          alt={asset.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover transition-transform hover:scale-[1.03]"
+                        />
                       ) : (
                         <div className="flex h-full items-center justify-center">
                           <ImageIcon size={24} />

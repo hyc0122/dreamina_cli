@@ -89,6 +89,49 @@ def list_bindings(store: Any, project_id: str, shot_id: str | None = None) -> li
     return [binding_from_row(row) for row in rows]
 
 
+def list_bindings_for_shots(
+    store: Any,
+    project_id: str,
+    shot_ids: list[str] | None = None,
+) -> dict[str, list[JimengAssetBinding]]:
+    ordered_ids = list(dict.fromkeys(shot_id for shot_id in (shot_ids or []) if shot_id))
+    with store._connect() as conn:
+        store._validate_project_membership(conn, project_id=project_id)
+        if ordered_ids:
+            placeholders = ", ".join("?" for _ in ordered_ids)
+            rows = conn.execute(
+                f"""
+                SELECT * FROM asset_bindings
+                WHERE project_id = ? AND shot_id IN ({placeholders})
+                ORDER BY shot_id ASC, slot_order ASC
+                """,
+                (project_id, *ordered_ids),
+            ).fetchall()
+            known_rows = conn.execute(
+                f"SELECT id FROM shots WHERE project_id = ? AND id IN ({placeholders})",
+                (project_id, *ordered_ids),
+            ).fetchall()
+            known_ids = {row["id"] for row in known_rows}
+            missing_ids = [shot_id for shot_id in ordered_ids if shot_id not in known_ids]
+            if missing_ids:
+                raise ValueError("selected shot does not belong to project")
+            result = {shot_id: [] for shot_id in ordered_ids}
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM asset_bindings
+                WHERE project_id = ?
+                ORDER BY shot_id ASC, slot_order ASC
+                """,
+                (project_id,),
+            ).fetchall()
+            result = {}
+    for row in rows:
+        binding = binding_from_row(row)
+        result.setdefault(binding.shot_id, []).append(binding)
+    return result
+
+
 def update_binding(store: Any, binding_id: str, **updates: Any) -> JimengAssetBinding:
     allowed = {"locked", "voice_enabled", "slot_order"}
     values = {key: value for key, value in updates.items() if key in allowed}

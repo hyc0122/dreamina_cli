@@ -146,6 +146,8 @@ class JimengStore:
                     UNIQUE(project_id, type, name),
                     FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
                 );
+                CREATE INDEX IF NOT EXISTS idx_assets_project_type_name
+                    ON assets(project_id, type, name);
 
                 CREATE TABLE IF NOT EXISTS asset_bindings (
                     id TEXT PRIMARY KEY,
@@ -163,6 +165,10 @@ class JimengStore:
                     FOREIGN KEY(shot_id) REFERENCES shots(id) ON DELETE CASCADE,
                     FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE
                 );
+                CREATE INDEX IF NOT EXISTS idx_asset_bindings_project_shot
+                    ON asset_bindings(project_id, shot_id, slot_order);
+                CREATE INDEX IF NOT EXISTS idx_asset_bindings_asset
+                    ON asset_bindings(asset_id);
 
                 CREATE TABLE IF NOT EXISTS queue_items (
                     id TEXT PRIMARY KEY,
@@ -197,6 +203,8 @@ class JimengStore:
                     FOREIGN KEY(shot_id) REFERENCES shots(id) ON DELETE CASCADE
                 );
                 CREATE INDEX IF NOT EXISTS idx_queue_status_position ON queue_items(status, position);
+                CREATE INDEX IF NOT EXISTS idx_queue_project_status_position
+                    ON queue_items(project_id, status, position);
 
                 CREATE TABLE IF NOT EXISTS video_candidates (
                     id TEXT PRIMARY KEY,
@@ -217,6 +225,8 @@ class JimengStore:
                     FOREIGN KEY(shot_id) REFERENCES shots(id) ON DELETE CASCADE,
                     FOREIGN KEY(queue_item_id) REFERENCES queue_items(id) ON DELETE CASCADE
                 );
+                CREATE INDEX IF NOT EXISTS idx_video_candidates_project_shot_created
+                    ON video_candidates(project_id, shot_id, created_at);
 
                 CREATE TABLE IF NOT EXISTS prompt_presets (
                     id TEXT PRIMARY KEY,
@@ -275,6 +285,8 @@ class JimengStore:
                     ON llm_asset_image_records(project_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_llm_asset_image_records_status
                     ON llm_asset_image_records(status);
+                CREATE INDEX IF NOT EXISTS idx_llm_asset_image_records_asset_status
+                    ON llm_asset_image_records(asset_id, status);
 
                 CREATE TABLE IF NOT EXISTS runtime_settings (
                     key TEXT PRIMARY KEY,
@@ -509,6 +521,13 @@ class JimengStore:
     def list_bindings(self, project_id: str, shot_id: str | None = None) -> list[JimengAssetBinding]:
         return binding_storage.list_bindings(self, project_id, shot_id)
 
+    def list_bindings_for_shots(
+        self,
+        project_id: str,
+        shot_ids: list[str] | None = None,
+    ) -> dict[str, list[JimengAssetBinding]]:
+        return binding_storage.list_bindings_for_shots(self, project_id, shot_ids)
+
     def update_binding(self, binding_id: str, **updates: Any) -> JimengAssetBinding:
         return binding_storage.update_binding(self, binding_id, **updates)
 
@@ -642,6 +661,14 @@ class JimengStore:
 
     def list_candidates(self, project_id: str, shot_id: str | None = None) -> list[JimengVideoCandidate]:
         return candidate_storage.list_candidates(self, project_id, shot_id)
+
+    def list_candidates_for_shots(
+        self,
+        project_id: str,
+        shot_ids: list[str] | None = None,
+        limit_per_shot: int | None = None,
+    ) -> dict[str, list[JimengVideoCandidate]]:
+        return candidate_storage.list_candidates_for_shots(self, project_id, shot_ids, limit_per_shot)
 
     def set_default_candidate(self, shot_id: str, candidate_id: str) -> JimengVideoCandidate:
         return candidate_storage.set_default_candidate(self, shot_id, candidate_id)

@@ -1,10 +1,9 @@
 "use client";
 
-import { ArrowLeft, Clapperboard, RefreshCw, ScrollText, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Clapperboard, RefreshCw, ScrollText, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AssetPickerDrawer, { type AssetPickerTarget } from "@/components/jimeng/assets/AssetPickerDrawer";
 import BatchSubmitSettingsModal from "@/components/jimeng/workbench/BatchSubmitSettingsModal";
-import ConfirmMissingPropsModal from "@/components/jimeng/workbench/ConfirmMissingPropsModal";
 import PromptPresetManagerModal from "@/components/jimeng/workbench/PromptPresetManagerModal";
 import ShotDetailPanel from "@/components/jimeng/workbench/ShotDetailPanel";
 import ShotProductionTable from "@/components/jimeng/workbench/ShotProductionTable";
@@ -51,6 +50,7 @@ export default function JimengWorkbenchPage() {
   const storeError = useJimengStore((state) => state.error);
   const loadProjectData = useJimengStore((state) => state.loadProjectData);
   const refreshShotAssetsAndBindings = useJimengStore((state) => state.refreshShotAssetsAndBindings);
+  const saveShotPrompt = useJimengStore((state) => state.saveShotPrompt);
   const setActivePage = useJimengStore((state) => state.setActivePage);
   const setRightPanelMode = useJimengStore((state) => state.setRightPanelMode);
   const submitShots = useJimengStore((state) => state.submitShots);
@@ -58,16 +58,12 @@ export default function JimengWorkbenchPage() {
   const [focusedShotId, setFocusedShotId] = useState<string | null>(null);
   const [assetPickerTarget, setAssetPickerTarget] = useState<AssetPickerTarget | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [workerOfflineNotice, setWorkerOfflineNotice] = useState<{ title: string; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [generationSettings, setGenerationSettings] = useState<JimengVideoGenerationSettings>(DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS);
+  const [batchSubmitIntervalSeconds, setBatchSubmitIntervalSeconds] = useState(3);
   const [batchSettingsOpen, setBatchSettingsOpen] = useState(false);
-  const [confirmMissingPropsOpen, setConfirmMissingPropsOpen] = useState(false);
   const [promptPresetManagerOpen, setPromptPresetManagerOpen] = useState(false);
-  const [missingPropShotIndexes, setMissingPropShotIndexes] = useState<number[]>([]);
-  const [pendingSubmitShotIds, setPendingSubmitShotIds] = useState<string[]>([]);
-  const [pendingGenerationSettings, setPendingGenerationSettings] = useState<JimengVideoGenerationSettings>(
-    DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
-  );
   const [videoModelOptions, setVideoModelOptions] = useState<LlmModelOption[]>([]);
   const submittingRef = useRef(false);
   const workbenchLoadHandledProjectId = useRef<string | null>(null);
@@ -110,7 +106,6 @@ export default function JimengWorkbenchPage() {
       return;
     }
     setGenerationSettings((settings) => ({ ...settings, ratio }));
-    setPendingGenerationSettings((settings) => ({ ...settings, ratio }));
   }, [currentProject?.default_ratio, currentProject?.id]);
 
   useEffect(() => {
@@ -123,7 +118,7 @@ export default function JimengWorkbenchPage() {
       .getSettings()
       .then((settings) => {
         setGenerationSettings((current) => settingsToGenerationSettings(settings, current, currentProject?.default_ratio));
-        setPendingGenerationSettings((current) => settingsToGenerationSettings(settings, current, currentProject?.default_ratio));
+        setBatchSubmitIntervalSeconds(Math.min(300, Math.max(1, Math.round(Number(settings.submit_interval_seconds) || 3))));
       })
       .catch(() => {
         settingsLoadHandledProjectId.current = null;
@@ -144,10 +139,12 @@ export default function JimengWorkbenchPage() {
   const promptPresetName = currentPreset?.name ?? (currentProject?.prompt_preset_id ? "模板未加载" : "未设置模板");
   const selectedShotSet = useMemo(() => new Set(selectedShotIds), [selectedShotIds]);
   const selectedShots = useMemo(() => shots.filter((shot) => selectedShotSet.has(shot.id)), [selectedShotSet, shots]);
+  const batchSubmitTargetShots = useMemo(() => (selectedShots.length > 0 ? selectedShots : shots), [selectedShots, shots]);
   const focusedShot = useMemo(() => {
     const preferredId = focusedShotId ?? selectedShotId ?? selectedShotIds[0] ?? null;
     return shots.find((shot) => shot.id === preferredId) ?? shots[0] ?? null;
   }, [focusedShotId, selectedShotId, selectedShotIds, shots]);
+  const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
 
   useEffect(() => {
     if (focusedShot?.default_duration == null) {
@@ -164,9 +161,13 @@ export default function JimengWorkbenchPage() {
     }));
   }, [focusedShot?.default_duration, focusedShot?.id]);
 
-  const bindingTypesForShot = useCallback(
-    (shot: JimengShot) => new Set((bindingsByShotId[shot.id] ?? []).map((binding) => binding.asset_type)),
-    [bindingsByShotId],
+  const shotHasBoundImage = useCallback(
+    (shot: JimengShot) =>
+      (bindingsByShotId[shot.id] ?? []).some((binding) => {
+        const asset = assetById.get(binding.asset_id);
+        return Boolean(asset?.image_path);
+      }),
+    [assetById, bindingsByShotId],
   );
 
   const submitNow = useCallback(async (shotIds: string[], settings: JimengVideoGenerationSettings) => {
@@ -177,13 +178,25 @@ export default function JimengWorkbenchPage() {
     submittingRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
+    setWorkerOfflineNotice(null);
 
     try {
       await submitShots(shotIds, settings);
-      await loadProjectData(currentProject.id);
-      setConfirmMissingPropsOpen(false);
+      try {
+        const queueStatus = await jimengApi.startQueue();
+        if (!queueStatus.worker_online) {
+          setWorkerOfflineNotice({
+            title: "队列已开启，但 worker 离线",
+            message: "分镜已提交到本地队列，队列开关已自动开启；目前没有检测到独立 worker 在线心跳。请进入“即梦排队”页面，点击“启动 worker”。",
+          });
+        }
+      } catch (error) {
+        setWorkerOfflineNotice({
+          title: "队列自动启动失败",
+          message: `分镜已提交到本地队列，但自动开启队列失败：${errorMessageFrom(error)}。请进入“即梦排队”页面，点击“开始队列”和“启动 worker”。`,
+        });
+      }
       setBatchSettingsOpen(false);
-      setPendingSubmitShotIds([]);
       setSubmitError(null);
       return true;
     } catch (error) {
@@ -197,57 +210,35 @@ export default function JimengWorkbenchPage() {
 
   const requestSubmitShots = useCallback((targetShots: JimengShot[], settings: JimengVideoGenerationSettings) => {
     if (submittingRef.current) {
-      return;
+      return false;
     }
     if (!currentProject) {
-      return;
+      return false;
     }
     if (targetShots.length === 0) {
       setSubmitError("请先选择要提交的分镜");
-      return;
+      return false;
     }
 
-    const missingRequired = targetShots
-      .map((shot) => {
-        const bindingTypes = bindingTypesForShot(shot);
-        const missing: string[] = [];
-        if (!bindingTypes.has("character")) {
-          missing.push("角色");
-        }
-        if (!bindingTypes.has("scene")) {
-          missing.push("场景");
-        }
-        return { shot, missing };
-      })
-      .filter((item) => item.missing.length > 0);
-
-    if (missingRequired.length > 0) {
+    const missingImages = targetShots.filter((shot) => !shotHasBoundImage(shot));
+    if (missingImages.length > 0) {
       setSubmitError(
-        missingRequired
-          .map((item) => `分镜${item.shot.shot_index} 缺少${item.missing.join("、")}`)
+        missingImages
+          .map((shot) => `分镜${shot.shot_index} 没有可提交的资产图片`)
           .join("；"),
       );
-      return;
-    }
-
-    const missingProps = targetShots.filter((shot) => !bindingTypesForShot(shot).has("prop"));
-    if (missingProps.length > 0) {
-      setSubmitError(null);
-      setPendingSubmitShotIds(targetShots.map((shot) => shot.id));
-      setPendingGenerationSettings(settings);
-      setMissingPropShotIndexes(missingProps.map((shot) => shot.shot_index));
-      setConfirmMissingPropsOpen(true);
-      return;
+      return false;
     }
 
     void submitNow(targetShots.map((shot) => shot.id), settings);
-  }, [bindingTypesForShot, currentProject, submitNow]);
+    return true;
+  }, [currentProject, shotHasBoundImage, submitNow]);
 
   const handleSubmitSelected = useCallback(
     (settings: JimengVideoGenerationSettings = generationSettings) => {
-      requestSubmitShots(selectedShots, settings);
+      return requestSubmitShots(batchSubmitTargetShots, settings);
     },
-    [generationSettings, requestSubmitShots, selectedShots],
+    [batchSubmitTargetShots, generationSettings, requestSubmitShots],
   );
 
   const handleSubmitCurrent = useCallback(() => {
@@ -257,6 +248,25 @@ export default function JimengWorkbenchPage() {
     }
     requestSubmitShots([focusedShot], generationSettings);
   }, [focusedShot, generationSettings, requestSubmitShots]);
+
+  const saveBatchSubmitSettings = useCallback(async (settings: JimengVideoGenerationSettings, submitIntervalSeconds: number) => {
+    const interval = Math.min(300, Math.max(1, Math.round(submitIntervalSeconds || 3)));
+    setGenerationSettings(settings);
+    setBatchSubmitIntervalSeconds(interval);
+    await jimengApi.updateSettings({ submit_interval_seconds: interval });
+    setBatchSettingsOpen(false);
+  }, []);
+
+  const submitSelectedFromBatchSettings = useCallback(async (settings: JimengVideoGenerationSettings, submitIntervalSeconds: number) => {
+    const interval = Math.min(300, Math.max(1, Math.round(submitIntervalSeconds || 3)));
+    setGenerationSettings(settings);
+    setBatchSubmitIntervalSeconds(interval);
+    await jimengApi.updateSettings({ submit_interval_seconds: interval });
+    const accepted = handleSubmitSelected(settings);
+    if (accepted) {
+      setBatchSettingsOpen(false);
+    }
+  }, [handleSubmitSelected]);
 
   const openAssetPicker = useCallback(
     (shot: JimengShot, assetType: JimengAssetType, assetId?: string) => {
@@ -292,6 +302,21 @@ export default function JimengWorkbenchPage() {
     }
     await refreshShotAssetsAndBindings(currentProject.id, shotId);
   }, [assetPickerTarget?.shot.id, currentProject, loadProjectData, refreshShotAssetsAndBindings]);
+
+  const handleSaveShotPrompt = useCallback(
+    async (shotId: string, prompt: string) => {
+      if (!currentProject) {
+        return;
+      }
+      await saveShotPrompt(currentProject.id, shotId, prompt);
+    },
+    [currentProject, saveShotPrompt],
+  );
+
+  const openQueuePageForWorker = useCallback(() => {
+    setWorkerOfflineNotice(null);
+    setActivePage("queue");
+  }, [setActivePage]);
 
   if (!currentProject) {
     return (
@@ -365,7 +390,7 @@ export default function JimengWorkbenchPage() {
             onPreviewShot={previewShot}
             onOpenAssetPicker={openAssetPicker}
             onOpenBatchSettings={() => setBatchSettingsOpen(true)}
-            onBatchSubmit={() => handleSubmitSelected()}
+            onSaveShotPrompt={handleSaveShotPrompt}
           />
         </section>
 
@@ -396,29 +421,51 @@ export default function JimengWorkbenchPage() {
         </aside>
       </div>
 
-      <ConfirmMissingPropsModal
-        open={confirmMissingPropsOpen}
-        projectId={currentProject.id}
-        promptPresetId={currentProject.prompt_preset_id}
-        promptPresetName={promptPresetName}
-        selectedShots={shots.filter((shot) => pendingSubmitShotIds.includes(shot.id))}
-        missingPropShotIndexes={missingPropShotIndexes}
-        submitting={submitting}
-        onCancel={() => setConfirmMissingPropsOpen(false)}
-        onConfirm={() => submitNow(pendingSubmitShotIds, pendingGenerationSettings)}
-      />
       <BatchSubmitSettingsModal
         open={batchSettingsOpen}
-        selectedCount={selectedShots.length}
+        selectedCount={batchSubmitTargetShots.length}
         submitting={submitting}
         value={generationSettings}
+        submitIntervalSeconds={batchSubmitIntervalSeconds}
         videoModelOptions={videoModelOptions}
         onClose={() => setBatchSettingsOpen(false)}
-        onSave={(settings) => {
-          setGenerationSettings(settings);
-          setBatchSettingsOpen(false);
-        }}
+        onSave={saveBatchSubmitSettings}
+        onSubmit={submitSelectedFromBatchSettings}
       />
+      {workerOfflineNotice ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4 py-6">
+          <div role="dialog" aria-modal="true" className="modal-panel w-full max-w-lg rounded-xl p-5">
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-amber-400/30 bg-amber-500/10 text-amber-200">
+                <AlertTriangle size={20} />
+              </span>
+              <div>
+                <h3 className="font-display text-lg font-semibold text-foreground">{workerOfflineNotice.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-text-secondary">{workerOfflineNotice.message}</p>
+                <p className="mt-3 rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-xs leading-5 text-text-muted">
+                  开启位置：顶部导航「即梦排队」→ 状态区「启动 worker」。
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setWorkerOfflineNotice(null)}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-glass-border bg-surface-inset px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground"
+              >
+                我知道了
+              </button>
+              <button
+                type="button"
+                onClick={openQueuePageForWorker}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+              >
+                去即梦排队开启
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <PromptPresetManagerModal open={promptPresetManagerOpen} onClose={() => setPromptPresetManagerOpen(false)} />
     </div>
   );

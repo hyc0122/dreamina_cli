@@ -146,6 +146,11 @@ export interface JimengVideoCandidate {
   created_at: string;
 }
 
+export interface JimengCandidatesByShotIdResponse {
+  candidates: JimengVideoCandidate[];
+  candidates_by_shot_id: Record<string, JimengVideoCandidate[]>;
+}
+
 export interface JimengBatchDownloadExportFile {
   shot_id: string;
   shot_index: number;
@@ -296,6 +301,10 @@ export interface JimengClearMatchedAssetsResponse {
   deleted_count: number;
 }
 
+export interface JimengBindingsByShotIdResponse {
+  bindings_by_shot_id: Record<string, JimengAssetBinding[]>;
+}
+
 export interface JimengPromptPreviewResponse {
   prefix_prompt: string;
   final_prompt: string;
@@ -436,6 +445,13 @@ export interface JimengLlmAssetImageRecord {
   asset_current_image_path?: string;
   asset_current_image_filename?: string;
   feedback: JimengLlmAssetImageRecordFeedback[];
+}
+
+export interface JimengLlmAssetImageRecordsEnvelope {
+  records: JimengLlmAssetImageRecord[];
+  total?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export interface JimengVideoGenerationSettings {
@@ -705,8 +721,17 @@ export const jimengApi = {
     axios
       .post<JimengAssetBatchImageGenerationResponse>(`${API_URL}/jimeng/projects/${projectId}/assets/llm_image/batch_generate`, data)
       .then((res) => res.data),
-  listLlmAssetImageRecords: (projectId?: string) =>
-    axios.get<{ records: JimengLlmAssetImageRecord[] }>(`${API_URL}/jimeng/llm/asset_image_records`, { params: { project_id: projectId } }).then((res) => res.data),
+  listLlmAssetImageRecords: (projectId?: string, options: { status?: string; limit?: number; offset?: number } = {}) =>
+    axios
+      .get<JimengLlmAssetImageRecordsEnvelope>(`${API_URL}/jimeng/llm/asset_image_records`, {
+        params: {
+          project_id: projectId,
+          status: options.status,
+          limit: options.limit,
+          offset: options.offset,
+        },
+      })
+      .then((res) => res.data),
   pollLlmAssetImageRecords: (data: { project_id?: string; record_ids?: string[]; limit?: number; auto_cancel_minutes?: number | null; force?: boolean } = {}) =>
     axios.post<{ records: JimengLlmAssetImageRecord[] }>(`${API_URL}/jimeng/llm/asset_image_records/poll`, data).then((res) => res.data),
   pollLlmAssetImageRecord: (recordId: string, data: { auto_cancel_minutes?: number | null; force?: boolean } = {}) =>
@@ -726,6 +751,12 @@ export const jimengApi = {
 
   listBindings: (projectId: string, shotId: string) =>
     axios.get<JimengAssetBinding[]>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/bindings`).then((res) => res.data),
+  listBindingsByShotIds: (projectId: string, shotIds: string[] = []) =>
+    axios
+      .get<JimengBindingsByShotIdResponse>(`${API_URL}/jimeng/projects/${projectId}/bindings`, {
+        params: { shot_ids: shotIds.join(",") },
+      })
+      .then((res) => res.data),
   createBinding: (projectId: string, shotId: string, data: { asset_id: string; asset_type: JimengAssetType; source?: string; locked?: boolean; slot_order?: number }) =>
     axios.post<JimengAssetBinding>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/bindings`, data).then((res) => res.data),
   deleteBinding: (projectId: string, shotId: string, bindingId: string) =>
@@ -756,6 +787,12 @@ export const jimengApi = {
 
   listCandidates: (projectId: string, shotId: string) =>
     axios.get<JimengVideoCandidate[]>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/candidates`).then((res) => res.data),
+  listCandidatesByShotIds: (projectId: string, shotIds: string[] = [], limitPerShot = 0) =>
+    axios
+      .get<JimengCandidatesByShotIdResponse>(`${API_URL}/jimeng/projects/${projectId}/candidates`, {
+        params: { shot_ids: shotIds.join(","), limit_per_shot: limitPerShot },
+      })
+      .then((res) => res.data),
   uploadVideoCandidate: (projectId: string, shotId: string, file: File) =>
     axios.post<JimengVideoCandidate>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/candidates/upload`, formDataWithFile(file), multipartHeaders).then((res) => res.data),
   setDefaultCandidate: (projectId: string, shotId: string, candidateId: string) =>

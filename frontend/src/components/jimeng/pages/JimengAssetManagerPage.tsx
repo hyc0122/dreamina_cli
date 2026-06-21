@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { ArrowLeft, CheckSquare, Download, FileInput, Image as ImageIcon, Plus, RefreshCw, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, Volume2, type LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import AssetBrowser from "@/components/jimeng/assets/AssetBrowser";
 import AssetBatchImageGenerateModal, { type AssetBatchImageGenerateOptions } from "@/components/jimeng/assets/AssetBatchImageGenerateModal";
 import AssetDetailPanel from "@/components/jimeng/assets/AssetDetailPanel";
@@ -55,7 +55,7 @@ export default function JimengAssetManagerPage() {
   const assets = useJimengStore((state) => state.assets);
   const loading = useJimengStore((state) => state.loading);
   const storeError = useJimengStore((state) => state.error);
-  const loadProjectData = useJimengStore((state) => state.loadProjectData);
+  const loadProjectAssets = useJimengStore((state) => state.loadProjectAssets);
   const setActivePage = useJimengStore((state) => state.setActivePage);
   const [activeType, setActiveType] = useState<JimengAssetType>("character");
   const [query, setQuery] = useState("");
@@ -76,12 +76,13 @@ export default function JimengAssetManagerPage() {
   const [imageModelOptions, setImageModelOptions] = useState<LlmModelOption[]>([]);
   const [fallbackImageModelValue, setFallbackImageModelValue] = useState("");
   const [llmImageRecords, setLlmImageRecords] = useState<JimengLlmAssetImageRecord[]>([]);
+  const deferredQuery = useDeferredValue(query);
 
   const refreshProject = useCallback(async () => {
     if (currentProject?.id) {
-      await loadProjectData(currentProject.id);
+      await loadProjectAssets(currentProject.id);
     }
-  }, [currentProject?.id, loadProjectData]);
+  }, [currentProject?.id, loadProjectAssets]);
 
   const loadLlmImageRecords = useCallback(async () => {
     if (!currentProject?.id) {
@@ -145,7 +146,7 @@ export default function JimengAssetManagerPage() {
   );
 
   const filteredAssets = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = deferredQuery.trim().toLowerCase();
     return assets
       .filter((asset) => asset.type === activeType)
       .filter((asset) => {
@@ -155,7 +156,7 @@ export default function JimengAssetManagerPage() {
         const haystack = [asset.name, ...asset.aliases, asset.description, asset.image_model, asset.character_kind].join(" ").toLowerCase();
         return haystack.includes(normalizedQuery);
       });
-  }, [activeType, assets, query]);
+  }, [activeType, assets, deferredQuery]);
 
   useEffect(() => {
     if (!selectedAssetId || !filteredAssets.some((asset) => asset.id === selectedAssetId)) {

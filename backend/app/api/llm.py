@@ -8,6 +8,7 @@ from ..llm.asset_image import batch_generate_asset_images, generate_asset_image
 from ..llm.asset_image_records import (
     apply_asset_image_record_to_asset,
     cancel_asset_image_record,
+    count_asset_image_records,
     delete_asset_image_record,
     delete_asset_image_records,
     list_asset_image_records,
@@ -50,8 +51,30 @@ def batch_generate_llm_asset_images(
 
 
 @router.get("/llm/asset_image_records")
-def list_llm_asset_image_records(project_id: Optional[str] = None):
-    return _call(lambda: {"records": _dump([public_asset_image_record(record) for record in list_asset_image_records(get_store(), project_id)])})
+def list_llm_asset_image_records(
+    project_id: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 300,
+    offset: int = 0,
+):
+    def list_records():
+        safe_limit = min(1000, max(1, int(limit or 300)))
+        safe_offset = max(0, int(offset or 0))
+        records = list_asset_image_records(
+            get_store(),
+            project_id=project_id,
+            status=status,
+            limit=safe_limit,
+            offset=safe_offset,
+        )
+        return {
+            "records": _dump([public_asset_image_record(record) for record in records]),
+            "total": count_asset_image_records(get_store(), project_id=project_id, status=status),
+            "limit": safe_limit,
+            "offset": safe_offset,
+        }
+
+    return _call(list_records)
 
 
 @router.post("/llm/asset_image_records/poll")

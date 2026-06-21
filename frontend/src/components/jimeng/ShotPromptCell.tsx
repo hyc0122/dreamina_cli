@@ -2,8 +2,8 @@
 
 import clsx from "clsx";
 import { Check, Edit3, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { jimengApi, type JimengHighlightSpan, type JimengShot } from "@/lib/jimengApi";
+import { type MouseEvent, useEffect, useMemo, useState } from "react";
+import { type JimengHighlightSpan, type JimengShot } from "@/lib/jimengApi";
 import { buildPromptSegments } from "./promptHighlight";
 
 const HIGHLIGHT_CLASS = {
@@ -13,13 +13,12 @@ const HIGHLIGHT_CLASS = {
 } as const;
 
 interface ShotPromptCellProps {
-  projectId: string;
   shot: JimengShot;
   highlights: JimengHighlightSpan[];
-  onSaved: () => Promise<void>;
+  onSavePrompt: (shotId: string, prompt: string) => Promise<void>;
 }
 
-export default function ShotPromptCell({ projectId, shot, highlights, onSaved }: ShotPromptCellProps) {
+export default function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotPromptCellProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(shot.prompt);
   const [saving, setSaving] = useState(false);
@@ -33,6 +32,10 @@ export default function ShotPromptCell({ projectId, shot, highlights, onSaved }:
 
   const segments = useMemo(() => buildPromptSegments(shot.prompt, highlights), [highlights, shot.prompt]);
 
+  const stopRowPreview = (event: MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+  };
+
   const savePrompt = async () => {
     if (saving) {
       return;
@@ -45,8 +48,7 @@ export default function ShotPromptCell({ projectId, shot, highlights, onSaved }:
     setSaving(true);
     setError(null);
     try {
-      await jimengApi.updateShot(projectId, shot.id, { prompt: draft });
-      await onSaved();
+      await onSavePrompt(shot.id, draft);
       setEditing(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "保存提示词失败");
@@ -57,7 +59,7 @@ export default function ShotPromptCell({ projectId, shot, highlights, onSaved }:
 
   if (editing) {
     return (
-      <div className="min-w-0 space-y-2">
+      <div className="min-w-0 space-y-2" onClick={stopRowPreview} onDoubleClick={stopRowPreview}>
         <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
@@ -70,7 +72,8 @@ export default function ShotPromptCell({ projectId, shot, highlights, onSaved }:
             <button
               type="button"
               title="取消编辑"
-              onClick={() => {
+              onClick={(event) => {
+                event.stopPropagation();
                 setDraft(shot.prompt);
                 setEditing(false);
                 setError(null);
@@ -82,7 +85,10 @@ export default function ShotPromptCell({ projectId, shot, highlights, onSaved }:
             <button
               type="button"
               title="保存提示词"
-              onClick={savePrompt}
+              onClick={(event) => {
+                event.stopPropagation();
+                void savePrompt();
+              }}
               disabled={saving}
               className="grid h-8 w-8 place-items-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
             >
@@ -95,9 +101,12 @@ export default function ShotPromptCell({ projectId, shot, highlights, onSaved }:
   }
 
   return (
-    <div className="group min-w-0 space-y-2">
+    <div className="group min-w-0 space-y-2" onClick={stopRowPreview}>
       <div
-        onDoubleClick={() => setEditing(true)}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          setEditing(true);
+        }}
         title="双击编辑提示词"
         className="h-52 overflow-y-auto rounded-md border border-glass-border bg-black/20 px-3 py-2 text-sm leading-6 text-text-secondary"
       >
@@ -122,7 +131,10 @@ export default function ShotPromptCell({ projectId, shot, highlights, onSaved }:
       </div>
       <button
         type="button"
-        onClick={() => setEditing(true)}
+        onClick={(event) => {
+          event.stopPropagation();
+          setEditing(true);
+        }}
         className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs text-text-muted transition-colors hover:bg-hover-bg hover:text-foreground"
       >
         <Edit3 size={13} />
