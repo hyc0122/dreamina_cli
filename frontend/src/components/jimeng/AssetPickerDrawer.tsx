@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { CheckSquare, FileInput, Image as ImageIcon, Loader2, Plus, Save, Search, Settings2, Sparkles, Square, Trash2, UploadCloud, X } from "lucide-react";
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import AssetMiniCard, { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/AssetMiniCard";
+import AssetCenteredPreview from "@/components/jimeng/assets/AssetCenteredPreview";
 import AssetMetadataImportModal from "@/components/jimeng/assets/AssetMetadataImportModal";
 import BatchUploadAssetsModal from "@/components/jimeng/assets/BatchUploadAssetsModal";
 import { jimengApi, type JimengAsset, type JimengAssetBinding, type JimengAssetType, type JimengCharacterKind, type JimengShot } from "@/lib/jimengApi";
@@ -58,6 +59,7 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
   const [newAssetName, setNewAssetName] = useState("");
   const [newAssetDescription, setNewAssetDescription] = useState("");
   const [newAssetCharacterKind, setNewAssetCharacterKind] = useState<JimengCharacterKind>("single");
+  const [hoverPreviewAssetId, setHoverPreviewAssetId] = useState<string | null>(null);
 
   const boundAssetIds = useMemo(
     () => new Set(bindings.filter((binding) => binding.asset_type === target.assetType).map((binding) => binding.asset_id)),
@@ -336,6 +338,11 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
 
   const selectedImageUrl = jimengMediaUrl(selectedAsset?.image_path, selectedAsset?.updated_at);
   const allFilteredChecked = filteredAssets.length > 0 && filteredAssets.every((asset) => checkedAssetIds.includes(asset.id));
+  const hoverPreviewAsset = useMemo(
+    () => filteredAssets.find((asset) => asset.id === hoverPreviewAssetId) ?? null,
+    [filteredAssets, hoverPreviewAssetId],
+  );
+  const hoverPreviewImageUrl = jimengMediaUrl(hoverPreviewAsset?.image_path, hoverPreviewAsset?.updated_at);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -579,11 +586,12 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
             {filteredAssets.map((asset) => {
               const bound = boundAssetIds.has(asset.id);
               const checked = checkedAssetIds.includes(asset.id);
-              const hoverImageUrl = jimengMediaUrl(asset.image_path, asset.updated_at);
               const bindingBusy = bindingAssetId !== null && bindingAssetId !== asset.id;
               return (
                 <div
                   key={asset.id}
+                  onMouseEnter={() => setHoverPreviewAssetId(asset.id)}
+                  onMouseLeave={() => setHoverPreviewAssetId((current) => (current === asset.id ? null : current))}
                   className={clsx(
                     "group/asset relative flex items-stretch gap-1.5 rounded-md transition-colors",
                     bound ? "border border-cyan-300/35 bg-cyan-300/10" : "hover:bg-hover-bg",
@@ -607,26 +615,6 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
                       onOpen={bindingBusy ? undefined : () => bindAsset(asset)}
                     />
                   </div>
-                  <div className="pointer-events-none absolute right-2 top-1/2 z-30 hidden w-64 -translate-y-1/2 overflow-hidden rounded-lg border border-primary/30 bg-app-bg/95 shadow-2xl shadow-black/30 backdrop-blur-xl group-hover/asset:block">
-                    <div className="aspect-video bg-black/35">
-                      {hoverImageUrl ? (
-                        <img src={hoverImageUrl} alt={asset.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-text-muted">
-                          <ImageIcon size={28} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-1.5 p-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="min-w-0 truncate text-sm font-semibold text-foreground">{asset.name}</p>
-                        <span className="shrink-0 rounded border border-glass-border bg-surface-inset px-1.5 py-0.5 text-[10px] text-text-muted">
-                          {JIMENG_ASSET_TYPE_LABELS[asset.type]}
-                        </span>
-                      </div>
-                      <p className="line-clamp-3 text-xs leading-5 text-text-secondary">{asset.description || "暂无描述"}</p>
-                    </div>
-                  </div>
                 </div>
               );
             })}
@@ -640,6 +628,9 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
         {notice ? <p className="mt-3 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{notice}</p> : null}
         {error ? <p className="mt-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
       </div>
+      {hoverPreviewAsset ? (
+        <AssetCenteredPreview imageUrl={hoverPreviewImageUrl} name={hoverPreviewAsset.name} description={hoverPreviewAsset.description || "暂无描述"} />
+      ) : null}
       <BatchUploadAssetsModal
         projectId={projectId}
         open={batchUploadOpen}

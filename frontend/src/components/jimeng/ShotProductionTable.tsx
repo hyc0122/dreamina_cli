@@ -283,7 +283,7 @@ export default function ShotProductionTable({
         shot_ids: selectedShotIds,
       });
       if ("export_dir" in response) {
-        setNotice(`已导出 ${response.files.length} 个视频到：${response.export_dir}${response.skipped.length ? `；跳过 ${response.skipped.length} 个` : ""}`);
+        setNotice(`已导出 ${response.files.length} 个默认视频到：${response.export_dir}${response.skipped.length ? `；跳过 ${response.skipped.length} 个无默认视频的分镜` : ""}`);
         return;
       }
       setNotice(`已找到 ${response.candidates.length} 个候选视频素材`);

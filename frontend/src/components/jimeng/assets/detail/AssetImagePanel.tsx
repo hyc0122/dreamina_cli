@@ -1,5 +1,6 @@
 import { ClipboardPaste, Image as ImageIcon, Loader2, Maximize2 } from "lucide-react";
-import { type ChangeEvent, type MouseEvent, useState } from "react";
+import { type ChangeEvent, useState } from "react";
+import AssetCenteredPreview from "@/components/jimeng/assets/AssetCenteredPreview";
 import type { JimengAsset } from "@/lib/jimengApi";
 
 export default function AssetImagePanel({
@@ -21,15 +22,7 @@ export default function AssetImagePanel({
   onPaste: () => void;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
-  const [magnifierPosition, setMagnifierPosition] = useState<{ x: number; y: number } | null>(null);
-
-  const updateMagnifierPosition = (event: MouseEvent<HTMLButtonElement>) => {
-    if (!magnifierEnabled || !imageUrl) {
-      setMagnifierPosition(null);
-      return;
-    }
-    setMagnifierPosition({ x: event.clientX, y: event.clientY });
-  };
+  const [magnifierVisible, setMagnifierVisible] = useState(false);
 
   return (
     <div className="mt-3 space-y-2">
@@ -41,7 +34,7 @@ export default function AssetImagePanel({
             checked={magnifierEnabled}
             onChange={(event) => {
               onMagnifierChange(event.target.checked);
-              setMagnifierPosition(null);
+              setMagnifierVisible(false);
             }}
             className="h-4 w-4 accent-primary"
           />
@@ -53,8 +46,8 @@ export default function AssetImagePanel({
           <button
             type="button"
             onClick={() => imageUrl && onPreview(asset)}
-            onMouseMove={updateMagnifierPosition}
-            onMouseLeave={() => setMagnifierPosition(null)}
+            onMouseEnter={() => setMagnifierVisible(Boolean(magnifierEnabled && imageUrl))}
+            onMouseLeave={() => setMagnifierVisible(false)}
             disabled={!imageUrl}
             className="group h-full w-full disabled:cursor-default"
           >
@@ -72,16 +65,8 @@ export default function AssetImagePanel({
               </span>
             ) : null}
           </button>
-          {magnifierEnabled && imageUrl && magnifierPosition ? (
-            <div
-              className="pointer-events-none fixed z-[70] h-72 w-72 overflow-hidden rounded-xl border border-primary/40 bg-panel-bg shadow-2xl"
-              style={{
-                left: Math.max(12, Math.min(window.innerWidth - 304, magnifierPosition.x + 18)),
-                top: Math.max(12, Math.min(window.innerHeight - 304, magnifierPosition.y + 18)),
-              }}
-            >
-              <img src={imageUrl} alt={`${asset.name} 放大预览`} className="h-full w-full object-cover" />
-            </div>
+          {magnifierEnabled && imageUrl && magnifierVisible ? (
+            <AssetCenteredPreview imageUrl={imageUrl} name={asset.name} description={asset.description} />
           ) : null}
           <button
             type="button"

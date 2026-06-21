@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Download, Loader2, RefreshCw, Send, Upload, Video } from "lucide-react";
+import { Download, Loader2, RefreshCw, Send, Star, Upload, Video } from "lucide-react";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import GenerationSettingsControl from "@/components/jimeng/workbench/GenerationSettingsControl";
@@ -50,6 +50,7 @@ export default function ShotDetailPanel({
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [defaultingCandidateId, setDefaultingCandidateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const shotVideoMaking = (shot?.status === "queued" || shot?.status === "running") && !shot?.last_error;
@@ -78,8 +79,8 @@ export default function ShotDetailPanel({
       }
       setCandidates(nextCandidates);
       const preferred =
-        nextCandidates.find((candidate) => candidate.is_locked) ??
         nextCandidates.find((candidate) => candidate.is_default) ??
+        nextCandidates.find((candidate) => candidate.is_locked) ??
         nextCandidates[0] ??
         null;
       setActiveCandidateId(preferred?.id ?? null);
@@ -134,10 +135,39 @@ export default function ShotDetailPanel({
     () => candidates.find((candidate) => candidate.id === activeCandidateId) ?? candidates[0] ?? null,
     [activeCandidateId, candidates],
   );
+  const defaultCandidate = useMemo(
+    () => candidates.find((candidate) => candidate.is_default) ?? candidates.find((candidate) => candidate.id === shot?.default_video_candidate_id) ?? null,
+    [candidates, shot?.default_video_candidate_id],
+  );
   const videoUrl = jimengMediaUrl(activeCandidate?.video_path);
 
-  const exportActiveCandidate = async () => {
-    if (!shot || !activeCandidate || exporting) {
+  const setDefaultCandidate = async (candidate: JimengVideoCandidate) => {
+    if (!shot || defaultingCandidateId) {
+      return;
+    }
+    setDefaultingCandidateId(candidate.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const updated = await jimengApi.setDefaultCandidate(project.id, shot.id, candidate.id);
+      setCandidates((items) =>
+        items.map((item) => ({
+          ...item,
+          is_default: item.id === updated.id,
+        })),
+      );
+      setActiveCandidateId(updated.id);
+      setNotice(`已设为默认视频：${updated.video_filename}`);
+      await loadProjectData(project.id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "设置默认视频失败");
+    } finally {
+      setDefaultingCandidateId(null);
+    }
+  };
+
+  const exportDefaultCandidate = async () => {
+    if (!shot || !defaultCandidate || exporting) {
       return;
     }
     setExporting(true);
@@ -148,7 +178,7 @@ export default function ShotDetailPanel({
       if (!targetDir) {
         return;
       }
-      const result = await jimengApi.exportCandidate(project.id, shot.id, activeCandidate.id, { target_dir: targetDir });
+      const result = await jimengApi.exportCandidate(project.id, shot.id, defaultCandidate.id, { target_dir: targetDir });
       setNotice(`视频已保存：${result.path}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "视频导出失败");
@@ -212,12 +242,12 @@ export default function ShotDetailPanel({
           </button>
           <button
             type="button"
-            onClick={exportActiveCandidate}
-            disabled={!shot || !activeCandidate || exporting}
+            onClick={exportDefaultCandidate}
+            disabled={!shot || !defaultCandidate || exporting}
             className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-glass-border bg-black/20 px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
           >
             {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            {exporting ? "保存中..." : "下载当前视频"}
+            {exporting ? "保存中..." : "下载默认视频"}
           </button>
           </div>
           <div className="rounded-lg border border-glass-border bg-surface-inset p-2.5">
@@ -269,10 +299,8 @@ export default function ShotDetailPanel({
                 const thumbnailUrl = jimengMediaUrl(candidate.thumbnail_path);
                 const isActive = candidate.id === activeCandidate?.id;
                 return (
-                  <button
+                  <div
                     key={candidate.id}
-                    type="button"
-                    onClick={() => setActiveCandidateId(candidate.id)}
                     className={clsx(
                       "min-w-0 rounded-md border p-1.5 text-left transition-colors",
                       isActive
@@ -280,29 +308,48 @@ export default function ShotDetailPanel({
                         : "border-glass-border bg-black/20 hover:border-white/20 hover:bg-hover-bg",
                     )}
                   >
-                    <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded bg-black/30">
-                      {thumbnailUrl ? (
-                        <img
-                          src={thumbnailUrl}
-                          alt={candidate.video_filename}
-                          loading="lazy"
-                          decoding="async"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <Video size={18} className="text-text-muted" />
-                      )}
-                    </div>
-                    <div className="mt-1.5 min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{candidateLabel(candidate, index)}</p>
-                      <p className="mt-1 truncate font-mono text-[10px] text-text-muted">{candidate.video_filename}</p>
+                    <button type="button" onClick={() => setActiveCandidateId(candidate.id)} className="block w-full text-left">
+                      <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded bg-black/30">
+                        {thumbnailUrl ? (
+                          <img
+                            src={thumbnailUrl}
+                            alt={candidate.video_filename}
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Video size={18} className="text-text-muted" />
+                        )}
+                      </div>
+                      <div className="mt-1.5 min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{candidateLabel(candidate, index)}</p>
+                        <p className="mt-1 truncate font-mono text-[10px] text-text-muted">{candidate.video_filename}</p>
+                      </div>
+                    </button>
+                    <div className="mt-1 flex items-center justify-between gap-2">
                       <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-text-muted">
                         {candidate.duration ? <span>{candidate.duration}s</span> : null}
                         {candidate.ratio ? <span>{candidate.ratio}</span> : null}
                         {candidate.resolution ? <span>{candidate.resolution}</span> : null}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setDefaultCandidate(candidate)}
+                        disabled={candidate.is_default || defaultingCandidateId !== null}
+                        className={clsx(
+                          "inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-not-allowed",
+                          candidate.is_default
+                            ? "border-primary/35 bg-primary/15 text-primary"
+                            : "border-glass-border bg-surface-inset text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-primary",
+                        )}
+                        title={candidate.is_default ? "当前默认视频" : "设为默认视频"}
+                      >
+                        {defaultingCandidateId === candidate.id ? <Loader2 size={10} className="animate-spin" /> : <Star size={10} />}
+                        {candidate.is_default ? "默认" : "设为默认"}
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

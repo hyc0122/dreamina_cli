@@ -440,15 +440,20 @@ export default function JimengGenerationHistoryPage() {
     setNotice(null);
     setError(null);
     try {
-      const shot = shotById.get(candidate.shot_id);
-      const blob = await jimengApi.downloadCandidate(candidate.project_id, candidate.shot_id, candidate.id);
+      const defaultCandidate = allCandidates.find((item) => item.shot_id === candidate.shot_id && item.is_default) ?? null;
+      if (!defaultCandidate) {
+        setError("该分镜没有默认视频，请先把候选设为默认。");
+        return;
+      }
+      const shot = shotById.get(defaultCandidate.shot_id);
+      const blob = await jimengApi.downloadCandidate(defaultCandidate.project_id, defaultCandidate.shot_id, defaultCandidate.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = shotVideoDownloadName(candidate, shot);
+      a.download = shotVideoDownloadName(defaultCandidate, shot);
       a.click();
       URL.revokeObjectURL(url);
-      setNotice(`已开始下载：${shotVideoDownloadName(candidate, shot)}`);
+      setNotice(`已开始下载默认视频：${shotVideoDownloadName(defaultCandidate, shot)}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "下载失败");
     }
@@ -711,7 +716,7 @@ export default function JimengGenerationHistoryPage() {
                             className="inline-flex items-center gap-1.5 rounded-md border border-glass-border bg-black/20 px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:bg-hover-bg hover:text-foreground"
                           >
                             <Download size={13} />
-                            下载
+                            下载默认
                           </button>
                         </div>
                       </div>
