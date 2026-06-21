@@ -580,6 +580,7 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
               const bound = boundAssetIds.has(asset.id);
               const checked = checkedAssetIds.includes(asset.id);
               const hoverImageUrl = jimengMediaUrl(asset.image_path, asset.updated_at);
+              const bindingBusy = bindingAssetId !== null && bindingAssetId !== asset.id;
               return (
                 <div
                   key={asset.id}
@@ -595,16 +596,17 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
                     onClick={() => toggleCheckedAsset(asset.id)}
                     className="grid w-8 shrink-0 place-items-center text-text-secondary transition-colors hover:text-primary"
                   >
-                    {checked ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} />}
+                      {checked ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} />}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => bindAsset(asset)}
-                    disabled={bindingAssetId !== null && bindingAssetId !== asset.id}
-                    className="min-w-0 flex-1 rounded-md text-left transition-colors disabled:cursor-wait disabled:opacity-60"
-                  >
-                    <AssetMiniCard asset={asset} assetType={target.assetType} compact binding={bound ? bindings.find((binding) => binding.asset_id === asset.id) : undefined} />
-                  </button>
+                  <div className={clsx("min-w-0 flex-1 rounded-md text-left transition-colors", bindingBusy && "cursor-wait opacity-60")}>
+                    <AssetMiniCard
+                      asset={asset}
+                      assetType={target.assetType}
+                      compact
+                      binding={bound ? bindings.find((binding) => binding.asset_id === asset.id) : undefined}
+                      onOpen={bindingBusy ? undefined : () => bindAsset(asset)}
+                    />
+                  </div>
                   <div className="pointer-events-none absolute right-2 top-1/2 z-30 hidden w-64 -translate-y-1/2 overflow-hidden rounded-lg border border-primary/30 bg-app-bg/95 shadow-2xl shadow-black/30 backdrop-blur-xl group-hover/asset:block">
                     <div className="aspect-video bg-black/35">
                       {hoverImageUrl ? (

@@ -89,6 +89,11 @@ def retry_queue_item(queue_item_id: str):
     )
 
 
+@router.delete("/queue/items/{queue_item_id}")
+def delete_queue_item(queue_item_id: str):
+    return _call(lambda: {"deleted_id": get_store().delete_canceled_queue_item(queue_item_id)})
+
+
 @router.post("/queue/reorder")
 def reorder_queue(request: QueueReorder):
     return _call(lambda: (_reorder_rows("queue_items", "id", "position", request.queue_item_ids), {"items": _dump(get_store().list_queue())})[1])

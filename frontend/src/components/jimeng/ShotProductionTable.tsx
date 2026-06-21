@@ -425,7 +425,7 @@ export default function ShotProductionTable({
                             : "border-glass-border bg-black/20 text-text-secondary",
                         )}
                       >
-                        {STATUS_LABELS[shot.status]}
+                        {hasFailure ? "失败" : STATUS_LABELS[shot.status]}
                       </span>
                     </div>
                   </div>

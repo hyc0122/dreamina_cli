@@ -52,7 +52,7 @@ export default function ShotDetailPanel({
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const shotVideoMaking = shot?.status === "queued" || shot?.status === "running";
+  const shotVideoMaking = (shot?.status === "queued" || shot?.status === "running") && !shot?.last_error;
   const requestIdRef = useRef(0);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 

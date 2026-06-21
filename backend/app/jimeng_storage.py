@@ -602,6 +602,9 @@ class JimengStore:
     def update_queue_item(self, item_id: str, **updates: Any) -> JimengQueueItem:
         return queue_storage.update_queue_item(self, item_id, **updates)
 
+    def delete_canceled_queue_item(self, item_id: str) -> str:
+        return queue_storage.delete_canceled_queue_item(self, item_id)
+
     def recover_interrupted_queue_items(self) -> dict[str, list[str]]:
         return queue_storage.recover_interrupted_queue_items(self)
 

@@ -12,6 +12,8 @@ import {
   DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
   clampJimengVideoDuration,
   jimengApi,
+  type JimengAsset,
+  type JimengAssetBinding,
   type JimengAssetType,
   type JimengSettings,
   type JimengShot,
@@ -20,6 +22,7 @@ import {
 import { useJimengStore } from "@/store/jimengStore";
 
 const errorMessageFrom = (error: unknown): string => (error instanceof Error ? error.message : "提交分镜失败");
+const MULTIMODAL_AUDIO_LIMIT = 3;
 
 const settingsToGenerationSettings = (
   settings: JimengSettings,
@@ -35,6 +38,30 @@ const settingsToGenerationSettings = (
   video_resolution: settings.video_resolution || current.video_resolution,
   poll_seconds: Number(settings.poll_seconds) > 0 ? Number(settings.poll_seconds) : current.poll_seconds,
 });
+
+export const submitReferenceIssueForShot = (
+  shot: JimengShot,
+  bindings: JimengAssetBinding[],
+  assetById: Map<string, JimengAsset>,
+  settings: JimengVideoGenerationSettings,
+): string | null => {
+  if (settings.generation_mode === "text2video") {
+    return null;
+  }
+
+  const enabledAudioPaths = new Set(
+    bindings
+      .filter((binding) => binding.asset_type === "character" && binding.voice_enabled !== false)
+      .map((binding) => assetById.get(binding.asset_id)?.audio_path?.trim())
+      .filter((path): path is string => Boolean(path)),
+  );
+
+  if (enabledAudioPaths.size > MULTIMODAL_AUDIO_LIMIT) {
+    return `分镜${shot.shot_index} 全能参考音频最多 3 段，当前为 ${enabledAudioPaths.size} 段；请关闭多余角色音色`;
+  }
+
+  return null;
+};
 
 export default function JimengWorkbenchPage() {
   const currentProject = useJimengStore((state) => state.currentProject);
@@ -201,6 +228,7 @@ export default function JimengWorkbenchPage() {
       return true;
     } catch (error) {
       setSubmitError(errorMessageFrom(error));
+      void loadProjectData(currentProject.id);
       return false;
     } finally {
       submittingRef.current = false;
@@ -230,9 +258,17 @@ export default function JimengWorkbenchPage() {
       return false;
     }
 
+    const referenceIssues = targetShots
+      .map((shot) => submitReferenceIssueForShot(shot, bindingsByShotId[shot.id] ?? [], assetById, settings))
+      .filter((message): message is string => Boolean(message));
+    if (referenceIssues.length > 0) {
+      setSubmitError(referenceIssues.join("；"));
+      return false;
+    }
+
     void submitNow(targetShots.map((shot) => shot.id), settings);
     return true;
-  }, [currentProject, shotHasBoundImage, submitNow]);
+  }, [assetById, bindingsByShotId, currentProject, shotHasBoundImage, submitNow]);
 
   const handleSubmitSelected = useCallback(
     (settings: JimengVideoGenerationSettings = generationSettings) => {

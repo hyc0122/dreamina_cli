@@ -58,6 +58,7 @@ export interface JimengStore extends JimengStateData {
   startQueueWorker: () => Promise<void>;
   pauseQueue: () => Promise<void>;
   cancelQueueItem: (queueItemId: string) => Promise<void>;
+  deleteQueueItem: (queueItemId: string) => Promise<void>;
   retryQueueItem: (queueItemId: string) => Promise<void>;
   reorderQueue: (queueItemIds: string[]) => Promise<void>;
 }
@@ -435,6 +436,17 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
       await get().loadQueue("global");
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });
+    }
+  },
+
+  deleteQueueItem: async (queueItemId) => {
+    set({ loading: true, error: null });
+    try {
+      await jimengApi.deleteQueueItem(queueItemId);
+      await get().loadQueue("global");
+    } catch (error) {
+      set({ error: errorMessageFrom(error), loading: false });
+      throw error;
     }
   },
 

@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Image as ImageIcon, Lock, MapPin, Package, Settings2, User, Volume2, VolumeX, X, type LucideIcon } from "lucide-react";
+import { Image as ImageIcon, Lock, MapPin, Package, Play, Settings2, User, Volume2, VolumeX, X, type LucideIcon } from "lucide-react";
 import { API_URL } from "@/lib/api";
 import { CHARACTER_KIND_LABELS, normalizeCharacterKind } from "@/components/jimeng/assets/assetManagerShared";
 import type { JimengAsset, JimengAssetBinding, JimengAssetType } from "@/lib/jimengApi";
@@ -80,9 +80,16 @@ export default function AssetMiniCard({
   const resolvedType = asset?.type ?? binding?.asset_type ?? assetType ?? "prop";
   const Icon = JIMENG_ASSET_TYPE_ICONS[resolvedType];
   const imageUrl = jimengMediaUrl(asset?.image_path, asset?.updated_at);
+  const voiceUrl = jimengMediaUrl(asset?.audio_path, asset?.updated_at);
   const hasVoice = resolvedType === "character" && Boolean(asset?.audio_path);
   const voiceEnabled = binding?.voice_enabled ?? true;
   const characterKindLabel = resolvedType === "character" ? CHARACTER_KIND_LABELS[normalizeCharacterKind(asset?.character_kind)] : null;
+  const previewVoice = () => {
+    if (!voiceUrl || typeof Audio === "undefined") {
+      return;
+    }
+    void new Audio(voiceUrl).play().catch(() => undefined);
+  };
 
   return (
     <div
@@ -124,7 +131,7 @@ export default function AssetMiniCard({
         <div className="flex min-w-0 items-center gap-1.5">
           <p className="truncate text-xs font-medium text-foreground">{asset?.name ?? "资产已缺失"}</p>
           {binding?.locked ? <Lock size={11} className="shrink-0 text-emerald-300" /> : null}
-          {hasVoice ? (
+          {hasVoice && onToggleVoice ? (
             <button
               type="button"
               title={voiceEnabled ? "音色已启用，点击临时关闭" : "音色已关闭，点击启用"}
@@ -140,6 +147,20 @@ export default function AssetMiniCard({
               )}
             >
               {voiceEnabled ? <Volume2 size={11} /> : <VolumeX size={11} />}
+            </button>
+          ) : null}
+          {hasVoice ? (
+            <button
+              type="button"
+              title="试听音色"
+              aria-label="试听音色"
+              onClick={(event) => {
+                event.stopPropagation();
+                previewVoice();
+              }}
+              className="grid h-5 w-5 shrink-0 place-items-center rounded border border-primary/30 bg-primary/10 text-primary transition-colors hover:bg-primary/15"
+            >
+              <Play size={10} />
             </button>
           ) : null}
         </div>

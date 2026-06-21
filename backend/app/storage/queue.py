@@ -320,6 +320,19 @@ def update_queue_item(store: Any, item_id: str, **updates: Any) -> JimengQueueIt
     return get_queue_item(store, item_id)
 
 
+def delete_canceled_queue_item(store: Any, item_id: str) -> str:
+    with store._connect() as conn:
+        row = conn.execute("SELECT project_id, status FROM queue_items WHERE id = ?", (item_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"Jimeng queue item not found: {item_id}")
+        if row["status"] != JimengQueueStatus.canceled.value:
+            raise ValueError("only canceled queue items can be deleted")
+        project_id = row["project_id"]
+        conn.execute("DELETE FROM queue_items WHERE id = ?", (item_id,))
+        normalize_queue_positions(conn, project_id)
+    return item_id
+
+
 def recover_interrupted_queue_items(store: Any) -> dict[str, list[str]]:
     recovered = {"polling": [], "orphaned": []}
     for item in list_queue(store):

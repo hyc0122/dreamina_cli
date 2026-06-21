@@ -12,6 +12,7 @@ import {
   RefreshCw,
   RotateCcw,
   SquareX,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -96,6 +97,7 @@ export default function JimengQueuePage() {
   const startQueueWorker = useJimengStore((state) => state.startQueueWorker);
   const pauseQueue = useJimengStore((state) => state.pauseQueue);
   const cancelQueueItem = useJimengStore((state) => state.cancelQueueItem);
+  const deleteQueueItem = useJimengStore((state) => state.deleteQueueItem);
   const retryQueueItem = useJimengStore((state) => state.retryQueueItem);
   const reorderQueue = useJimengStore((state) => state.reorderQueue);
   const selectProject = useJimengStore((state) => state.selectProject);
@@ -209,6 +211,14 @@ export default function JimengQueuePage() {
       return;
     }
     void runAction("已加入重试队列", () => retryQueueItem(item.id), item.id);
+  };
+
+  const deleteCanceledQueueItemWithConfirm = (item: JimengQueueItem) => {
+    const confirmed = window.confirm(`删除 ${shotLabel(item, shotMap[item.shot_id])} 的已取消队列记录？\n\n只删除这条排队记录，不会删除分镜、资产或已生成的视频文件。`);
+    if (!confirmed) {
+      return;
+    }
+    void runAction("已删除已取消队列记录", () => deleteQueueItem(item.id), item.id);
   };
 
   const reorderQueueItem = (item: JimengQueueItem, direction: "up" | "down") =>
@@ -422,6 +432,15 @@ export default function JimengQueuePage() {
                                 disabled={isBusy || getQueueFilterStatus(item) === "completed" || getQueueFilterStatus(item) === "canceled"}
                                 tone="danger"
                               />
+                              {getQueueFilterStatus(item) === "canceled" ? (
+                                <QueueActionButton
+                                  icon={Trash2}
+                                  label="删除"
+                                  onClick={() => deleteCanceledQueueItemWithConfirm(item)}
+                                  disabled={isBusy}
+                                  tone="danger"
+                                />
+                              ) : null}
                             </div>
                           </td>
                         </tr>
