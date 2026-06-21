@@ -433,6 +433,8 @@ export interface JimengLlmAssetImageRecord {
   source_path?: string;
   asset_image_path?: string;
   asset_image_filename?: string;
+  asset_current_image_path?: string;
+  asset_current_image_filename?: string;
   feedback: JimengLlmAssetImageRecordFeedback[];
 }
 
@@ -671,6 +673,8 @@ export const jimengApi = {
     files.forEach((file) => formData.append("files", file));
     return axios.post<{ assets: JimengAsset[] }>(`${API_URL}/jimeng/projects/${projectId}/assets/batch_upload`, formData, multipartHeaders).then((res) => res.data);
   },
+  uploadAssetReferenceImage: (file: File) =>
+    axios.post<{ filename: string; path: string; url: string }>(`${API_URL}/jimeng/assets/reference_images`, formDataWithFile(file), multipartHeaders).then((res) => res.data),
   updateAsset: (projectId: string, assetId: string, data: Partial<Omit<JimengAssetMetadataInput, "type">>) =>
     axios.put<JimengAsset>(`${API_URL}/jimeng/projects/${projectId}/assets/${assetId}`, data).then((res) => res.data),
   deleteAsset: (projectId: string, assetId: string) =>
@@ -703,10 +707,12 @@ export const jimengApi = {
       .then((res) => res.data),
   listLlmAssetImageRecords: (projectId?: string) =>
     axios.get<{ records: JimengLlmAssetImageRecord[] }>(`${API_URL}/jimeng/llm/asset_image_records`, { params: { project_id: projectId } }).then((res) => res.data),
-  pollLlmAssetImageRecords: (data: { project_id?: string; record_ids?: string[]; limit?: number } = {}) =>
+  pollLlmAssetImageRecords: (data: { project_id?: string; record_ids?: string[]; limit?: number; auto_cancel_minutes?: number | null; force?: boolean } = {}) =>
     axios.post<{ records: JimengLlmAssetImageRecord[] }>(`${API_URL}/jimeng/llm/asset_image_records/poll`, data).then((res) => res.data),
-  pollLlmAssetImageRecord: (recordId: string) =>
-    axios.post<JimengLlmAssetImageRecord>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}/poll`).then((res) => res.data),
+  pollLlmAssetImageRecord: (recordId: string, data: { auto_cancel_minutes?: number | null; force?: boolean } = {}) =>
+    axios.post<JimengLlmAssetImageRecord>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}/poll`, null, { params: data }).then((res) => res.data),
+  applyLlmAssetImageRecord: (recordId: string) =>
+    axios.post<{ asset: JimengAsset; record: JimengLlmAssetImageRecord }>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}/apply`).then((res) => res.data),
   cancelLlmAssetImageRecord: (recordId: string) =>
     axios.post<JimengLlmAssetImageRecord>(`${API_URL}/jimeng/llm/asset_image_records/${recordId}/cancel`).then((res) => res.data),
   deleteLlmAssetImageRecord: (recordId: string) =>

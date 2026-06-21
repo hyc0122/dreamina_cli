@@ -6,9 +6,9 @@
 
 ## 当前版本
 
-- 当前版本：v1.00.017
-- 更新时间：2026-06-21 00:22:35 +08:00
-- 最近更新：资产 AI 生图支持参考图地址和图片质量，批量生图改为弹窗确认参数后提交。
+- 当前版本：v1.00.023
+- 更新时间：2026-06-21 08:06:59 +08:00
+- 最近更新：分镜提交制作时按钮显示“分镜制作中”动画；右侧提交校验错误会直接显示在提交按钮旁。
 - 更新日志：[CHANGELOG.md](CHANGELOG.md)
 
 ## 主要功能
@@ -237,13 +237,12 @@ $env:DREAMINA_CLI_DATA_DIR="D:\dreamina-data"
 
 ## 即梦模型列表维护
 
-后期新增即梦模型时，需要同步维护前端下拉列表和后端能力返回列表：
+后期新增即梦图片模型时，后端会从即梦 CLI 探测到的模型中增量登记：每次发现新图片模型会追加到已知列表，不会删除旧模型。
 
 - 即梦视频模型前端列表：`frontend/src/lib/jimengApi.ts` 中的 `JIMENG_VIDEO_MODELS`。
 - 即梦视频模型后端能力列表：`backend/app/api/settings.py` 中的 `_JIMENG_VIDEO_MODELS`。
-- 即梦资产图片模型前端列表：`frontend/src/components/jimeng/assets/assetManagerShared.ts` 中的 `IMAGE_MODELS`。
-- 即梦资产图片模型后端能力列表：`backend/app/api/settings.py` 中的 `_JIMENG_IMAGE_MODELS`。
-- 即梦 CLI 图片模型校验：`backend/app/jimeng_cli.py` 中的 `_IMAGE_MODELS`。
+- 即梦资产图片模型会经 `/jimeng/settings/cli_capabilities` 返回，前端不再维护独立图片模型常量。
+- 即梦 CLI 图片模型校验允许未来 `dreaminaX.Y` / `X.Y` 版本格式，避免新模型显示后无法提交。
 
 “大模型设置”里新增的图片模型会出现在资产管理“生图设置”的全局模型选择中；新增的视频模型会出现在分镜工作台和即梦设置的视频模型选择中。
 

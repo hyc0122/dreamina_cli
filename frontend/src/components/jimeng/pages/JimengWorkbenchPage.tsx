@@ -3,9 +3,9 @@
 import { ArrowLeft, Clapperboard, RefreshCw, ScrollText, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AssetPickerDrawer, { type AssetPickerTarget } from "@/components/jimeng/assets/AssetPickerDrawer";
-import PromptPresetManager from "@/components/jimeng/PromptPresetManager";
 import BatchSubmitSettingsModal from "@/components/jimeng/workbench/BatchSubmitSettingsModal";
 import ConfirmMissingPropsModal from "@/components/jimeng/workbench/ConfirmMissingPropsModal";
+import PromptPresetManagerModal from "@/components/jimeng/workbench/PromptPresetManagerModal";
 import ShotDetailPanel from "@/components/jimeng/workbench/ShotDetailPanel";
 import ShotProductionTable from "@/components/jimeng/workbench/ShotProductionTable";
 import { buildLlmModelOptions, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
@@ -330,7 +330,7 @@ export default function JimengWorkbenchPage() {
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setPromptPresetManagerOpen((open) => !open)}
+              onClick={() => setPromptPresetManagerOpen(true)}
               className="inline-flex h-9 w-fit items-center gap-2 rounded-md border border-primary/35 bg-primary/10 px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/15"
             >
               <ScrollText size={15} />
@@ -349,12 +349,6 @@ export default function JimengWorkbenchPage() {
         </div>
         {storeError ? <p className="mt-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{storeError}</p> : null}
       </section>
-
-      {promptPresetManagerOpen ? (
-        <div className="max-h-[min(62vh,680px)] shrink-0 overflow-y-auto pr-1">
-          <PromptPresetManager />
-        </div>
-      ) : null}
 
       <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_410px]">
         <section className="glass-panel min-h-0 min-w-0 overflow-hidden rounded-xl">
@@ -392,6 +386,7 @@ export default function JimengWorkbenchPage() {
               promptPresetName={promptPresetName}
               selectedCount={selectedShotIds.length}
               submitting={submitting}
+              submitError={submitError}
               generationSettings={generationSettings}
               videoModelOptions={videoModelOptions}
               onGenerationSettingsChange={setGenerationSettings}
@@ -424,6 +419,7 @@ export default function JimengWorkbenchPage() {
           setBatchSettingsOpen(false);
         }}
       />
+      <PromptPresetManagerModal open={promptPresetManagerOpen} onClose={() => setPromptPresetManagerOpen(false)} />
     </div>
   );
 }

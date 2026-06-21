@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from ..llm.asset_image import batch_generate_asset_images, generate_asset_image
 from ..llm.asset_image_records import (
+    apply_asset_image_record_to_asset,
     cancel_asset_image_record,
     delete_asset_image_record,
     delete_asset_image_records,
@@ -62,6 +63,8 @@ def poll_llm_asset_image_records(request: Optional[LlmAssetImageRecordPollReques
             project_id=payload.project_id,
             record_ids=payload.record_ids,
             limit=payload.limit,
+            auto_cancel_minutes=payload.auto_cancel_minutes,
+            force=payload.force,
         )
         return {"records": _dump([public_asset_image_record(record) for record in records])}
 
@@ -69,8 +72,13 @@ def poll_llm_asset_image_records(request: Optional[LlmAssetImageRecordPollReques
 
 
 @router.post("/llm/asset_image_records/{record_id}/poll")
-def poll_llm_asset_image_record(record_id: str):
-    return _call(lambda: _dump(public_asset_image_record(poll_asset_image_record(get_store(), record_id))))
+def poll_llm_asset_image_record(record_id: str, auto_cancel_minutes: Optional[int] = 20, force: bool = False):
+    return _call(lambda: _dump(public_asset_image_record(poll_asset_image_record(get_store(), record_id, auto_cancel_minutes=auto_cancel_minutes, force=force))))
+
+
+@router.post("/llm/asset_image_records/{record_id}/apply")
+def apply_llm_asset_image_record(record_id: str):
+    return _call(lambda: _dump(apply_asset_image_record_to_asset(get_store(), record_id)))
 
 
 @router.post("/llm/asset_image_records/{record_id}/cancel")

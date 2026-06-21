@@ -19,7 +19,11 @@ const DEFAULT_TEMPLATE = [
   "{{shot_prompt}}",
 ].join("\n");
 
-export default function PromptPresetManager() {
+interface PromptPresetManagerProps {
+  embedded?: boolean;
+}
+
+export default function PromptPresetManager({ embedded = false }: PromptPresetManagerProps) {
   const currentProject = useJimengStore((state) => state.currentProject);
   const storePromptPresets = useJimengStore((state) => state.promptPresets);
   const loadProjectData = useJimengStore((state) => state.loadProjectData);
@@ -141,7 +145,7 @@ export default function PromptPresetManager() {
   );
 
   return (
-    <section className="glass-panel rounded-xl p-5">
+    <section className={clsx(embedded ? "p-0" : "glass-panel rounded-xl p-5")}>
       <div className="flex flex-col gap-4 lg:flex-row">
         <aside className="lg:w-80 lg:shrink-0">
           <div className="flex items-center justify-between gap-3">

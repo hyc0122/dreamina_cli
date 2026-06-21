@@ -13,6 +13,7 @@ import urllib.request
 import uuid
 import zipfile
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -219,6 +220,32 @@ def batch_generate_asset_images(project_id: str, request: Optional[AssetImageGen
 @router.post("/projects/{project_id}/assets/batch_delete")
 def batch_delete_assets(project_id: str, request: AssetBatchDelete):
     return _call(lambda: {"deleted": get_store().delete_assets(project_id, request.asset_ids)})
+
+
+@router.post("/assets/reference_images")
+async def upload_asset_reference_image(request: Request):
+    async def upload():
+        filename, content, content_type = await _file_payload(request)
+        _validate_upload_file(filename, content_type, "image")
+        ext = Path(filename).suffix.lower()
+        if ext not in {".png", ".jpg", ".jpeg", ".webp"}:
+            ext = ".png"
+        unique_part = uuid.uuid4().hex[:8]
+        time_part = datetime.now().strftime("%Y%m%d-%H%M%S")
+        safe_filename = f"asset-reference-{time_part}-{unique_part}{ext}"
+        reference_dir = get_store().output_root / "jimeng" / "asset-references"
+        reference_dir.mkdir(parents=True, exist_ok=True)
+        target_path = reference_dir / safe_filename
+        get_store()._assert_under_output_root(target_path)
+        target_path.write_bytes(content)
+        relative_url = f"files/jimeng/asset-references/{urllib.parse.quote(safe_filename)}"
+        return {
+            "filename": safe_filename,
+            "path": str(target_path),
+            "url": urllib.parse.urljoin(str(request.base_url), relative_url),
+        }
+
+    return await _async_call(upload)
 
 
 @router.put("/projects/{project_id}/assets/{asset_id}")

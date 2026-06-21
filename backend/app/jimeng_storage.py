@@ -257,6 +257,25 @@ class JimengStore:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS llm_asset_image_records (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL DEFAULT '',
+                    asset_id TEXT NOT NULL DEFAULT '',
+                    asset_name TEXT NOT NULL DEFAULT '',
+                    asset_type TEXT NOT NULL DEFAULT '',
+                    provider_id TEXT NOT NULL DEFAULT '',
+                    model_id TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT '',
+                    task_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL DEFAULT '',
+                    record_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_llm_asset_image_records_project_created
+                    ON llm_asset_image_records(project_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_llm_asset_image_records_status
+                    ON llm_asset_image_records(status);
+
                 CREATE TABLE IF NOT EXISTS runtime_settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL,
