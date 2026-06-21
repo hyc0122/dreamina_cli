@@ -52,6 +52,7 @@ export default function ShotDetailPanel({
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const shotVideoMaking = shot?.status === "queued" || shot?.status === "running";
   const requestIdRef = useRef(0);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -239,11 +240,11 @@ export default function ShotDetailPanel({
           <button
             type="button"
             onClick={onSubmitCurrent}
-            disabled={!shot || submitting}
+            disabled={!shot || submitting || shotVideoMaking}
             className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:border-glass-border disabled:bg-black/20 disabled:text-text-muted"
           >
-            {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            {submitting ? "分镜制作中..." : shot ? `提交当前分镜${shot.shot_index}` : "请选择分镜"}
+            {submitting || shotVideoMaking ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            {submitting || shotVideoMaking ? "视频制作中..." : shot ? `提交当前分镜${shot.shot_index}` : "请选择分镜"}
           </button>
           {submitError ? <p className="rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-200">{submitError}</p> : null}
           {selectedCount > 0 ? (

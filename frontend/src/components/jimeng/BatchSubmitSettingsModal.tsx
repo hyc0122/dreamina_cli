@@ -1,6 +1,6 @@
 "use client";
 
-import { Save, Settings2, X } from "lucide-react";
+import { Loader2, Save, Send, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import GenerationSettingsControl, { normalizeGenerationSettings } from "@/components/jimeng/GenerationSettingsControl";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
@@ -15,9 +15,11 @@ interface BatchSubmitSettingsModalProps {
   selectedCount: number;
   submitting: boolean;
   value?: JimengVideoGenerationSettings;
+  submitIntervalSeconds?: number;
   videoModelOptions?: LlmModelOption[];
   onClose: () => void;
-  onSave: (settings: JimengVideoGenerationSettings) => void;
+  onSave: (settings: JimengVideoGenerationSettings, submitIntervalSeconds: number) => void | Promise<void>;
+  onSubmit: (settings: JimengVideoGenerationSettings, submitIntervalSeconds: number) => Promise<void>;
 }
 
 export default function BatchSubmitSettingsModal({
@@ -25,15 +27,20 @@ export default function BatchSubmitSettingsModal({
   selectedCount,
   submitting,
   value = DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
+  submitIntervalSeconds = 3,
   videoModelOptions = [],
   onClose,
   onSave,
+  onSubmit,
 }: BatchSubmitSettingsModalProps) {
   const [draft, setDraft] = useState<JimengVideoGenerationSettings>(() => normalizeGenerationSettings(value));
+  const [intervalDraft, setIntervalDraft] = useState(() => Math.min(300, Math.max(1, Math.round(submitIntervalSeconds || 3))));
+  const [error, setError] = useState<string | null>(null);
   const normalizedValue = normalizeGenerationSettings(value);
+  const normalizedInterval = Math.min(300, Math.max(1, Math.round(submitIntervalSeconds || 3)));
   const { requestClose, backdropProps } = useModalDismiss({
     open,
-    dirty: JSON.stringify(draft) !== JSON.stringify(normalizedValue),
+    dirty: JSON.stringify(draft) !== JSON.stringify(normalizedValue) || intervalDraft !== normalizedInterval,
     disabled: submitting,
     onClose,
   });
@@ -41,8 +48,10 @@ export default function BatchSubmitSettingsModal({
   useEffect(() => {
     if (open) {
       setDraft(normalizeGenerationSettings(value));
+      setIntervalDraft(Math.min(300, Math.max(1, Math.round(submitIntervalSeconds || 3))));
+      setError(null);
     }
-  }, [open, value]);
+  }, [open, submitIntervalSeconds, value]);
 
   if (!open) {
     return null;
@@ -54,12 +63,12 @@ export default function BatchSubmitSettingsModal({
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-              <Settings2 size={16} />
-              参数设置
+              <Send size={16} />
+              批量提交
             </div>
-            <h3 className="mt-2 font-display text-xl font-semibold text-foreground">保存批量默认参数</h3>
+            <h3 className="mt-2 font-display text-xl font-semibold text-foreground">批量提交参数</h3>
             <p className="mt-1 text-sm text-text-secondary">
-              这里只保存左侧批量提交会使用的默认参数，不会提交分镜。当前已选 {selectedCount} 个分镜。
+              确认本次批量提交的视频参数和 worker 提交间隔。本次将提交 {selectedCount} 个分镜。
             </p>
           </div>
           <button
@@ -76,7 +85,21 @@ export default function BatchSubmitSettingsModal({
           <GenerationSettingsControl value={draft} onChange={setDraft} videoModelOptions={videoModelOptions} />
         </div>
 
+        <label className="mt-3 block rounded-lg border border-glass-border bg-surface-inset p-4">
+          <span className="text-sm font-medium text-text-secondary">提交间隔（秒）</span>
+          <input
+            type="number"
+            min={1}
+            max={300}
+            value={intervalDraft}
+            onChange={(event) => setIntervalDraft(Math.min(300, Math.max(1, Number(event.target.value) || 1)))}
+            className="glass-input mt-2 w-full"
+          />
+          <span className="mt-2 block text-xs leading-5 text-text-muted">批量分镜会一次性写入本地队列，独立 worker 会按这个间隔逐条提交到即梦。</span>
+        </label>
+
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {error ? <p className="mr-auto rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
           <button
             type="button"
             onClick={requestClose}
@@ -86,12 +109,29 @@ export default function BatchSubmitSettingsModal({
           </button>
           <button
             type="button"
-            onClick={() => onSave(draft)}
+            onClick={() => {
+              setError(null);
+              void Promise.resolve(onSave(draft, intervalDraft)).catch((caught) =>
+                setError(caught instanceof Error ? caught.message : "保存参数失败"),
+              );
+            }}
             disabled={submitting}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save size={15} />
             {submitting ? "保存中..." : "保存参数"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              void onSubmit(draft, intervalDraft).catch((caught) => setError(caught instanceof Error ? caught.message : "批量提交失败"));
+            }}
+            disabled={submitting || selectedCount === 0}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-primary/40 bg-primary/15 px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            {submitting ? "分镜制作中..." : "开始批量提交"}
           </button>
         </div>
       </div>
