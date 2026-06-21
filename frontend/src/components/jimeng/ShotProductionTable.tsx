@@ -21,7 +21,7 @@ import {
   Video,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useMemo, useState } from "react";
 import AssetSlotCell from "@/components/jimeng/assets/AssetSlotCell";
 import BatchReplaceModal from "@/components/jimeng/workbench/BatchReplaceModal";
 import ImportShotsModal from "@/components/jimeng/ImportShotsModal";
@@ -49,6 +49,13 @@ const STATUS_LABELS: Record<JimengShot["status"], string> = {
   failed: "失败",
   completed: "已完成",
   locked: "已锁定",
+};
+
+const EMPTY_BINDINGS: JimengAssetBinding[] = [];
+const EMPTY_HIGHLIGHTS: JimengHighlightSpan[] = [];
+const SHOT_ROW_CONTAIN_STYLE: CSSProperties = {
+  contentVisibility: "auto",
+  containIntrinsicSize: "380px",
 };
 
 interface ToolbarButtonProps {
@@ -374,7 +381,7 @@ export default function ShotProductionTable({
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
         <div className="space-y-3">
           {shots.map((shot, index) => {
-            const shotBindings = bindingsByShotId[shot.id] ?? [];
+            const shotBindings = bindingsByShotId[shot.id] ?? EMPTY_BINDINGS;
             const hasFailure = shot.status === "failed" || Boolean(shot.last_error);
             const isFocused = focusedShotId === shot.id;
             const isSelected = selectedShotSet.has(shot.id);
@@ -389,6 +396,7 @@ export default function ShotProductionTable({
               <article
                 key={shot.id}
                 onClick={() => onPreviewShot(shot.id)}
+                style={SHOT_ROW_CONTAIN_STYLE}
                 className={clsx(
                   "group cursor-pointer rounded-lg border p-3 transition-all",
                   "bg-surface-inset hover:border-primary/35 hover:bg-hover-bg",
@@ -427,7 +435,7 @@ export default function ShotProductionTable({
                       <p className="mb-1.5 text-xs font-medium text-text-muted">分镜提示词</p>
                       <ShotPromptCell
                         shot={shot}
-                        highlights={highlightsByShotId[shot.id] ?? []}
+                        highlights={highlightsByShotId[shot.id] ?? EMPTY_HIGHLIGHTS}
                         onSavePrompt={onSaveShotPrompt}
                       />
                     </div>

@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { Check, Edit3, X } from "lucide-react";
-import { type MouseEvent, useEffect, useMemo, useState } from "react";
+import { memo, type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { type JimengHighlightSpan, type JimengShot } from "@/lib/jimengApi";
 import { buildPromptSegments } from "./promptHighlight";
 
@@ -18,7 +18,25 @@ interface ShotPromptCellProps {
   onSavePrompt: (shotId: string, prompt: string) => Promise<void>;
 }
 
-export default function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotPromptCellProps) {
+function areHighlightsEqual(previous: JimengHighlightSpan[], next: JimengHighlightSpan[]) {
+  if (previous === next) {
+    return true;
+  }
+  if (previous.length !== next.length) {
+    return false;
+  }
+  return previous.every((item, index) => {
+    const target = next[index];
+    return (
+      item.asset_type === target.asset_type &&
+      item.text === target.text &&
+      item.start === target.start &&
+      item.end === target.end
+    );
+  });
+}
+
+function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotPromptCellProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(shot.prompt);
   const [saving, setSaving] = useState(false);
@@ -32,11 +50,21 @@ export default function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotP
 
   const segments = useMemo(() => buildPromptSegments(shot.prompt, highlights), [highlights, shot.prompt]);
 
-  const stopRowPreview = (event: MouseEvent<HTMLElement>) => {
+  const stopRowPreview = useCallback((event: MouseEvent<HTMLElement>) => {
     event.stopPropagation();
-  };
+  }, []);
 
-  const savePrompt = async () => {
+  const openEditor = useCallback(() => {
+    setEditing(true);
+  }, []);
+
+  const cancelEditor = useCallback(() => {
+    setDraft(shot.prompt);
+    setEditing(false);
+    setError(null);
+  }, [shot.prompt]);
+
+  const savePrompt = useCallback(async () => {
     if (saving) {
       return;
     }
@@ -55,7 +83,7 @@ export default function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotP
     } finally {
       setSaving(false);
     }
-  };
+  }, [draft, onSavePrompt, saving, shot.id, shot.prompt]);
 
   if (editing) {
     return (
@@ -67,16 +95,14 @@ export default function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotP
           placeholder="输入分镜提示词"
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {error ? <p className="min-w-0 text-xs text-red-300">{error}</p> : <span className="min-w-0 text-xs text-text-muted">编辑后保存会刷新当前分镜数据</span>}
+          {error ? <p className="min-w-0 text-xs text-red-300">{error}</p> : <span className="min-w-0 text-xs text-text-muted">只保存当前分镜提示词</span>}
           <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
               title="取消编辑"
               onClick={(event) => {
                 event.stopPropagation();
-                setDraft(shot.prompt);
-                setEditing(false);
-                setError(null);
+                cancelEditor();
               }}
               className="grid h-8 w-8 place-items-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground"
             >
@@ -105,7 +131,7 @@ export default function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotP
       <div
         onDoubleClick={(event) => {
           event.stopPropagation();
-          setEditing(true);
+          openEditor();
         }}
         title="双击编辑提示词"
         className="h-52 overflow-y-auto rounded-md border border-glass-border bg-black/20 px-3 py-2 text-sm leading-6 text-text-secondary"
@@ -133,7 +159,7 @@ export default function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotP
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          setEditing(true);
+          openEditor();
         }}
         className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs text-text-muted transition-colors hover:bg-hover-bg hover:text-foreground"
       >
@@ -143,3 +169,12 @@ export default function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotP
     </div>
   );
 }
+
+export default memo(ShotPromptCell, (previous, next) => {
+  return (
+    previous.shot.id === next.shot.id &&
+    previous.shot.prompt === next.shot.prompt &&
+    previous.onSavePrompt === next.onSavePrompt &&
+    areHighlightsEqual(previous.highlights, next.highlights)
+  );
+});
