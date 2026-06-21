@@ -137,6 +137,24 @@ const buildVideoStateByShotId = async (projectId: string, shots: JimengShot[]): 
   return Object.fromEntries(shots.map((shot) => [shot.id, videoStateFromCandidates(shot, response.candidates_by_shot_id[shot.id] ?? [])]));
 };
 
+const calculateBoundPromptHighlights = (prompt: string, assets: JimengAsset[], bindings: JimengAssetBinding[]): JimengHighlightSpan[] => {
+  if (bindings.length === 0) {
+    return [];
+  }
+  const boundAssetIds = new Set(bindings.map((binding) => binding.asset_id));
+  return calculatePromptHighlights(
+    prompt,
+    assets.filter((asset) => boundAssetIds.has(asset.id)),
+  );
+};
+
+const buildBoundHighlightsByShotId = (
+  shots: JimengShot[],
+  assets: JimengAsset[],
+  bindingsByShotId: Record<string, JimengAssetBinding[]>,
+): Record<string, JimengHighlightSpan[]> =>
+  Object.fromEntries(shots.map((shot) => [shot.id, calculateBoundPromptHighlights(shot.prompt, assets, bindingsByShotId[shot.id] ?? [])]));
+
 const buildQueueItemsForShots = async (
   project: JimengProject,
   knownShots: JimengShot[],
@@ -166,47 +184,6 @@ const buildQueueItemsForShots = async (
 };
 
 let latestProjectDataRequestId = 0;
-let latestHighlightRefreshId = 0;
-
-const runWhenIdle = (callback: () => void): void => {
-  if (typeof window !== "undefined") {
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (handler: () => void, options?: { timeout: number }) => number;
-    };
-    if (idleWindow.requestIdleCallback) {
-      idleWindow.requestIdleCallback(callback, { timeout: 250 });
-      return;
-    }
-  }
-  globalThis.setTimeout(callback, 16);
-};
-
-const schedulePromptHighlightRefresh = (
-  shots: JimengShot[],
-  assets: JimengAsset[],
-  applyHighlights: (highlightsByShotId: Record<string, JimengHighlightSpan[]>) => void,
-): void => {
-  const refreshId = ++latestHighlightRefreshId;
-  const batchSize = 8;
-  let cursor = 0;
-
-  const runBatch = () => {
-    if (refreshId !== latestHighlightRefreshId) {
-      return;
-    }
-
-    const batch = shots.slice(cursor, cursor + batchSize);
-    cursor += batchSize;
-    if (batch.length > 0) {
-      applyHighlights(Object.fromEntries(batch.map((shot) => [shot.id, calculatePromptHighlights(shot.prompt, assets)])));
-    }
-    if (cursor < shots.length) {
-      runWhenIdle(runBatch);
-    }
-  };
-
-  runWhenIdle(runBatch);
-};
 
 export const useJimengStore = create<JimengStore>((set, get) => ({
   ...createJimengInitialState(),
@@ -264,25 +241,13 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         assets,
         bindingsByShotId,
         videoStateByShotId,
-        highlightsByShotId: Object.fromEntries(
-          shots
-            .filter((shot) => shot.id in get().highlightsByShotId)
-            .map((shot) => [shot.id, get().highlightsByShotId[shot.id]]),
-        ),
+        highlightsByShotId: buildBoundHighlightsByShotId(shots, assets, bindingsByShotId),
         queue: queueEnvelope.items,
         queueStatus: queueEnvelope.status,
         promptPresets,
         selectedShotIds: get().selectedShotIds.filter((id) => shots.some((shot) => shot.id === id)),
         selectedShotId: shots.some((shot) => shot.id === get().selectedShotId) ? get().selectedShotId : null,
         loading: false,
-      });
-      schedulePromptHighlightRefresh(shots, assets, (nextHighlightsByShotId) => {
-        set((state) => ({
-          highlightsByShotId: {
-            ...state.highlightsByShotId,
-            ...nextHighlightsByShotId,
-          },
-        }));
       });
     } catch (error) {
       if (requestId === latestProjectDataRequestId) {
@@ -304,19 +269,12 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         jimengApi.getProject(targetProjectId),
         jimengApi.listAssets(targetProjectId),
       ]);
-      set({
+      set((state) => ({
         currentProject,
         assets,
+        highlightsByShotId: buildBoundHighlightsByShotId(state.shots, assets, state.bindingsByShotId),
         loading: false,
-      });
-      schedulePromptHighlightRefresh(get().shots, assets, (nextHighlightsByShotId) => {
-        set((state) => ({
-          highlightsByShotId: {
-            ...state.highlightsByShotId,
-            ...nextHighlightsByShotId,
-          },
-        }));
-      });
+      }));
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });
     }
@@ -337,7 +295,7 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         },
         highlightsByShotId: {
           ...state.highlightsByShotId,
-          [shotId]: calculatePromptHighlights(state.shots.find((shot) => shot.id === shotId)?.prompt ?? "", assets),
+          [shotId]: calculateBoundPromptHighlights(state.shots.find((shot) => shot.id === shotId)?.prompt ?? "", assets, bindings),
         },
         loading: false,
       }));
@@ -353,7 +311,7 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         shots: state.shots.map((shot) => (shot.id === updatedShot.id ? updatedShot : shot)),
         highlightsByShotId: {
           ...state.highlightsByShotId,
-          [updatedShot.id]: calculatePromptHighlights(updatedShot.prompt, state.assets),
+          [updatedShot.id]: calculateBoundPromptHighlights(updatedShot.prompt, state.assets, state.bindingsByShotId[updatedShot.id] ?? []),
         },
         error: null,
       }));
@@ -433,7 +391,6 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
       });
       const fullBindingsResponse = await jimengApi.listBindingsByShotIds(projectId, targetShotIds);
       const fullBindingsByShotId = Object.fromEntries(targetShotIds.map((shotId) => [shotId, fullBindingsResponse.bindings_by_shot_id[shotId] ?? []]));
-      const highlightsByShotId = buildHighlightsByShotId(matchResponse);
       set((state) => ({
         bindingsByShotId: {
           ...state.bindingsByShotId,
@@ -441,7 +398,7 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         },
         highlightsByShotId: {
           ...state.highlightsByShotId,
-          ...highlightsByShotId,
+          ...buildBoundHighlightsByShotId(state.shots.filter((shot) => targetShotIds.includes(shot.id)), state.assets, fullBindingsByShotId),
         },
         loading: false,
       }));

@@ -170,7 +170,7 @@ def model_data(value: BaseModel, exclude_unset: bool = False) -> dict[str, Any]:
 
 
 _DURATION_PATTERNS = [
-    re.compile(r"(?:总时长|时长|镜头时长)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:秒|s|S)"),
+    re.compile(r"(?:推荐时长|建议时长|总时长|镜头时长|时长)\s*[:：]?\s*(?:约|大约|大概)?\s*(\d+(?:\.\d+)?)\s*(?:秒|s|S)"),
     re.compile(r"\bduration\s*[:=]\s*(\d+(?:\.\d+)?)\s*s?\b", re.IGNORECASE),
 ]
 
