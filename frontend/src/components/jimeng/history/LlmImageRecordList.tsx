@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { Ban, CheckSquare, RefreshCw, Square, Trash2 } from "lucide-react";
+import { memo } from "react";
 import { jimengMediaUrl, JIMENG_ASSET_TYPE_LABELS } from "@/components/jimeng/assets/AssetMiniCard";
 import { formatUpdatedAt } from "@/components/jimeng/assets/assetManagerShared";
 import type { JimengLlmAssetImageRecord } from "@/lib/jimengApi";
@@ -41,7 +42,7 @@ const compact = (value: string | null | undefined, max = 90): string => {
   return value.length > max ? `${value.slice(0, max)}...` : value;
 };
 
-export default function LlmImageRecordList({
+function LlmImageRecordList({
   records,
   selectedRecordIds,
   projectNameFor,
@@ -85,7 +86,13 @@ export default function LlmImageRecordList({
               title={imageUrl ? "打开图片预览" : "图片尚未保存到本地"}
             >
               {imageUrl ? (
-                <img src={imageUrl} alt={record.asset_name} className="h-full w-full object-cover transition-transform hover:scale-[1.03]" />
+                <img
+                  src={imageUrl}
+                  alt={record.asset_name}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover transition-transform hover:scale-[1.03]"
+                />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-1.5 px-2 text-center">
                   <RefreshCw size={18} />
@@ -170,3 +177,5 @@ export default function LlmImageRecordList({
     </div>
   );
 }
+
+export default memo(LlmImageRecordList);

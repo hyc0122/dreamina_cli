@@ -238,6 +238,53 @@ def list_candidates(store: Any, project_id: str, shot_id: str | None = None) -> 
     return [candidate_from_row(row) for row in rows]
 
 
+def list_candidates_for_shots(
+    store: Any,
+    project_id: str,
+    shot_ids: list[str] | None = None,
+    limit_per_shot: int | None = None,
+) -> dict[str, list[JimengVideoCandidate]]:
+    ordered_ids = list(dict.fromkeys(shot_id for shot_id in (shot_ids or []) if shot_id))
+    limit = int(limit_per_shot or 0)
+    with store._connect() as conn:
+        store._validate_project_membership(conn, project_id=project_id)
+        if ordered_ids:
+            placeholders = ", ".join("?" for _ in ordered_ids)
+            known_rows = conn.execute(
+                f"SELECT id FROM shots WHERE project_id = ? AND id IN ({placeholders})",
+                (project_id, *ordered_ids),
+            ).fetchall()
+            known_ids = {row["id"] for row in known_rows}
+            missing_ids = [shot_id for shot_id in ordered_ids if shot_id not in known_ids]
+            if missing_ids:
+                raise ValueError("selected shot does not belong to project")
+            result = {shot_id: [] for shot_id in ordered_ids}
+        else:
+            shot_rows = conn.execute("SELECT id FROM shots WHERE project_id = ? ORDER BY shot_index ASC", (project_id,)).fetchall()
+            ordered_ids = [row["id"] for row in shot_rows]
+            result = {shot_id: [] for shot_id in ordered_ids}
+
+        if not ordered_ids:
+            return result
+
+        placeholders = ", ".join("?" for _ in ordered_ids)
+        rows = conn.execute(
+            f"""
+            SELECT * FROM video_candidates
+            WHERE project_id = ? AND shot_id IN ({placeholders})
+            ORDER BY shot_id ASC, created_at DESC, rowid DESC
+            """,
+            (project_id, *ordered_ids),
+        ).fetchall()
+
+    for row in rows:
+        candidate = candidate_from_row(row)
+        bucket = result.setdefault(candidate.shot_id, [])
+        if limit <= 0 or len(bucket) < limit:
+            bucket.append(candidate)
+    return result
+
+
 def set_default_candidate(store: Any, shot_id: str, candidate_id: str) -> JimengVideoCandidate:
     stamp = _now()
     candidate = get_candidate(store, candidate_id)

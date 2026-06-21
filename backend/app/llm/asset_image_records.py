@@ -112,15 +112,38 @@ def _asset_type_value(value: Any) -> str:
     return str(value or "")
 
 
-def _read_records(store: JimengStore) -> list[dict[str, Any]]:
+def _read_records(
+    store: JimengStore,
+    *,
+    project_id: str | None = None,
+    status: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
     _import_legacy_records(store)
+    clauses: list[str] = []
+    params: list[Any] = []
+    if project_id:
+        clauses.append("project_id = ?")
+        params.append(project_id)
+    if status:
+        clauses.append("status = ?")
+        params.append(status)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    limit_sql = ""
+    if limit is not None and limit > 0:
+        limit_sql = "LIMIT ? OFFSET ?"
+        params.extend([limit, max(0, offset)])
     with store._connect() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT record_json
             FROM llm_asset_image_records
+            {where}
             ORDER BY created_at DESC, updated_at DESC
-            """
+            {limit_sql}
+            """,
+            params,
         ).fetchall()
     records: list[dict[str, Any]] = []
     for row in rows:
@@ -131,6 +154,22 @@ def _read_records(store: JimengStore) -> list[dict[str, Any]]:
         if isinstance(record, dict):
             records.append(record)
     return records
+
+
+def _count_records(store: JimengStore, *, project_id: str | None = None, status: str | None = None) -> int:
+    _import_legacy_records(store)
+    clauses: list[str] = []
+    params: list[Any] = []
+    if project_id:
+        clauses.append("project_id = ?")
+        params.append(project_id)
+    if status:
+        clauses.append("status = ?")
+        params.append(status)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with store._connect() as conn:
+        row = conn.execute(f"SELECT COUNT(*) AS count FROM llm_asset_image_records {where}", params).fetchone()
+    return int(row["count"] if row else 0)
 
 
 def _write_records(store: JimengStore, records: list[dict[str, Any]]) -> None:
@@ -201,11 +240,19 @@ def create_asset_image_record(
     return record
 
 
-def list_asset_image_records(store: JimengStore, project_id: str | None = None) -> list[dict[str, Any]]:
-    records = _read_records(store)
-    if project_id:
-        records = [record for record in records if record.get("project_id") == project_id]
+def list_asset_image_records(
+    store: JimengStore,
+    project_id: str | None = None,
+    status: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    records = _read_records(store, project_id=project_id, status=status, limit=limit, offset=offset)
     return sorted(records, key=lambda item: str(item.get("created_at") or item.get("updated_at") or ""), reverse=True)
+
+
+def count_asset_image_records(store: JimengStore, project_id: str | None = None, status: str | None = None) -> int:
+    return _count_records(store, project_id=project_id, status=status)
 
 
 def get_asset_image_record(store: JimengStore, record_id: str) -> dict[str, Any]:

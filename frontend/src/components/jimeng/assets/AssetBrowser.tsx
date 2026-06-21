@@ -2,11 +2,12 @@
 
 import clsx from "clsx";
 import { CheckSquare, Image as ImageIcon, Square } from "lucide-react";
+import { memo } from "react";
 import { JIMENG_ASSET_TYPE_LABELS, jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import type { JimengAsset } from "@/lib/jimengApi";
 import { type AssetViewMode, CHARACTER_KIND_LABELS } from "@/components/jimeng/assets/assetManagerShared";
 
-export default function AssetBrowser({
+function AssetBrowser({
   asset,
   selected,
   checked,
@@ -97,7 +98,13 @@ export default function AssetBrowser({
           {checked ? <CheckSquare size={15} /> : <Square size={15} />}
         </span>
         {imageUrl ? (
-          <img src={imageUrl} alt={asset.name} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
+          <img
+            src={imageUrl}
+            alt={asset.name}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+          />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-muted">
             <ImageIcon size={24} />
@@ -120,3 +127,5 @@ export default function AssetBrowser({
     </button>
   );
 }
+
+export default memo(AssetBrowser);

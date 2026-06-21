@@ -50,6 +50,7 @@ export default function JimengWorkbenchPage() {
   const storeError = useJimengStore((state) => state.error);
   const loadProjectData = useJimengStore((state) => state.loadProjectData);
   const refreshShotAssetsAndBindings = useJimengStore((state) => state.refreshShotAssetsAndBindings);
+  const saveShotPrompt = useJimengStore((state) => state.saveShotPrompt);
   const setActivePage = useJimengStore((state) => state.setActivePage);
   const setRightPanelMode = useJimengStore((state) => state.setRightPanelMode);
   const submitShots = useJimengStore((state) => state.submitShots);
@@ -195,7 +196,6 @@ export default function JimengWorkbenchPage() {
           message: `分镜已提交到本地队列，但自动开启队列失败：${errorMessageFrom(error)}。请进入“即梦排队”页面，点击“开始队列”和“启动 worker”。`,
         });
       }
-      await loadProjectData(currentProject.id);
       setBatchSettingsOpen(false);
       setSubmitError(null);
       return true;
@@ -303,6 +303,16 @@ export default function JimengWorkbenchPage() {
     await refreshShotAssetsAndBindings(currentProject.id, shotId);
   }, [assetPickerTarget?.shot.id, currentProject, loadProjectData, refreshShotAssetsAndBindings]);
 
+  const handleSaveShotPrompt = useCallback(
+    async (shotId: string, prompt: string) => {
+      if (!currentProject) {
+        return;
+      }
+      await saveShotPrompt(currentProject.id, shotId, prompt);
+    },
+    [currentProject, saveShotPrompt],
+  );
+
   const openQueuePageForWorker = useCallback(() => {
     setWorkerOfflineNotice(null);
     setActivePage("queue");
@@ -380,6 +390,7 @@ export default function JimengWorkbenchPage() {
             onPreviewShot={previewShot}
             onOpenAssetPicker={openAssetPicker}
             onOpenBatchSettings={() => setBatchSettingsOpen(true)}
+            onSaveShotPrompt={handleSaveShotPrompt}
           />
         </section>
 

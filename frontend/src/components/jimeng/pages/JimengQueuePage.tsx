@@ -154,7 +154,7 @@ export default function JimengQueuePage() {
   }, [currentPage, totalPages]);
 
   useEffect(() => {
-    const projectIds = Array.from(new Set(queue.map((item) => item.project_id)));
+    const projectIds = Array.from(new Set(pageQueue.map((item) => item.project_id)));
     if (projectIds.length === 0) {
       setShotMap({});
       return;
@@ -181,7 +181,7 @@ export default function JimengQueuePage() {
     return () => {
       canceled = true;
     };
-  }, [queue]);
+  }, [pageQueue]);
 
   const runAction = useCallback(
     async (label: string, action: () => Promise<void>, itemId: string | null = null) => {

@@ -41,7 +41,9 @@ export interface JimengStore extends JimengStateData {
   loadProjects: () => Promise<void>;
   selectProject: (projectId: string) => Promise<void>;
   loadProjectData: (projectId?: string) => Promise<void>;
+  loadProjectAssets: (projectId?: string) => Promise<void>;
   refreshShotAssetsAndBindings: (projectId: string, shotId: string) => Promise<void>;
+  saveShotPrompt: (projectId: string, shotId: string, prompt: string) => Promise<JimengShot>;
   setActivePage: (page: JimengPageMode) => void;
   setRightPanelMode: (mode: JimengRightPanelMode) => void;
   toggleShotSelection: (shotId: string, checked: boolean) => void;
@@ -99,10 +101,11 @@ const errorMessageFrom = (error: unknown): string => {
 };
 
 const buildBindingsByShotId = async (projectId: string, shots: JimengShot[]): Promise<Record<string, JimengAssetBinding[]>> => {
-  const entries = await Promise.all(
-    shots.map(async (shot) => [shot.id, await jimengApi.listBindings(projectId, shot.id)] as const),
-  );
-  return Object.fromEntries(entries);
+  if (shots.length === 0) {
+    return {};
+  }
+  const response = await jimengApi.listBindingsByShotIds(projectId, shots.map((shot) => shot.id));
+  return Object.fromEntries(shots.map((shot) => [shot.id, response.bindings_by_shot_id[shot.id] ?? []]));
 };
 
 const buildQueueItemsForShots = async (
@@ -206,12 +209,35 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
     }
   },
 
+  loadProjectAssets: async (projectId?: string) => {
+    const targetProjectId = projectId ?? get().currentProject?.id;
+    if (!targetProjectId) {
+      set({ error: "No Jimeng project selected", loading: false });
+      return;
+    }
+
+    set({ loading: true, error: null });
+    try {
+      const [currentProject, assets] = await Promise.all([
+        jimengApi.getProject(targetProjectId),
+        jimengApi.listAssets(targetProjectId),
+      ]);
+      set({
+        currentProject,
+        assets,
+        loading: false,
+      });
+    } catch (error) {
+      set({ error: errorMessageFrom(error), loading: false });
+    }
+  },
+
   refreshShotAssetsAndBindings: async (projectId, shotId) => {
     set({ loading: true, error: null });
     try {
       const [assets, bindings] = await Promise.all([
         jimengApi.listAssets(projectId),
-        jimengApi.listBindings(projectId, shotId),
+        jimengApi.listBindingsByShotIds(projectId, [shotId]).then((response) => response.bindings_by_shot_id[shotId] ?? []),
       ]);
       set((state) => ({
         assets,
@@ -223,6 +249,24 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
       }));
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });
+    }
+  },
+
+  saveShotPrompt: async (projectId, shotId, prompt) => {
+    try {
+      const updatedShot = await jimengApi.updateShot(projectId, shotId, { prompt });
+      set((state) => ({
+        shots: state.shots.map((shot) => (shot.id === updatedShot.id ? updatedShot : shot)),
+        highlightsByShotId: {
+          ...state.highlightsByShotId,
+          [updatedShot.id]: [],
+        },
+        error: null,
+      }));
+      return updatedShot;
+    } catch (error) {
+      set({ error: errorMessageFrom(error) });
+      throw error;
     }
   },
 
@@ -254,8 +298,18 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const queueItems = await buildQueueItemsForShots(currentProject, get().shots, uniqueShotIds, generationSettings);
-      await jimengApi.createQueueItems(queueItems);
+      const response = await jimengApi.createQueueItems(queueItems);
       set((state) => ({
+        shots: state.shots.map((shot) =>
+          uniqueShotIds.includes(shot.id)
+            ? {
+                ...shot,
+                status: "queued",
+                last_error: null,
+              }
+            : shot,
+        ),
+        queue: [...state.queue.filter((item) => !response.items.some((created) => created.id === item.id)), ...response.items],
         selectedShotIds: state.selectedShotIds.filter((id) => !uniqueShotIds.includes(id)),
         selectedShotId: uniqueShotIds.includes(state.selectedShotId ?? "") ? null : state.selectedShotId,
         loading: false,
@@ -283,12 +337,12 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
         shot_ids: targetShotIds,
         clear_existing_auto: options?.clearExistingAuto ?? false,
       });
-      const shots = await jimengApi.listShots(projectId);
-      const bindingsByShotId = await buildBindingsByShotId(projectId, shots);
       const highlightsByShotId = buildHighlightsByShotId(matchResponse);
       set((state) => ({
-        shots,
-        bindingsByShotId,
+        bindingsByShotId: {
+          ...state.bindingsByShotId,
+          ...Object.fromEntries(matchResponse.shots.map((shot) => [shot.shot_id, shot.bindings])),
+        },
         highlightsByShotId: {
           ...state.highlightsByShotId,
           ...highlightsByShotId,
@@ -312,12 +366,12 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await jimengApi.clearMatchedAssets(projectId, { shot_ids: targetShotIds });
-      const shots = await jimengApi.listShots(projectId);
-      const bindingsByShotId = await buildBindingsByShotId(projectId, shots);
       const clearedHighlights = Object.fromEntries(targetShotIds.map((shotId) => [shotId, [] as JimengHighlightSpan[]]));
       set((state) => ({
-        shots,
-        bindingsByShotId,
+        bindingsByShotId: {
+          ...state.bindingsByShotId,
+          ...Object.fromEntries(response.shots.map((shot) => [shot.shot_id, shot.bindings])),
+        },
         highlightsByShotId: {
           ...state.highlightsByShotId,
           ...clearedHighlights,

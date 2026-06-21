@@ -282,7 +282,13 @@ export default function ShotDetailPanel({
                   >
                     <div className="flex aspect-video w-full items-center justify-center overflow-hidden rounded bg-black/30">
                       {thumbnailUrl ? (
-                        <img src={thumbnailUrl} alt={candidate.video_filename} className="h-full w-full object-cover" />
+                        <img
+                          src={thumbnailUrl}
+                          alt={candidate.video_filename}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
                         <Video size={18} className="text-text-muted" />
                       )}

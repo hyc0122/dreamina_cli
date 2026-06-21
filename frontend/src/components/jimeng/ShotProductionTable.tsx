@@ -107,6 +107,7 @@ interface ShotProductionTableProps {
   onPreviewShot: (shotId: string) => void;
   onOpenAssetPicker: (shot: JimengShot, assetType: JimengAssetType, assetId?: string) => void;
   onOpenBatchSettings: () => void;
+  onSaveShotPrompt: (shotId: string, prompt: string) => Promise<void>;
 }
 
 export default function ShotProductionTable({
@@ -122,6 +123,7 @@ export default function ShotProductionTable({
   onPreviewShot,
   onOpenAssetPicker,
   onOpenBatchSettings,
+  onSaveShotPrompt,
 }: ShotProductionTableProps) {
   const loading = useJimengStore((state) => state.loading);
   const toggleShotSelection = useJimengStore((state) => state.toggleShotSelection);
@@ -424,10 +426,9 @@ export default function ShotProductionTable({
                     <div className="min-w-0">
                       <p className="mb-1.5 text-xs font-medium text-text-muted">分镜提示词</p>
                       <ShotPromptCell
-                        projectId={project.id}
                         shot={shot}
                         highlights={highlightsByShotId[shot.id] ?? []}
-                        onSaved={refreshProject}
+                        onSavePrompt={onSaveShotPrompt}
                       />
                     </div>
                     <div className="min-w-0">
