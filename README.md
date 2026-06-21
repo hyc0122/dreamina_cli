@@ -6,10 +6,11 @@
 
 ## 当前版本
 
-- 当前版本：v1.00.025
-- 更新时间：2026-06-21 10:03:37 +08:00
-- 最近更新：分镜编辑和生成记录性能优化；提示词保存改为局部更新，资产/生成记录/队列读取减少全量刷新和逐条请求。
+- 当前版本：v1.00.026
+- 更新时间：2026-06-21 11:57:11 +08:00
+- 最近更新：新增 GitHub 提交、拉取和 `main`/开发分支同步说明，方便按当前开发分支提交和同步。
 - 更新日志：[CHANGELOG.md](CHANGELOG.md)
+- GitHub 提交拉取说明：[docs/GitHub提交拉取说明.md](docs/GitHub提交拉取说明.md)
 
 ## 主要功能
 
@@ -97,6 +98,8 @@ cd dreamina_cli
 ```powershell
 git pull origin main
 ```
+
+开发分支提交、拉取以及 `main` 同步开发分支的完整命令，见 [GitHub 提交拉取说明](docs/GitHub提交拉取说明.md)。
 
 ## 安装 Python 依赖
 
@@ -328,8 +331,4 @@ dreamina_cli/
 
 ## 更新说明
 
-如果你是从 GitHub 拉取后继续开发，建议每次开发前先更新：
-
-```powershell
-git pull origin main
-```
+如果你是从 GitHub 拉取后继续开发，建议先阅读 [GitHub 提交拉取说明](docs/GitHub提交拉取说明.md)，按当前开发分支执行提交、拉取和同步命令。
