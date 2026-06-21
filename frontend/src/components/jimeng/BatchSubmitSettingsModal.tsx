@@ -38,6 +38,7 @@ export default function BatchSubmitSettingsModal({
   const [error, setError] = useState<string | null>(null);
   const normalizedValue = normalizeGenerationSettings(value);
   const normalizedInterval = Math.min(300, Math.max(1, Math.round(submitIntervalSeconds || 3)));
+  const durationSource = draft.duration_source === "global" ? "global" : "per_shot";
   const { requestClose, backdropProps } = useModalDismiss({
     open,
     dirty: JSON.stringify(draft) !== JSON.stringify(normalizedValue) || intervalDraft !== normalizedInterval,
@@ -83,6 +84,37 @@ export default function BatchSubmitSettingsModal({
 
         <div className="mt-5 rounded-lg border border-glass-border bg-surface-inset p-4">
           <GenerationSettingsControl value={draft} onChange={setDraft} videoModelOptions={videoModelOptions} />
+        </div>
+
+        <div className="mt-3 rounded-lg border border-glass-border bg-surface-inset p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-text-secondary">时长来源</p>
+              <p className="mt-1 text-xs leading-5 text-text-muted">
+                默认按每个分镜自己的时长提交；没有单独配置的分镜会使用上方时长。
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 rounded-lg border border-glass-border bg-app-bg/55 p-1">
+              <button
+                type="button"
+                onClick={() => setDraft((state) => normalizeGenerationSettings({ ...state, duration_source: "per_shot" }))}
+                className={`h-9 rounded-md px-3 text-sm font-medium transition-colors ${
+                  durationSource === "per_shot" ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground"
+                }`}
+              >
+                按单分镜
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraft((state) => normalizeGenerationSettings({ ...state, duration_source: "global" }))}
+                className={`h-9 rounded-md px-3 text-sm font-medium transition-colors ${
+                  durationSource === "global" ? "bg-primary text-white" : "text-text-secondary hover:bg-hover-bg hover:text-foreground"
+                }`}
+              >
+                统一时长
+              </button>
+            </div>
+          </div>
         </div>
 
         <label className="mt-3 block rounded-lg border border-glass-border bg-surface-inset p-4">

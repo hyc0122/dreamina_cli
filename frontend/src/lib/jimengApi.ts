@@ -457,6 +457,7 @@ export interface JimengLlmAssetImageRecordsEnvelope {
 export interface JimengVideoGenerationSettings {
   provider: "dreamina_cli" | "jimeng_api" | string;
   generation_mode: "auto" | "multimodal2video" | "text2video";
+  duration_source?: "per_shot" | "global";
   model_version: string;
   duration: number;
   ratio: string;
@@ -490,6 +491,7 @@ export const clampJimengVideoDuration = (value: unknown): number => {
 export const DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS: JimengVideoGenerationSettings = {
   provider: "dreamina_cli",
   generation_mode: "auto",
+  duration_source: "per_shot",
   model_version: "seedance2.0fast",
   duration: 5,
   ratio: "9:16",

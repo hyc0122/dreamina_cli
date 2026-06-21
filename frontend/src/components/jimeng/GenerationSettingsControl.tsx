@@ -42,6 +42,7 @@ export function normalizeGenerationSettings(
     ...value,
     provider: "dreamina_cli",
     account_id: "",
+    duration_source: value?.duration_source === "global" ? "global" : "per_shot",
     duration: clampJimengVideoDuration(value?.duration ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.duration),
     poll_seconds: Math.max(5, Number(value?.poll_seconds ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.poll_seconds) || 30),
   };
