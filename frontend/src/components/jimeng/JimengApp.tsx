@@ -10,6 +10,7 @@ import {
   FolderOpen,
   History,
   Image as ImageIcon,
+  KeyRound,
   ListChecks,
   MessageSquare,
   Moon,
@@ -24,6 +25,7 @@ import JimengGenerationHistoryPage from "@/components/jimeng/pages/JimengGenerat
 import JimengProjectListPage from "@/components/jimeng/pages/JimengProjectListPage";
 import JimengQueuePage from "@/components/jimeng/pages/JimengQueuePage";
 import JimengSettingsPage from "@/components/jimeng/pages/JimengSettingsPage";
+import JimengWebSessionTestPage from "@/components/jimeng/pages/JimengWebSessionTestPage";
 import JimengWorkbenchPage from "@/components/jimeng/pages/JimengWorkbenchPage";
 import LlmSettingsPage from "@/components/jimeng/llm/LlmSettingsPage";
 import { jimengApi } from "@/lib/jimengApi";
@@ -87,6 +89,13 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     placeholderTitle: "大模型设置",
     placeholderText: "配置资产图片纯文本生图使用的大模型供应商。",
     icon: Bot,
+  },
+  {
+    id: "web_session",
+    label: "网页测试",
+    placeholderTitle: "网页测试",
+    placeholderText: "独立测试 SessionID 网页生视频请求。",
+    icon: KeyRound,
   },
   {
     id: "settings",
@@ -253,6 +262,9 @@ export default function JimengApp() {
     }
     if (activePage === "llm") {
       return <LlmSettingsPage />;
+    }
+    if (activePage === "web_session") {
+      return <JimengWebSessionTestPage />;
     }
     if (activePage === "settings") {
       return <JimengSettingsPage />;

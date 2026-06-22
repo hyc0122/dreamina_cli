@@ -1,5 +1,7 @@
 # 更新日志
 
+## v1.00.038 - 2026-06-22 14:23:17 +08:00
+- SessionID 网页生视频测试通道：新增独立网页测试页面、网页 SessionID 账号池、任务绑定账号和同账号轮询结果接口，方便先验证多账号 Cookie 请求链路，不影响官方 CLI 队列。详细说明：docs/releases/v1.00.038-web-session-test.md
 ## v1.00.037 - 2026-06-21 23:40:53 +08:00
 - 即梦队列防重复提交修复：当 CLI/本地封装返回 `submit_id` 且状态仍为 `querying/running` 时，队列会视为已被即梦接收并进入持续轮询，不再因为本地提交错误提示进入失败重试，避免同一分镜反复生成多个远端任务。详细说明：docs/releases/v1.00.037-queue-accepted-task-polling.md
 

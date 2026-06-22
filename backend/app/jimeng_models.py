@@ -1,4 +1,4 @@
-from enum import Enum
+﻿from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -188,5 +188,39 @@ class JimengCliAccount(BaseModel):
     vip_expire_at: Optional[str] = None
     last_error: Optional[str] = None
     is_default: bool = False
+    created_at: str
+    updated_at: str
+
+class JimengWebSessionAccount(BaseModel):
+    id: str
+    label: str
+    sessionid_masked: str
+    enabled: bool = True
+    max_concurrency: int = 1
+    cooldown_seconds: int = 0
+    last_error: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class JimengWebSessionTask(BaseModel):
+    id: str
+    account_id: str
+    account_label: str = ""
+    prompt: str
+    model: str
+    ratio: str = "9:16"
+    duration: int = 5
+    resolution: str = "720p"
+    status: str = "draft"
+    submit_id: Optional[str] = None
+    history_id: Optional[str] = None
+    result_url: Optional[str] = None
+    raw_submit_response: Optional[Dict[str, Any]] = None
+    raw_poll_response: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    submitted_at: Optional[str] = None
+    last_polled_at: Optional[str] = None
+    finished_at: Optional[str] = None
     created_at: str
     updated_at: str

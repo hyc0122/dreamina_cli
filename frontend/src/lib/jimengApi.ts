@@ -17,7 +17,7 @@ export type JimengQueueStatus =
   | "canceled"
   | "orphaned";
 export type JimengPromptScope = "system" | "user";
-export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "settings";
+export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "web_session" | "settings";
 export type JimengRightPanelMode = "preview" | "asset_picker";
 export type JimengShotMoveDirection = "up" | "down";
 export type JimengShotImportFormat = "plain" | "csv";
@@ -249,6 +249,48 @@ export interface JimengRuntimeInfo {
   is_current?: boolean;
 }
 
+export interface JimengWebSessionAccount {
+  id: string;
+  label: string;
+  sessionid_masked: string;
+  enabled: boolean;
+  max_concurrency: number;
+  cooldown_seconds: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JimengWebSessionTask {
+  id: string;
+  account_id: string;
+  account_label: string;
+  prompt: string;
+  model: string;
+  ratio: string;
+  duration: number;
+  resolution: string;
+  status: "draft" | "polling" | "completed" | "failed" | string;
+  submit_id: string | null;
+  history_id: string | null;
+  result_url: string | null;
+  raw_submit_response: Record<string, unknown> | null;
+  raw_poll_response: Record<string, unknown> | null;
+  error_message: string | null;
+  submitted_at: string | null;
+  last_polled_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JimengWebSessionAccountsEnvelope {
+  accounts: JimengWebSessionAccount[];
+}
+
+export interface JimengWebSessionTasksEnvelope {
+  tasks: JimengWebSessionTask[];
+}
 export interface JimengRuntimeInstancesEnvelope {
   instances: JimengRuntimeInfo[];
   scan_range: {
@@ -634,6 +676,20 @@ export const jimengApi = {
     axios.post<{ ok: boolean; message: string }>(`${API_URL}/runtime/shutdown`).then((res) => res.data),
   selectDirectory: () =>
     axios.post<{ path: string | null }>(`${API_URL}/runtime/select-directory`).then((res) => res.data),
+  listWebSessionAccounts: () =>
+    axios.get<JimengWebSessionAccountsEnvelope>(`${API_URL}/jimeng/web-session/accounts`).then((res) => res.data),
+  createWebSessionAccount: (data: { label: string; sessionid: string; enabled?: boolean; max_concurrency?: number; cooldown_seconds?: number }) =>
+    axios.post<JimengWebSessionAccount>(`${API_URL}/jimeng/web-session/accounts`, data).then((res) => res.data),
+  updateWebSessionAccount: (accountId: string, data: Partial<{ label: string; sessionid: string; enabled: boolean; max_concurrency: number; cooldown_seconds: number }>) =>
+    axios.put<JimengWebSessionAccount>(`${API_URL}/jimeng/web-session/accounts/${accountId}`, data).then((res) => res.data),
+  deleteWebSessionAccount: (accountId: string) =>
+    axios.delete<{ deleted: string }>(`${API_URL}/jimeng/web-session/accounts/${accountId}`).then((res) => res.data),
+  listWebSessionTasks: (data: { account_id?: string; limit?: number } = {}) =>
+    axios.get<JimengWebSessionTasksEnvelope>(`${API_URL}/jimeng/web-session/tasks`, { params: data }).then((res) => res.data),
+  createWebSessionTask: (data: { account_id: string; prompt: string; model?: string; ratio?: string; duration?: number; resolution?: string }) =>
+    axios.post<JimengWebSessionTask>(`${API_URL}/jimeng/web-session/tasks`, data).then((res) => res.data),
+  pollWebSessionTask: (taskId: string) =>
+    axios.post<JimengWebSessionTask>(`${API_URL}/jimeng/web-session/tasks/${taskId}/poll`).then((res) => res.data),
   listProjects: () =>
     axios.get<JimengProject[]>(`${API_URL}/jimeng/projects`).then((res) => res.data),
   createProject: (data: { name: string; style?: string; description?: string; default_ratio?: string }) =>
