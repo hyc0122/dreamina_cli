@@ -5,8 +5,9 @@ import { Download, Loader2, RefreshCw, Send, Star, Upload, Video } from "lucide-
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { jimengMediaUrl } from "@/components/jimeng/assets/AssetMiniCard";
 import GenerationSettingsControl from "@/components/jimeng/workbench/GenerationSettingsControl";
+import { isShotVideoMaking } from "@/components/jimeng/jimengUiHelpers";
 import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
-import { jimengApi, type JimengProject, type JimengShot, type JimengVideoCandidate, type JimengVideoGenerationSettings } from "@/lib/jimengApi";
+import { jimengApi, type JimengProject, type JimengQueueItem, type JimengShot, type JimengVideoCandidate, type JimengVideoGenerationSettings } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
 
 interface ShotDetailPanelProps {
@@ -17,6 +18,7 @@ interface ShotDetailPanelProps {
   submitting: boolean;
   submitError?: string | null;
   generationSettings: JimengVideoGenerationSettings;
+  queueItems?: JimengQueueItem[];
   videoModelOptions?: LlmModelOption[];
   onGenerationSettingsChange: (settings: JimengVideoGenerationSettings) => void;
   onSubmitCurrent: () => void;
@@ -40,6 +42,7 @@ export default function ShotDetailPanel({
   submitting,
   submitError = null,
   generationSettings,
+  queueItems = [],
   videoModelOptions = [],
   onGenerationSettingsChange,
   onSubmitCurrent,
@@ -53,7 +56,7 @@ export default function ShotDetailPanel({
   const [defaultingCandidateId, setDefaultingCandidateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const shotVideoMaking = (shot?.status === "queued" || shot?.status === "running") && !shot?.last_error;
+  const shotVideoMaking = isShotVideoMaking(shot, queueItems);
   const requestIdRef = useRef(0);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 

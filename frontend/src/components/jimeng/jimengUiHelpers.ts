@@ -1,4 +1,4 @@
-import type { JimengQueueItem, JimengQueueStatus, JimengVideoCandidate } from "@/lib/jimengApi";
+import type { JimengQueueItem, JimengQueueStatus, JimengShot, JimengVideoCandidate } from "@/lib/jimengApi";
 
 export type JimengGenerationLockFilter = "all" | "locked" | "unlocked";
 export type JimengQueueFilterStatus = "waiting" | "running" | "completed" | "failed" | "canceled";
@@ -22,6 +22,7 @@ export interface JimengQueueStatusMeta {
 const RUNNING_QUEUE_STATUSES = new Set<JimengQueueStatus>(["submitting", "running", "polling"]);
 const WAITING_QUEUE_STATUSES = new Set<JimengQueueStatus>(["waiting", "retry_wait", "blocked"]);
 const FAILED_QUEUE_STATUSES = new Set<JimengQueueStatus>(["failed", "orphaned"]);
+const ACTIVE_SHOT_QUEUE_STATUSES = new Set<JimengQueueStatus>(["waiting", "blocked", "retry_wait", "submitting", "running", "polling"]);
 const RUNNING_GEN_STATUSES = new Set(["querying", "running", "pending", "processing"]);
 const SUCCESS_GEN_STATUSES = new Set(["success", "completed", "complete"]);
 const FAILED_GEN_STATUSES = new Set(["failed", "fail", "error", "canceled", "cancelled"]);
@@ -155,6 +156,20 @@ export function getQueueStatusMeta(item: JimengQueueItem): JimengQueueStatusMeta
     ...classes,
     detail,
   };
+}
+
+export function isShotVideoMaking(shot: Pick<JimengShot, "id" | "status" | "last_error"> | null | undefined, queueItems?: JimengQueueItem[]): boolean {
+  if (!shot || shot.last_error) {
+    return false;
+  }
+  if (!queueItems) {
+    return shot.status === "queued" || shot.status === "running";
+  }
+  const relatedItems = queueItems.filter((item) => item.shot_id === shot.id);
+  if (relatedItems.length === 0) {
+    return false;
+  }
+  return relatedItems.some((item) => ACTIVE_SHOT_QUEUE_STATUSES.has(item.status));
 }
 
 export function filterGenerationCandidates(

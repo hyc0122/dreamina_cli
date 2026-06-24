@@ -70,6 +70,7 @@ export default function JimengWorkbenchPage() {
   const bindingsByShotId = useJimengStore((state) => state.bindingsByShotId);
   const highlightsByShotId = useJimengStore((state) => state.highlightsByShotId);
   const videoStateByShotId = useJimengStore((state) => state.videoStateByShotId);
+  const queue = useJimengStore((state) => state.queue);
   const promptPresets = useJimengStore((state) => state.promptPresets);
   const selectedShotIds = useJimengStore((state) => state.selectedShotIds);
   const selectedShotId = useJimengStore((state) => state.selectedShotId);
@@ -421,6 +422,7 @@ export default function JimengWorkbenchPage() {
             bindingsByShotId={bindingsByShotId}
             highlightsByShotId={highlightsByShotId}
             videoStateByShotId={videoStateByShotId}
+            queueItems={queue}
             selectedShotIds={selectedShotIds}
             focusedShotId={focusedShot?.id ?? null}
             submitError={submitError}
@@ -451,6 +453,7 @@ export default function JimengWorkbenchPage() {
               submitting={submitting}
               submitError={submitError}
               generationSettings={generationSettings}
+              queueItems={queue}
               videoModelOptions={videoModelOptions}
               onGenerationSettingsChange={setGenerationSettings}
               onSubmitCurrent={handleSubmitCurrent}

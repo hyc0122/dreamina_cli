@@ -27,7 +27,7 @@ import BatchReplaceModal from "@/components/jimeng/workbench/BatchReplaceModal";
 import ImportShotsModal from "@/components/jimeng/ImportShotsModal";
 import OperationOverlay from "@/components/jimeng/OperationOverlay";
 import ShotPromptCell from "@/components/jimeng/workbench/ShotPromptCell";
-import { summarizeJimengError } from "@/components/jimeng/jimengUiHelpers";
+import { isShotVideoMaking, summarizeJimengError } from "@/components/jimeng/jimengUiHelpers";
 import {
   JIMENG_VIDEO_DURATION_OPTIONS,
   clampJimengVideoDuration,
@@ -37,6 +37,7 @@ import {
   type JimengAssetType,
   type JimengHighlightSpan,
   type JimengProject,
+  type JimengQueueItem,
   type JimengShot,
 } from "@/lib/jimengApi";
 import { useJimengStore, type JimengVideoState } from "@/store/jimengStore";
@@ -108,6 +109,7 @@ interface ShotProductionTableProps {
   bindingsByShotId: Record<string, JimengAssetBinding[]>;
   highlightsByShotId: Record<string, JimengHighlightSpan[]>;
   videoStateByShotId: Record<string, JimengVideoState>;
+  queueItems?: JimengQueueItem[];
   selectedShotIds: string[];
   focusedShotId: string | null;
   submitError: string | null;
@@ -125,6 +127,7 @@ export default function ShotProductionTable({
   bindingsByShotId,
   highlightsByShotId,
   videoStateByShotId,
+  queueItems = [],
   selectedShotIds,
   focusedShotId,
   submitError,
@@ -398,6 +401,16 @@ export default function ShotProductionTable({
                   ? "已有默认视频"
                   : "已有候选视频"
               : "暂无视频";
+            const shotMaking = isShotVideoMaking(shot, queueItems);
+            const displayStatusLabel = hasFailure
+              ? "失败"
+              : shotMaking
+                ? "视频制作中"
+                : shot.status === "queued" || shot.status === "running"
+                  ? hasVideo
+                    ? "已完成"
+                    : "草稿"
+                  : STATUS_LABELS[shot.status];
 
             return (
               <article
@@ -432,7 +445,7 @@ export default function ShotProductionTable({
                             : "border-glass-border bg-black/20 text-text-secondary",
                         )}
                       >
-                        {hasFailure ? "失败" : STATUS_LABELS[shot.status]}
+                        {displayStatusLabel}
                       </span>
                     </div>
                   </div>

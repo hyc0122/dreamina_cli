@@ -50,7 +50,7 @@
   - 单测队列 worker 能选择 `volcengine_ark_video`。
 - Test: `frontend/src/components/jimeng/llm/__tests__/llmDefaults.behavior.test.mjs`
   - 单测默认方舟供应商存在且是视频模型。
-- Docs: `README.md`、`CHANGELOG.md`、`docs/releases/v1.00.046-ark-seedance-provider.md`
+- Docs: `README.md`、`CHANGELOG.md`、`docs/releases/v1.00.047-ark-seedance-provider.md`
   - 同步版本与说明。
 
 ---
@@ -528,7 +528,7 @@ Expected: PASS.
 **Files:**
 - Modify: `README.md`
 - Modify: `CHANGELOG.md`
-- Create: `docs/releases/v1.00.046-ark-seedance-provider.md`
+- Create: `docs/releases/v1.00.047-ark-seedance-provider.md`
 - Modify: `pyproject.toml`
 - Modify: `frontend/package.json`
 
@@ -536,9 +536,9 @@ Expected: PASS.
 
 Set version to:
 
-- README current version: `v1.00.046`
-- `pyproject.toml`: `1.0.46`
-- `frontend/package.json`: `1.0.46`
+- README current version: `v1.00.047`
+- `pyproject.toml`: `1.0.47`
+- `frontend/package.json`: `1.0.47`
 
 - [ ] **Step 2: Add changelog entry**
 
@@ -555,7 +555,7 @@ Add to top of `CHANGELOG.md`:
 
 - [ ] **Step 3: Add release detail**
 
-Create `docs/releases/v1.00.046-ark-seedance-provider.md` with:
+Create `docs/releases/v1.00.047-ark-seedance-provider.md` with:
 
 ```markdown
 # v1.00.046 火山方舟 Seedance 视频接口
@@ -601,7 +601,7 @@ Expected:
 Stage only source and docs that belong to this feature:
 
 ```powershell
-git add backend/app/providers/ark_video_provider.py backend/app/providers/factory.py backend/app/providers/__init__.py backend/app/providers/base.py backend/app/api/context.py backend/app/queue_worker.py backend/app/api/queue.py backend/app/jimeng_queue.py backend/app/llm/models.py backend/app/llm/settings.py frontend/src/lib/jimengApi.ts frontend/src/components/jimeng/llm/llmDefaults.ts frontend/src/components/jimeng/llm/LlmProviderPanel.tsx frontend/src/components/jimeng/llm/LlmModelList.tsx frontend/src/components/jimeng/GenerationSettingsControl.tsx frontend/src/components/jimeng/pages/JimengWorkbenchPage.tsx frontend/src/store/jimengStore.ts tests/test_ark_video_provider.py tests/test_jimeng_generation_providers.py tests/test_jimeng_model_settings.py README.md CHANGELOG.md docs/releases/v1.00.046-ark-seedance-provider.md pyproject.toml frontend/package.json docs/superpowers/plans/2026-06-23-ark-seedance-provider.md
+git add backend/app/providers/ark_video_provider.py backend/app/providers/factory.py backend/app/providers/__init__.py backend/app/providers/base.py backend/app/api/context.py backend/app/queue_worker.py backend/app/api/queue.py backend/app/jimeng_queue.py backend/app/llm/models.py backend/app/llm/settings.py frontend/src/lib/jimengApi.ts frontend/src/components/jimeng/llm/llmDefaults.ts frontend/src/components/jimeng/llm/LlmProviderPanel.tsx frontend/src/components/jimeng/llm/LlmModelList.tsx frontend/src/components/jimeng/GenerationSettingsControl.tsx frontend/src/components/jimeng/pages/JimengWorkbenchPage.tsx frontend/src/store/jimengStore.ts tests/test_ark_video_provider.py tests/test_jimeng_generation_providers.py tests/test_jimeng_model_settings.py README.md CHANGELOG.md docs/releases/v1.00.047-ark-seedance-provider.md pyproject.toml frontend/package.json docs/superpowers/plans/2026-06-23-ark-seedance-provider.md
 git commit -m "feat: 接入火山方舟 Seedance 视频接口"
 ```
 
