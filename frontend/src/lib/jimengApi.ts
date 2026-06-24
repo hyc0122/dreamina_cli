@@ -21,6 +21,7 @@ export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "hi
 export type JimengRightPanelMode = "preview" | "asset_picker";
 export type JimengShotMoveDirection = "up" | "down";
 export type JimengShotImportFormat = "plain" | "csv";
+export type JimengQueueSortOrder = "asc" | "desc" | "position";
 
 export interface JimengProject {
   id: string;
@@ -386,6 +387,12 @@ export interface JimengQueueEnvelope {
     waiting_count: number;
     last_error: string | null;
   };
+}
+
+export interface JimengQueueQueryOptions {
+  created_from?: string;
+  created_to?: string;
+  sort_order?: JimengQueueSortOrder;
 }
 
 export interface JimengQueueWorkerStartResponse {
@@ -845,8 +852,17 @@ export const jimengApi = {
   reorderBindings: (projectId: string, shotId: string, bindingIds: string[]) =>
     axios.post<{ bindings: JimengAssetBinding[] }>(`${API_URL}/jimeng/projects/${projectId}/shots/${shotId}/bindings/reorder`, { binding_ids: bindingIds }).then((res) => res.data),
 
-  listQueue: (projectId?: string) =>
-    axios.get<JimengQueueEnvelope>(`${API_URL}/jimeng/queue`, { params: { project_id: projectId } }).then((res) => res.data),
+  listQueue: (projectId?: string, options: JimengQueueQueryOptions = {}) =>
+    axios
+      .get<JimengQueueEnvelope>(`${API_URL}/jimeng/queue`, {
+        params: {
+          project_id: projectId,
+          created_from: options.created_from,
+          created_to: options.created_to,
+          sort_order: options.sort_order,
+        },
+      })
+      .then((res) => res.data),
   createQueueItem: (item: JimengQueueItemCreate) =>
     axios.post<JimengQueueItem>(`${API_URL}/jimeng/queue/items`, item).then((res) => res.data),
   createQueueItems: (items: JimengQueueItemCreate[]) =>

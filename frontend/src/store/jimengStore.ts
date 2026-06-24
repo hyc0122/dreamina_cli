@@ -12,6 +12,7 @@ import {
   type JimengProject,
   type JimengPromptPreset,
   type JimengQueueEnvelope,
+  type JimengQueueQueryOptions,
   type JimengQueueItemCreate,
   type JimengQueueItem,
   type JimengRightPanelMode,
@@ -62,7 +63,7 @@ export interface JimengStore extends JimengStateData {
   submitSelectedShots: (generationSettings?: JimengVideoGenerationSettings) => Promise<void>;
   matchAssets: (shotIds: string[], options?: { clearExistingAuto?: boolean }) => Promise<JimengMatchAssetsResponse | undefined>;
   clearMatchedAssets: (shotIds: string[]) => Promise<JimengClearMatchedAssetsResponse | undefined>;
-  loadQueue: (scope?: "currentProject" | "global") => Promise<void>;
+  loadQueue: (scope?: "currentProject" | "global", options?: JimengQueueQueryOptions) => Promise<void>;
   startQueue: () => Promise<void>;
   startQueueWorker: () => Promise<void>;
   pauseQueue: () => Promise<void>;
@@ -438,11 +439,11 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
     }
   },
 
-  loadQueue: async (scope = "currentProject") => {
+  loadQueue: async (scope = "currentProject", options = {}) => {
     const projectId = scope === "global" ? undefined : get().currentProject?.id;
     set({ loading: true, error: null });
     try {
-      const queueEnvelope = await jimengApi.listQueue(projectId);
+      const queueEnvelope = await jimengApi.listQueue(projectId, options);
       set({ queue: queueEnvelope.items, queueStatus: queueEnvelope.status, loading: false });
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });

@@ -125,24 +125,40 @@ def get_queue_item(store: Any, item_id: str) -> JimengQueueItem:
     return queue_item_from_row(row)
 
 
-def list_queue(store: Any, project_id: str | None = None) -> list[JimengQueueItem]:
+def list_queue(
+    store: Any,
+    project_id: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+    sort_order: str = "position",
+) -> list[JimengQueueItem]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if project_id is not None:
+        clauses.append("project_id = ?")
+        params.append(project_id)
+    if created_from:
+        clauses.append("datetime(created_at) >= datetime(?)")
+        params.append(created_from)
+    if created_to:
+        clauses.append("datetime(created_at) < datetime(?)")
+        params.append(created_to)
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    normalized_sort = str(sort_order).lower()
+    if normalized_sort in {"asc", "desc"}:
+        direction = "DESC" if normalized_sort == "desc" else "ASC"
+        order_sql = f"datetime(created_at) {direction}, position {direction}, id {direction}"
+    else:
+        order_sql = "position ASC, created_at ASC, id ASC"
     with store._connect() as conn:
-        if project_id is None:
-            rows = conn.execute(
-                """
-                SELECT * FROM queue_items
-                ORDER BY position ASC, created_at ASC, id ASC
-                """
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT * FROM queue_items
-                WHERE project_id = ?
-                ORDER BY position ASC, created_at ASC, id ASC
-                """,
-                (project_id,),
-            ).fetchall()
+        rows = conn.execute(
+            f"""
+            SELECT * FROM queue_items
+            {where_sql}
+            ORDER BY {order_sql}
+            """,
+            params,
+        ).fetchall()
     return [queue_item_from_row(row) for row in rows]
 
 

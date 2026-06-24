@@ -668,8 +668,14 @@ class JimengStore:
     def get_queue_item(self, item_id: str) -> JimengQueueItem:
         return queue_storage.get_queue_item(self, item_id)
 
-    def list_queue(self, project_id: str | None = None) -> list[JimengQueueItem]:
-        return queue_storage.list_queue(self, project_id)
+    def list_queue(
+        self,
+        project_id: str | None = None,
+        created_from: str | None = None,
+        created_to: str | None = None,
+        sort_order: str = "position",
+    ) -> list[JimengQueueItem]:
+        return queue_storage.list_queue(self, project_id, created_from, created_to, sort_order)
 
     def next_waiting_item(self) -> JimengQueueItem | None:
         return queue_storage.next_waiting_item(self)

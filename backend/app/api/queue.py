@@ -20,8 +20,19 @@ router = APIRouter(prefix="/jimeng", tags=["jimeng-queue"])
 
 
 @router.get("/queue")
-def list_queue(project_id: str | None = None):
-    return _call(lambda: {"items": _dump(get_store().list_queue(project_id)), "status": _queue_status_payload()})
+def list_queue(
+    project_id: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+    sort_order: str = "position",
+):
+    normalized_sort = sort_order if sort_order in {"asc", "desc", "position"} else "position"
+    return _call(
+        lambda: {
+            "items": _dump(get_store().list_queue(project_id, created_from, created_to, normalized_sort)),
+            "status": _queue_status_payload(),
+        }
+    )
 
 
 @router.post("/queue/items")
