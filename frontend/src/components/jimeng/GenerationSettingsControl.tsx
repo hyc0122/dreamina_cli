@@ -91,7 +91,7 @@ export default function GenerationSettingsControl({
             </option>
           ))}
           {videoModelOptions.length > 0 ? (
-            <optgroup label="大模型视频模型（未完全适配）">
+            <optgroup label="大模型视频模型">
               {videoModelOptions.map((model) => (
                 <option key={model.value} value={model.value}>
                   {model.label}

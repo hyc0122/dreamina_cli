@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .api.router import router as jimeng_router
 from .services.directory_picker import pick_directory_dialog, select_directory
+from .versioning import APP_NAME, current_app_version
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -29,7 +30,7 @@ DEFAULT_SCAN_END = 62199
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUTPUT_DIR / "jimeng").mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Dreamina CLI Batch API")
+app = FastAPI(title=f"{APP_NAME} API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,6 +89,8 @@ def _runtime_identity(is_current: bool = False) -> dict[str, object]:
     return {
         "ok": True,
         "app": "dreamina_cli",
+        "app_name": APP_NAME,
+        "version": current_app_version(PROJECT_DIR),
         "pid": os.getpid(),
         "host": RUNTIME_HOST,
         "port": RUNTIME_PORT,

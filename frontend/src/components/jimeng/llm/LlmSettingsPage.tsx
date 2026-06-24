@@ -67,9 +67,6 @@ export default function LlmSettingsPage() {
               </div>
               <h2 className="mt-2 font-display text-xl font-semibold text-foreground sm:text-2xl">大模型设置</h2>
               <p className="mt-2 text-sm text-text-secondary">独立配置佳速 API / OpenAI 兼容接口，目前只用于资产图片纯文本生图。</p>
-              <p className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
-                大模型接口未完全适配，视频模型目前只做参数选择展示，提交前请先小范围验证。
-              </p>
               <a
                 href={JIASU_OFFICIAL_URL}
                 target="_blank"

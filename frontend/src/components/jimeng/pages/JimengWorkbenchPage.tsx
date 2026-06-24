@@ -222,7 +222,7 @@ export default function JimengWorkbenchPage() {
       } catch (error) {
         setWorkerOfflineNotice({
           title: "队列自动启动失败",
-          message: `分镜已提交到本地队列，但自动开启队列失败：${errorMessageFrom(error)}。请进入“即梦排队”页面，点击“开始队列”和“启动 worker”。`,
+          message: `分镜已提交到本地队列，但自动开启队列失败：${errorMessageFrom(error)}。请进入“即梦排队”页面，点击“恢复自动提交”和“启动 worker”。`,
         });
       }
       setBatchSettingsOpen(false);

@@ -6,10 +6,11 @@
 
 from fastapi import APIRouter
 
-from . import assets, bindings, candidates, llm, projects, prompt_presets, queue, settings, shots, web_session
+from . import app_version, assets, bindings, candidates, llm, projects, prompt_presets, queue, settings, shots, web_session
 
 
 router = APIRouter()
+router.include_router(app_version.router)
 router.include_router(projects.router)
 router.include_router(shots.router)
 router.include_router(assets.router)

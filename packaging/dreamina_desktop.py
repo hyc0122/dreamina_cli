@@ -15,6 +15,11 @@ from pathlib import Path
 import uvicorn
 from fastapi.staticfiles import StaticFiles
 
+APP_DISPLAY_NAME = "即梦cli自动排队助手"
+HELP_URL = "https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink"
+FEEDBACK_URL = "https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvMLycffc"
+CUSTOMER_SERVICE = "微信客服：jmqh888"
+
 
 def _repair_mojibake_path(path: Path) -> Path:
     try:
@@ -138,7 +143,7 @@ def _start_startup_splash() -> threading.Event:
             title.pack(pady=(4, 4))
             subtitle = tk.Label(root, text="正在加载本地服务与工作台，请稍等", bg="#050816", fg="#94a3b8", font=("Microsoft YaHei UI", 10))
             subtitle.pack()
-            progress = tk.Label(root, text="Dreamina CLI Batch", bg="#050816", fg="#8b5cf6", font=("Consolas", 9))
+            progress = tk.Label(root, text=APP_DISPLAY_NAME, bg="#050816", fg="#8b5cf6", font=("Consolas", 9))
             progress.pack(pady=(14, 0))
 
             angle = {"value": 0.0}
@@ -178,7 +183,7 @@ def _show_native_launcher(host: str, port: int, project_dir: Path, data_dir: Pat
     from tkinter import messagebox
 
     root = tk.Tk()
-    root.title("小狼专用-即梦CLI 启动管理器")
+    root.title(f"{APP_DISPLAY_NAME} 启动管理器")
     root.geometry("760x520")
     root.minsize(680, 460)
     root.configure(bg="#080b16")
@@ -187,11 +192,14 @@ def _show_native_launcher(host: str, port: int, project_dir: Path, data_dir: Pat
     body_font = ("Microsoft YaHei UI", 10)
     mono_font = ("Consolas", 9)
 
-    tk.Label(root, text="小狼专用 - 即梦 CLI", bg="#080b16", fg="#f8fafc", font=title_font).pack(anchor="w", padx=24, pady=(22, 4))
-    tk.Label(root, text="原生启动管理器：打开软件、查看端口、关闭服务、定位根目录。", bg="#080b16", fg="#94a3b8", font=body_font).pack(anchor="w", padx=24)
+    tk.Label(root, text=APP_DISPLAY_NAME, bg="#080b16", fg="#f8fafc", font=title_font).pack(anchor="w", padx=24, pady=(22, 4))
+    tk.Label(root, text=f"原生启动管理器：打开软件、查看端口、关闭服务、定位根目录。{CUSTOMER_SERVICE}", bg="#080b16", fg="#94a3b8", font=body_font).pack(anchor="w", padx=24)
 
     status = tk.StringVar(value=f"服务端口：{host}:{port}")
     tk.Label(root, textvariable=status, bg="#111827", fg="#6ee7b7", font=body_font, padx=12, pady=8).pack(fill="x", padx=24, pady=(18, 10))
+    version_status: dict = {}
+    version_var = tk.StringVar(value="正在检查版本号...")
+    tk.Label(root, textvariable=version_var, bg="#080b16", fg="#fca5a5", font=body_font).pack(anchor="w", padx=24, pady=(0, 8))
 
     info_frame = tk.Frame(root, bg="#0f172a", padx=14, pady=12)
     info_frame.pack(fill="x", padx=24)
@@ -208,15 +216,37 @@ def _show_native_launcher(host: str, port: int, project_dir: Path, data_dir: Pat
     list_box = tk.Listbox(root, height=7, bg="#0f172a", fg="#dbeafe", selectbackground="#4f46e5", relief="flat", font=mono_font)
     list_box.pack(fill="both", expand=True, padx=24, pady=12)
 
+    def _refresh_version_status(open_update_on_required: bool = False) -> None:
+        payload = _request_json(f"http://{host}:{port}/app/version", timeout=5.0) or {}
+        version_status.clear()
+        version_status.update(payload)
+        current = payload.get("current_version") or "--"
+        latest = payload.get("latest_version") or "--"
+        if payload.get("update_required"):
+            version_var.set(f"当前版本：{current}，新版本：{latest}。请更新后再打开前端。")
+            status.set("检测到新版本，已打开使用说明。")
+            if open_update_on_required:
+                webbrowser.open(str(payload.get("update_url") or HELP_URL))
+            return
+        if payload.get("error"):
+            version_var.set(f"当前版本：{current}，云端版本检测失败，仍可打开软件。")
+            return
+        version_var.set(f"当前版本：{current}，云端版本：{latest}。{CUSTOMER_SERVICE}")
+
     def open_app() -> None:
+        _refresh_version_status(open_update_on_required=False)
+        if version_status.get("update_required"):
+            webbrowser.open(str(version_status.get("update_url") or HELP_URL))
+            status.set("当前版本已过期，不能打开前端。")
+            return
         webbrowser.open(_default_desktop_url(host, port))
         status.set("已打开主界面。")
 
     def open_help() -> None:
-        webbrowser.open("https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink")
+        webbrowser.open(HELP_URL)
 
     def open_feedback() -> None:
-        webbrowser.open("https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvMLycffc")
+        webbrowser.open(FEEDBACK_URL)
 
     def scan_ports() -> None:
         payload = _request_json(f"http://{host}:{port}/runtime/instances")
@@ -227,7 +257,7 @@ def _show_native_launcher(host: str, port: int, project_dir: Path, data_dir: Pat
         status.set("端口扫描完成。" if payload else "端口扫描失败，请确认服务是否仍在运行。")
 
     def shutdown() -> None:
-        if not messagebox.askyesno("关闭服务", "确定关闭当前即梦 CLI 批量工具服务吗？"):
+        if not messagebox.askyesno("关闭服务", f"确定关闭当前{APP_DISPLAY_NAME}服务吗？"):
             return
         _post_json(f"http://{host}:{port}/runtime/shutdown")
         status.set("关闭指令已发送。")
@@ -258,6 +288,7 @@ def _show_native_launcher(host: str, port: int, project_dir: Path, data_dir: Pat
         ).pack(side="left", padx=(0, 8))
 
     scan_ports()
+    _refresh_version_status(open_update_on_required=True)
     root.mainloop()
 
 
@@ -313,8 +344,8 @@ def main() -> None:
         resource_root, data_dir = _prepare_environment()
         _setup_logging(data_dir)
         if os.getenv("DREAMINA_QUEUE_WORKER", "").lower() in {"1", "true", "yes"}:
-            logging.info("Dreamina CLI Batch queue worker starting")
-            _safe_print("Dreamina CLI Batch queue worker")
+            logging.info("%s queue worker starting", APP_DISPLAY_NAME)
+            _safe_print(f"{APP_DISPLAY_NAME} queue worker")
             from backend.app.queue_worker import main as queue_worker_main
 
             queue_worker_main()
@@ -328,8 +359,8 @@ def main() -> None:
         if existing:
             existing_port = int(existing["port"])
             existing_url = _default_desktop_url(host, existing_port)
-            logging.info("Existing Dreamina CLI Batch instance detected: %s", existing_url)
-            _safe_print("Dreamina CLI Batch already running")
+            logging.info("Existing %s instance detected: %s", APP_DISPLAY_NAME, existing_url)
+            _safe_print(f"{APP_DISPLAY_NAME} already running")
             _safe_print(f"Open: {existing_url}")
             if startup_splash is not None:
                 startup_splash.set()
@@ -342,10 +373,10 @@ def main() -> None:
         app = _mount_frontend(resource_root)
         url = _default_desktop_url(host, port)
 
-        logging.info("Dreamina CLI Batch starting")
+        logging.info("%s starting", APP_DISPLAY_NAME)
         logging.info("Data directory: %s", data_dir)
         logging.info("Open: %s", url)
-        _safe_print("Dreamina CLI Batch")
+        _safe_print(APP_DISPLAY_NAME)
         _safe_print(f"Data directory: {data_dir}")
         _safe_print(f"Open: {url}")
         if _browser_disabled():
@@ -365,7 +396,7 @@ def main() -> None:
     except Exception:
         if startup_splash is not None:
             startup_splash.set()
-        logging.exception("Dreamina CLI Batch failed to start")
+        logging.exception("%s failed to start", APP_DISPLAY_NAME)
         raise
 
 

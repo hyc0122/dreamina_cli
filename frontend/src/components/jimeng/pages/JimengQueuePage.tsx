@@ -49,7 +49,7 @@ const STATUS_FILTERS: Array<{ value: QueueStatusFilter; label: string; tone?: "d
 
 const STATUS_HELP: Record<QueueStatusFilter, string> = {
   all: "全部：显示当前队列里所有任务。",
-  waiting: "等待：还没有下发给即梦，正在排队等 worker 提交。",
+  waiting: "等待：分镜已进入自动排队，还没有下发给即梦，正在等待 worker 自动提交。",
   running: "在途：已经下发给即梦或正在轮询结果，还没有拿到最终视频。",
   completed: "成功：即梦已返回视频并保存到本地候选视频。",
   failed: "失败：即梦或本地提交返回错误，需要查看原因后重试。",
@@ -257,12 +257,13 @@ export default function JimengQueuePage() {
                 <ClipboardList size={14} />
                 即梦排队
               </div>
-              <h2 className="mt-2 font-display text-2xl font-semibold text-foreground">手动提交队列</h2>
+              <h2 className="mt-2 font-display text-2xl font-semibold text-foreground">自动提交排队</h2>
+              <p className="mt-1 text-sm text-text-secondary">分镜工作台提交后会自动进入这里，由在线 worker 按间隔自动下发给即梦。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <QueueActionButton icon={RefreshCw} label="刷新" onClick={() => runAction("队列已刷新", () => loadQueue("global"))} disabled={loading} />
-              <QueueActionButton icon={Play} label="开始队列" onClick={() => runAction("队列已启动", startQueue)} tone="primary" disabled={loading} />
-              <QueueActionButton icon={Pause} label="暂停队列" onClick={() => runAction("队列已暂停", pauseQueue)} disabled={loading} />
+              <QueueActionButton icon={Play} label="恢复自动提交" onClick={() => runAction("自动提交已恢复", startQueue)} tone="primary" disabled={loading} />
+              <QueueActionButton icon={Pause} label="暂停自动提交" onClick={() => runAction("自动提交已暂停", pauseQueue)} disabled={loading} />
             </div>
           </div>
 
@@ -310,7 +311,7 @@ export default function JimengQueuePage() {
               )}
             </div>
             <div className="rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-text-secondary">
-              队列开关：<span className="ml-1 font-medium text-foreground">{queueStatus?.started ? "运行" : "暂停"}</span>
+              自动提交：<span className="ml-1 font-medium text-foreground">{queueStatus?.started ? "运行" : "暂停"}</span>
             </div>
             <div className="rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-text-secondary">
               在途任务：<span className="ml-1 font-mono font-medium text-primary">{queueStatus?.in_flight_count ?? 0}</span>
@@ -495,7 +496,7 @@ export default function JimengQueuePage() {
                 {sortedQueue.length > 0 ? "当前状态没有任务" : "暂无队列任务"}
               </h3>
               <p className="mt-2 text-sm text-text-secondary">
-                {sortedQueue.length > 0 ? "可以切换上方状态标签查看其他任务。" : "在分镜工作台选择分镜后，点击批量提交选中分镜。"}
+                {sortedQueue.length > 0 ? "可以切换上方状态标签查看其他任务。" : "在分镜工作台提交分镜后，任务会自动进入排队列表。"}
               </p>
             </div>
           )}

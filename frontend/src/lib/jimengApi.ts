@@ -239,6 +239,8 @@ export interface JimengCliAccountIsolationDiagnostics {
 export interface JimengRuntimeInfo {
   ok: boolean;
   app: string;
+  app_name?: string;
+  version?: string;
   pid: number;
   host: string;
   port: number;
@@ -263,6 +265,19 @@ export interface JimengWebSessionAccount {
   last_error: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface JimengVersionStatus {
+  app_name: string;
+  current_version: string;
+  latest_version: string;
+  update_available: boolean;
+  update_required: boolean;
+  update_check_url: string;
+  update_url: string;
+  message: string;
+  error: string | null;
+  checked_at: string;
 }
 
 export interface JimengWebSessionTask {
@@ -674,6 +689,8 @@ const formDataWithFile = (file: File): FormData => {
 export const jimengApi = {
   getRuntimeInfo: () =>
     axios.get<JimengRuntimeInfo>(`${API_URL}/health`).then((res) => res.data),
+  getAppVersion: () =>
+    axios.get<JimengVersionStatus>(`${API_URL}/app/version`).then((res) => res.data),
   listRuntimeInstances: () =>
     axios.get<JimengRuntimeInstancesEnvelope>(`${API_URL}/runtime/instances`).then((res) => res.data),
   shutdownRuntime: () =>

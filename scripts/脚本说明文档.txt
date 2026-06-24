@@ -1,7 +1,7 @@
 `scripts` 里面四个脚本用途如下：
 
 1. [build_exe.ps1](G:/漫剧/LumenX/dreamina_cli/scripts/build_exe.ps1)  
-一键打包 EXE 用的脚本。会先构建前端 `frontend/dist`，再用 PyInstaller 打包 `packaging/dreamina_desktop.py`，最终输出到 `releases/即梦cli批量工具/即梦cli批量工具.exe`。  
+一键打包 EXE 用的脚本。会先构建前端 `frontend/dist`，再用 PyInstaller 打包 `packaging/dreamina_desktop.py`，最终输出到 `releases/即梦cli自动排队助手/即梦cli自动排队助手.exe`。
 运行：
 
 ```powershell

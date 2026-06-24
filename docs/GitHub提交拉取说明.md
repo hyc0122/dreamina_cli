@@ -1,6 +1,6 @@
 # GitHub 提交、拉取和分支同步说明
 
-- 适用项目：Dreamina CLI 即梦批量生产工具
+- 适用项目：即梦cli自动排队助手
 - 仓库地址：https://github.com/hyc0122/dreamina_cli
 - 当前开发分支：`codex/v1.00.008-workbench-template`
 - 默认原则：日常修改提交到开发分支，不直接提交或推送 `main`。

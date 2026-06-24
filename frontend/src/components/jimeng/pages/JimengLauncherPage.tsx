@@ -15,13 +15,14 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { jimengApi } from "@/lib/jimengApi";
-import type { JimengRuntimeInfo } from "@/lib/jimengApi";
+import type { JimengRuntimeInfo, JimengVersionStatus } from "@/lib/jimengApi";
 
 const HELP_URL = "https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink";
 const FEEDBACK_URL = "https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvMLycffc";
 
 interface JimengLauncherPageProps {
   onOpenApp: () => void;
+  versionStatus?: JimengVersionStatus | null;
 }
 
 const formatStartedAt = (value?: string) => {
@@ -67,7 +68,7 @@ function ExternalHelpLinks({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export default function JimengLauncherPage({ onOpenApp }: JimengLauncherPageProps) {
+export default function JimengLauncherPage({ onOpenApp, versionStatus }: JimengLauncherPageProps) {
   const [runtimeInfo, setRuntimeInfo] = useState<JimengRuntimeInfo | null>(null);
   const [instances, setInstances] = useState<JimengRuntimeInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -124,10 +125,10 @@ export default function JimengLauncherPage({ onOpenApp }: JimengLauncherPageProp
           <div>
             <div className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               <MonitorUp size={14} />
-              Dreamina CLI Launcher
+              启动管理器
             </div>
-            <h1 className="mt-3 font-display text-2xl font-bold text-white">小狼专用-即梦CLI 启动管理器</h1>
-            <p className="mt-1 text-sm text-slate-300">当前端口、服务状态、帮助入口和反馈入口都在这里。</p>
+            <h1 className="mt-3 font-display text-2xl font-bold text-white">即梦cli自动排队助手 启动管理器</h1>
+            <p className="mt-1 text-sm text-slate-300">当前版本：{versionStatus?.current_version ?? runtimeInfo?.version ?? "--"} · 微信客服：jmqh888</p>
           </div>
           <ExternalHelpLinks />
         </header>
@@ -158,8 +159,8 @@ export default function JimengLauncherPage({ onOpenApp }: JimengLauncherPageProp
                 <div className="mt-2 font-mono text-2xl font-semibold text-white">{runtimeInfo?.port ?? "--"}</div>
               </div>
               <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 p-4">
-                <div className="text-xs text-amber-100">进程 PID</div>
-                <div className="mt-2 font-mono text-2xl font-semibold text-amber-200">{runtimeInfo?.pid ?? "--"}</div>
+                <div className="text-xs text-amber-100">当前版本</div>
+                <div className="mt-2 font-mono text-2xl font-semibold text-amber-200">{versionStatus?.current_version ?? runtimeInfo?.version ?? "--"}</div>
               </div>
             </div>
 
@@ -169,6 +170,7 @@ export default function JimengLauncherPage({ onOpenApp }: JimengLauncherPageProp
               <RuntimePath label="数据目录" value={runtimeInfo?.data_dir} />
               <RuntimePath label="输出目录" value={runtimeInfo?.output_dir} />
               <RuntimePath label="启动时间" value={formatStartedAt(runtimeInfo?.started_at)} />
+              <RuntimePath label="微信客服" value="jmqh888" />
             </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-3">

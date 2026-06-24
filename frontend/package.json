@@ -1,6 +1,6 @@
 {
-  "name": "dreamina-cli-batch-frontend",
-  "version": "1.0.46",
+  "name": "jimeng-cli-auto-queue-helper-frontend",
+  "version": "1.0.47",
   "private": true,
   "type": "module",
   "scripts": {

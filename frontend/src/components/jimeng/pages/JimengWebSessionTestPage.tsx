@@ -159,6 +159,9 @@ export default function JimengWebSessionTestPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Web Session Test</p>
             <h2 className="mt-1 font-display text-2xl font-semibold text-foreground">SessionID 网页生视频测试</h2>
             <p className="mt-1 text-sm text-text-secondary">独立测试 sessionid 或完整 Cookie 调用即梦网页接口，不进入官方 CLI 队列；建议粘贴即梦网页 Network 请求里的完整 Cookie，仅填 sessionid 可能触发 4013 风控。</p>
+            <p className="mt-2 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-300">
+              该功能内测中，仅用于测试，不建议作为正式生产通道。
+            </p>
           </div>
           <button type="button" onClick={() => void runAction(refresh)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-4 text-sm font-semibold text-foreground hover:bg-hover-bg">
             <RefreshCcw size={16} />

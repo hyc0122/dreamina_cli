@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($AppName)) {
-  $AppName = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("5Y2z5qKmY2xp5om56YeP5bel5YW3"))
+  $AppName = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("5Y2z5qKmY2xp6Ieq5Yqo5o6S6Zif5Yqp5omL"))
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -21,11 +21,11 @@ $BuildVenv = Join-Path $BuildPath ".venv"
 $SpecPath = Join-Path $BuildPath "spec"
 $Launcher = Join-Path $Root "packaging\dreamina_desktop.py"
 
-Write-Host "== Dreamina CLI Batch EXE Build ==" -ForegroundColor Cyan
+Write-Host "== $AppName EXE Build ==" -ForegroundColor Cyan
 Write-Host "Root: $Root"
 
 if (-not (Test-Path -LiteralPath $Launcher)) {
-  throw "找不到桌面启动器：$Launcher"
+  throw "Launcher not found: $Launcher"
 }
 
 if (-not $SkipNpmInstall) {
@@ -49,7 +49,7 @@ finally {
 }
 
 if (-not (Test-Path -LiteralPath $FrontendDist)) {
-  throw "前端构建完成但没有找到 dist 目录：$FrontendDist"
+  throw "Frontend build completed but dist was not found: $FrontendDist"
 }
 
 New-Item -ItemType Directory -Force -Path $DistPath, $BuildPath, $SpecPath | Out-Null
@@ -75,7 +75,7 @@ $AppDistPath = Join-Path $DistPath $AppName
 if (Test-Path -LiteralPath $AppDistPath) {
   $ResolvedAppDistPath = (Resolve-Path -LiteralPath $AppDistPath).Path
   if (-not $ResolvedAppDistPath.StartsWith($ResolvedDistPath, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "拒绝清理 dist_exe 之外的目录：$ResolvedAppDistPath"
+    throw "Refusing to clean a path outside releases: $ResolvedAppDistPath"
   }
   Write-Host "== clean previous app dist ==" -ForegroundColor Cyan
   Remove-Item -LiteralPath $ResolvedAppDistPath -Recurse -Force
@@ -112,7 +112,7 @@ finally {
 
 $OutputExe = Join-Path $DistPath "$AppName\$AppName.exe"
 if (-not (Test-Path -LiteralPath $OutputExe)) {
-  throw "打包完成但没有找到 EXE：$OutputExe"
+  throw "Build completed but EXE was not found: $OutputExe"
 }
 
 $DocsSource = Join-Path $Root "docs"

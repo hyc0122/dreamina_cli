@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import UpdateRequiredScreen from "@/components/jimeng/UpdateRequiredScreen";
 import JimengLauncherPage from "@/components/jimeng/pages/JimengLauncherPage";
 import JimengAssetManagerPage from "@/components/jimeng/pages/JimengAssetManagerPage";
 import JimengGenerationHistoryPage from "@/components/jimeng/pages/JimengGenerationHistoryPage";
@@ -29,7 +30,7 @@ import JimengWebSessionTestPage from "@/components/jimeng/pages/JimengWebSession
 import JimengWorkbenchPage from "@/components/jimeng/pages/JimengWorkbenchPage";
 import LlmSettingsPage from "@/components/jimeng/llm/LlmSettingsPage";
 import { jimengApi } from "@/lib/jimengApi";
-import type { JimengCliResult, JimengPageMode, JimengRuntimeInfo } from "@/lib/jimengApi";
+import type { JimengCliResult, JimengPageMode, JimengRuntimeInfo, JimengVersionStatus } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
 
 type ThemeMode = "dark" | "light";
@@ -44,7 +45,8 @@ interface JimengPageConfig {
 
 const THEME_STORAGE_KEY = "dreamina_cli_theme";
 const LOGIN_CACHE_KEY = "dreamina_cli_login_snapshot";
-const HELP_URL = "https://github.com/hyc0122/dreamina_cli#readme";
+const APP_DISPLAY_NAME = "即梦cli自动排队助手";
+const HELP_URL = "https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink";
 const FEEDBACK_URL = "https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvMLycffc";
 
 const JIMENG_PAGES: JimengPageConfig[] = [
@@ -73,7 +75,7 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     id: "queue",
     label: "即梦排队",
     placeholderTitle: "即梦排队",
-    placeholderText: "查看队列启动、暂停、重试和下载状态。",
+    placeholderText: "查看自动提交排队、暂停、重试和下载状态。",
     icon: ListChecks,
   },
   {
@@ -188,8 +190,13 @@ export default function JimengApp() {
   const [shellRoute, setShellRoute] = useState<"launcher" | "app">(getShellRoute);
   const [totalCredit, setTotalCredit] = useState<string | null>(null);
   const [runtimeInfo, setRuntimeInfo] = useState<JimengRuntimeInfo | null>(null);
+  const [versionStatus, setVersionStatus] = useState<JimengVersionStatus | null>(null);
+  const [versionChecked, setVersionChecked] = useState(false);
+  const [autoOpenedUpdateVersion, setAutoOpenedUpdateVersion] = useState<string | null>(null);
   const activeConfig = JIMENG_PAGES.find((page) => page.id === activePage) ?? JIMENG_PAGES[0];
   const activeIndex = JIMENG_PAGES.findIndex((page) => page.id === activeConfig.id) + 1;
+  const currentVersion = versionStatus?.current_version ?? runtimeInfo?.version ?? "--";
+  const appName = versionStatus?.app_name ?? runtimeInfo?.app_name ?? APP_DISPLAY_NAME;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -220,6 +227,33 @@ export default function JimengApp() {
       setTotalCredit(readCachedTotalCredit());
     }
   }, []);
+
+  const refreshVersionStatus = useCallback(async () => {
+    setVersionChecked(false);
+    try {
+      const status = await jimengApi.getAppVersion();
+      setVersionStatus(status);
+    } catch {
+      setVersionStatus(null);
+    } finally {
+      setVersionChecked(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshVersionStatus();
+  }, [refreshVersionStatus]);
+
+  useEffect(() => {
+    if (!versionStatus?.update_required || autoOpenedUpdateVersion === versionStatus.latest_version) {
+      return;
+    }
+    setAutoOpenedUpdateVersion(versionStatus.latest_version);
+    const timer = window.setTimeout(() => {
+      window.open(versionStatus.update_url, "_blank", "noopener,noreferrer");
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [autoOpenedUpdateVersion, versionStatus]);
 
   useEffect(() => {
     void refreshTotalCredit();
@@ -272,8 +306,24 @@ export default function JimengApp() {
     return <PlaceholderPage page={activeConfig} />;
   };
 
+  if (!versionChecked) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-app-bg px-4 text-center">
+        <div className="rounded-xl border border-glass-border bg-panel-bg px-6 py-5 shadow-xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Version Check</p>
+          <h1 className="mt-2 font-display text-xl font-semibold text-foreground">{APP_DISPLAY_NAME}</h1>
+          <p className="mt-2 text-sm text-text-secondary">正在检查云端版本号...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (versionStatus?.update_required) {
+    return <UpdateRequiredScreen status={versionStatus} onRetry={refreshVersionStatus} />;
+  }
+
   if (shellRoute === "launcher") {
-    return <JimengLauncherPage onOpenApp={openMainApp} />;
+    return <JimengLauncherPage onOpenApp={openMainApp} versionStatus={versionStatus} />;
   }
 
   return (
@@ -282,8 +332,11 @@ export default function JimengApp() {
         <header className="shrink-0 border-b border-glass-border pb-2">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="font-display text-lg font-bold text-foreground">小狼专用-即梦CLI</h1>
+            <h1 className="font-display text-lg font-bold text-foreground">{appName}</h1>
             <span className="rounded-md border border-glass-border bg-surface-inset px-2 py-1 text-xs text-text-muted">面向分镜批量生成</span>
+            <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-mono text-primary">
+              {currentVersion}
+            </span>
             {runtimeInfo?.project_dir && (
               <span
                 className="inline-flex max-w-full items-center gap-1 rounded-md border border-glass-border bg-surface-inset px-2 py-1 text-xs text-text-muted sm:max-w-[520px]"

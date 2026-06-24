@@ -767,7 +767,7 @@ export default function JimengSettingsPage() {
                   </option>
                 ))}
                 {videoModelOptions.length > 0 ? (
-                  <optgroup label="大模型视频模型（未完全适配）">
+                  <optgroup label="大模型视频模型">
                     {videoModelOptions.map((model) => (
                       <option key={model.value} value={model.value}>
                         {model.label}
@@ -779,7 +779,7 @@ export default function JimengSettingsPage() {
               <span className="block text-xs leading-5 text-text-muted">
                 即梦官方视频模型列表维护在 <code>frontend/src/lib/jimengApi.ts</code> 的 <code>JIMENG_VIDEO_MODELS</code>；
                 后端能力列表维护在 <code>backend/app/api/settings.py</code> 的 <code>_JIMENG_VIDEO_MODELS</code>。
-                大模型视频模型来自“大模型设置”，当前仅展示选择，接口未完全适配。
+                大模型视频模型来自“大模型设置”，用于统一选择视频生成模型。
               </span>
             </label>
             <label className="space-y-2">
