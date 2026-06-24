@@ -122,6 +122,12 @@ export function getQueueFilterStatus(item: JimengQueueItem): JimengQueueFilterSt
   if (item.status === "completed" || SUCCESS_GEN_STATUSES.has(genStatus) || item.local_video_path) {
     return "completed";
   }
+  if (WAITING_QUEUE_STATUSES.has(item.status)) {
+    return "waiting";
+  }
+  if (RUNNING_QUEUE_STATUSES.has(item.status) || RUNNING_GEN_STATUSES.has(genStatus) || item.submit_id) {
+    return "running";
+  }
   if (
     FAILED_QUEUE_STATUSES.has(item.status) ||
     FAILED_GEN_STATUSES.has(genStatus) ||
@@ -130,12 +136,6 @@ export function getQueueFilterStatus(item: JimengQueueItem): JimengQueueFilterSt
     rawOutput.includes("exceededconcurrencylimit")
   ) {
     return "failed";
-  }
-  if (RUNNING_QUEUE_STATUSES.has(item.status) || RUNNING_GEN_STATUSES.has(genStatus) || item.submit_id) {
-    return "running";
-  }
-  if (WAITING_QUEUE_STATUSES.has(item.status)) {
-    return "waiting";
   }
   return "failed";
 }
@@ -146,7 +146,9 @@ export function getQueueStatusMeta(item: JimengQueueItem): JimengQueueStatusMeta
   const detail =
     displayStatus === "failed"
       ? summarizeJimengError(item.error_message || item.cli_raw_output || item.gen_status)
-      : item.gen_status || item.submit_id || (displayStatus === "waiting" ? `队列位置 #${item.position}` : QUEUE_STATUS_LABELS[displayStatus]);
+      : displayStatus === "waiting"
+        ? `队列位置 #${item.position ?? "-"}`
+        : item.gen_status || item.submit_id || QUEUE_STATUS_LABELS[displayStatus];
 
   return {
     label: QUEUE_STATUS_LABELS[displayStatus],
@@ -183,6 +185,17 @@ export function filterGenerationCandidates(
   });
 }
 
+export const WEB_SESSION_REQUIRED_COOKIE_NAMES = ["ttwid", "odin_tt", "user_spaces_idc"] as const;
+
+export type WebSessionRequiredCookieName = (typeof WEB_SESSION_REQUIRED_COOKIE_NAMES)[number];
+
+export function getMissingWebSessionCookieNames(value: string): WebSessionRequiredCookieName[] {
+  const normalized = String(value ?? "");
+  return WEB_SESSION_REQUIRED_COOKIE_NAMES.filter((name) => {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return !new RegExp(`(?:^|[;\\s])${escaped}\\s*=`, "i").test(normalized);
+  });
+}
 export function insertPromptVariable(
   value: string,
   variable: string,

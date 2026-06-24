@@ -1,6 +1,6 @@
 {
   "name": "dreamina-cli-batch-frontend",
-  "version": "1.0.38",
+  "version": "1.0.45",
   "private": true,
   "type": "module",
   "scripts": {

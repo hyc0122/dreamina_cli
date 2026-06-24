@@ -294,6 +294,7 @@ class JimengStore:
                     id TEXT PRIMARY KEY,
                     label TEXT NOT NULL,
                     sessionid TEXT NOT NULL,
+                    cookie_json TEXT NOT NULL DEFAULT '{}',
                     enabled INTEGER NOT NULL DEFAULT 1,
                     max_concurrency INTEGER NOT NULL DEFAULT 1,
                     cooldown_seconds INTEGER NOT NULL DEFAULT 0,
@@ -389,6 +390,13 @@ class JimengStore:
                 {
                     "scope": "TEXT NOT NULL DEFAULT 'video'",
                     "accent": "TEXT NOT NULL DEFAULT '#6478ff'",
+                },
+            )
+            self._ensure_columns(
+                conn,
+                "web_session_accounts",
+                {
+                    "cookie_json": "TEXT NOT NULL DEFAULT '{}'",
                 },
             )
             self._seed_default_style_presets(conn)

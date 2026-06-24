@@ -485,7 +485,12 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await jimengApi.cancelQueueItem(queueItemId);
-      await get().loadQueue("global");
+      const projectId = get().currentProject?.id;
+      if (projectId) {
+        await get().loadProjectData(projectId);
+      } else {
+        await get().loadQueue("global");
+      }
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });
     }

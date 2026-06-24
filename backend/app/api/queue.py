@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from ..jimeng_models import JimengQueueStatus
+from ..jimeng_models import JimengQueueStatus, JimengShotStatus
 from ..providers import DreaminaCliProvider
 from ..queue_worker_launcher import start_queue_worker_process
 from .context import _call, _dump, _model_data, _now, get_store, save_runtime_settings
@@ -52,17 +52,7 @@ def start_queue_worker():
 
 @router.post("/queue/items/{queue_item_id}/cancel")
 def cancel_queue_item(queue_item_id: str):
-    return _call(
-        lambda: _dump(
-            get_store().update_queue_item(
-                queue_item_id,
-                status=JimengQueueStatus.canceled,
-                error_message=None,
-                lease_owner=None,
-                lease_expires_at=None,
-            )
-        )
-    )
+    return _call(lambda: _dump(_cancel_queue_item(queue_item_id)))
 
 
 @router.post("/queue/items/{queue_item_id}/retry")
@@ -128,6 +118,53 @@ def _heartbeat_is_recent(value: Any, max_age_seconds: int = 15) -> bool:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - parsed).total_seconds() <= max_age_seconds
+
+
+
+def _cancel_queue_item(queue_item_id: str):
+    store = get_store()
+    item = store.get_queue_item(queue_item_id)
+    updated = store.update_queue_item(
+        queue_item_id,
+        status=JimengQueueStatus.canceled,
+        error_message=None,
+        lease_owner=None,
+        lease_expires_at=None,
+        finished_at=_now(),
+    )
+    _restore_shot_status_after_queue_cancel(updated.project_id, updated.shot_id, item.id)
+    return updated
+
+
+def _restore_shot_status_after_queue_cancel(project_id: str, shot_id: str, canceled_item_id: str) -> None:
+    store = get_store()
+    active_statuses = {
+        JimengQueueStatus.waiting,
+        JimengQueueStatus.submitting,
+        JimengQueueStatus.running,
+        JimengQueueStatus.polling,
+        JimengQueueStatus.retry_wait,
+    }
+    other_active_items = [
+        item
+        for item in store.list_queue(project_id)
+        if item.id != canceled_item_id and item.shot_id == shot_id and item.status in active_statuses
+    ]
+    if other_active_items:
+        running_statuses = {JimengQueueStatus.submitting, JimengQueueStatus.running, JimengQueueStatus.polling}
+        next_status = JimengShotStatus.running if any(item.status in running_statuses for item in other_active_items) else JimengShotStatus.queued
+        store.update_shot(shot_id, status=next_status, last_error=None)
+        return
+
+    shot = store.get_shot(project_id, shot_id)
+    candidates = store.list_candidates(project_id, shot_id)
+    if shot.locked_video_candidate_id or any(candidate.is_locked for candidate in candidates):
+        next_status = JimengShotStatus.locked
+    elif shot.default_video_candidate_id or candidates:
+        next_status = JimengShotStatus.completed
+    else:
+        next_status = JimengShotStatus.draft
+    store.update_shot(shot_id, status=next_status, last_error=None)
 
 
 def _start_queue_worker_payload() -> dict[str, Any]:

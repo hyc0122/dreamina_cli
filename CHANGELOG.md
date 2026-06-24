@@ -1,7 +1,25 @@
 # 更新日志
 
+## v1.00.045 - 2026-06-23 23:42:42 +08:00
+- 即梦队列取消状态同步修复：后台取消队列任务时会同步恢复对应分镜状态，有候选视频的分镜回到已完成，没有候选视频的分镜回到草稿；前端取消后自动刷新当前项目数据，右侧提交按钮不再错误停留在“视频制作中”。详细说明：docs/releases/v1.00.045-queue-cancel-shot-status.md
+## v1.00.044 - 2026-06-23 01:39:54 +08:00
+- 风格参考图外链与 Cookie 辅助优化：资产生图设置的风格参考图支持手动粘贴图片链接、小图预览、复制/删除和居中放大；网页测试页新增打开即梦获取 Cookie、Cookie 复制教程、剪贴板粘贴 Cookie，并在保存前提示缺少的 ttwid / odin_tt / user_spaces_idc。详细说明：docs/releases/v1.00.044-reference-links-cookie-shortcuts.md
+## v1.00.043 - 2026-06-23 01:07:19 +08:00
+- 网页 Session Cookie 诊断：账号池显示缺少的真实浏览器 Cookie，提交返回 4013 时明确提示需要复制即梦网页 Network 请求里的完整 Cookie，避免把“只填 sessionid + 本地补指纹”误认为可稳定生成。详细说明：docs/releases/v1.00.043-web-session-cookie-diagnostics.md
+
+## v1.00.042 - 2026-06-23 00:49:02 +08:00
+- 即梦 CLI 并发上限回队列修复：CLI 返回并发或队列达到上限时按等待重试处理，队列页不再把 retry_wait 误显示到失败列表。 详细说明：docs/releases/v1.00.042-cli-concurrency-retry-queue.md
+
+## v1.00.041 - 2026-06-23 00:16:21 +08:00
+- 网页 SessionID 旧账号 Cookie 回填修复：账号列表和账号详情读取旧数据时会自动补齐 `_tea_web_id`、`s_v_web_id`、`fpk1`、`uifid` 等指纹 Cookie 并写回 SQLite，同时给旧数据库自动补齐 `cookie_json` 字段，页面刷新后不再显示“Cookie: 1 个 · 缺少指纹”。详细说明：docs/releases/v1.00.041-web-session-list-cookie-backfill.md
+## v1.00.040 - 2026-06-22 22:15:44 +08:00
+- 网页 SessionID 账号凭证补齐：测试页支持粘贴完整 Cookie；仅填写 sessionid 时后端会自动生成 `_tea_web_id`、`s_v_web_id`、`fpk1`、`uifid` 等网页指纹 Cookie 并保存到 SQLite，提交和轮询都使用同一账号绑定的 Cookie，降低 4013 风控概率。详细说明：docs/releases/v1.00.040-web-session-cookie-fingerprint.md
+## v1.00.039 - 2026-06-22 20:39:21 +08:00
+- 网页 SessionID 测试链路重构：按 `jimeng-web2api-master` 的 `signed_post` 原理重写网页生视频测试后端，使用 sessionid 拼 Cookie、通用参数签名、真实 history_id 绑定和同账号历史轮询；即梦返回 4013 等失败 ret 时立即展示原始原因，不再误显示为轮询中。详细说明：docs/releases/v1.00.039-web-session-polling-fix.md
+
 ## v1.00.038 - 2026-06-22 14:23:17 +08:00
 - SessionID 网页生视频测试通道：新增独立网页测试页面、网页 SessionID 账号池、任务绑定账号和同账号轮询结果接口，方便先验证多账号 Cookie 请求链路，不影响官方 CLI 队列。详细说明：docs/releases/v1.00.038-web-session-test.md
+
 ## v1.00.037 - 2026-06-21 23:40:53 +08:00
 - 即梦队列防重复提交修复：当 CLI/本地封装返回 `submit_id` 且状态仍为 `querying/running` 时，队列会视为已被即梦接收并进入持续轮询，不再因为本地提交错误提示进入失败重试，避免同一分镜反复生成多个远端任务。详细说明：docs/releases/v1.00.037-queue-accepted-task-polling.md
 

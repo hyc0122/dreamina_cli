@@ -172,7 +172,7 @@ worker 根据 provider 构造对应 provider 实例。方舟任务提交成功�
 
 - `README.md` 当前版本和本次更新概要。
 - `CHANGELOG.md` 新版本号、更新时间精确到秒。
-- `docs/releases/v1.00.045-ark-seedance-provider.md` 写详细修改内容。
+- `docs/releases/v1.00.046-ark-seedance-provider.md` 写详细修改内容。
 
 ## 自检
 

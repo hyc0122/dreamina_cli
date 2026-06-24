@@ -1,4 +1,4 @@
-﻿from enum import Enum
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -195,6 +195,10 @@ class JimengWebSessionAccount(BaseModel):
     id: str
     label: str
     sessionid_masked: str
+    cookie_count: int = 0
+    has_fingerprint: bool = False
+    cookie_ready: bool = False
+    missing_cookie_names: List[str] = Field(default_factory=list)
     enabled: bool = True
     max_concurrency: int = 1
     cooldown_seconds: int = 0

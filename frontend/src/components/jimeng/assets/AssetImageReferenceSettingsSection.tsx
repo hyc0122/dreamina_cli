@@ -1,6 +1,11 @@
-import { Copy, Image as ImageIcon, Loader2, Trash2, UploadCloud } from "lucide-react";
+import { AlertCircle, Copy, Image as ImageIcon, Link as LinkIcon, Loader2, Maximize2, Plus, Trash2, UploadCloud } from "lucide-react";
 import { type ChangeEvent, useState } from "react";
-import { normalizeReferenceImageUrls, type AssetImageSettings } from "@/components/jimeng/assets/assetManagerShared";
+import AssetCenteredPreview from "@/components/jimeng/assets/AssetCenteredPreview";
+import {
+  addReferenceImageUrls,
+  normalizeReferenceImageUrls,
+  type AssetImageSettings,
+} from "@/components/jimeng/assets/assetManagerShared";
 import type { AssetImageSettingsDraftSetter } from "@/components/jimeng/assets/AssetImageSettingsModal";
 import { jimengApi } from "@/lib/jimengApi";
 
@@ -16,7 +21,12 @@ export default function AssetImageReferenceSettingsSection({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
+  const [linkInput, setLinkInput] = useState("");
+  const [imageLoadErrors, setImageLoadErrors] = useState<Record<string, boolean>>({});
+  const [hoverPreviewUrl, setHoverPreviewUrl] = useState<string | null>(null);
+  const [pinnedPreviewUrl, setPinnedPreviewUrl] = useState<string | null>(null);
   const references = normalizeReferenceImageUrls(draft.styleReferenceImages);
+  const previewUrl = pinnedPreviewUrl || hoverPreviewUrl;
 
   const updateReferences = (urls: string[]) => {
     setDraft((state) => ({ ...state, styleReferenceImages: normalizeReferenceImageUrls(urls) }));
@@ -56,6 +66,34 @@ export default function AssetImageReferenceSettingsSection({
     }
   };
 
+  const addManualLinks = () => {
+    const value = linkInput.trim();
+    if (!value) {
+      setError("请先粘贴图片链接。");
+      return;
+    }
+    const result = addReferenceImageUrls(references, value, 10);
+    updateReferences(result.urls);
+    setLinkInput("");
+    const warnings = [];
+    if (result.invalid.length > 0) warnings.push(`已跳过 ${result.invalid.length} 个无效链接`);
+    if (result.duplicateCount > 0) warnings.push(`已跳过 ${result.duplicateCount} 个重复链接`);
+    if (result.skippedByLimit > 0) warnings.push(`最多保留 10 张，已跳过 ${result.skippedByLimit} 个链接`);
+    setError(warnings.length > 0 ? `${warnings.join("；")}。` : null);
+    setCopiedNotice(result.added.length > 0 ? `已添加 ${result.added.length} 个参考图链接` : null);
+  };
+
+  const removeReference = (url: string) => {
+    updateReferences(references.filter((item) => item !== url));
+    setHoverPreviewUrl((current) => (current === url ? null : current));
+    setPinnedPreviewUrl((current) => (current === url ? null : current));
+    setImageLoadErrors((current) => {
+      const next = { ...current };
+      delete next[url];
+      return next;
+    });
+  };
+
   const copyUrl = async (url: string) => {
     await navigator.clipboard?.writeText(url);
     setCopiedNotice("已复制参考图链接");
@@ -72,7 +110,7 @@ export default function AssetImageReferenceSettingsSection({
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h3 className="font-display text-lg font-semibold text-foreground">风格参考图</h3>
-            <p className="mt-1 text-sm text-text-secondary">上传用于资产生图的全局参考图。只有勾选使用范围后，单个生图和批量生图才会发送这些链接。</p>
+            <p className="mt-1 text-sm text-text-secondary">上传图片或粘贴图片链接，作为资产生图的全局参考图。只有勾选使用范围后，单个生图和批量生图才会发送这些链接。</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground">
@@ -104,6 +142,37 @@ export default function AssetImageReferenceSettingsSection({
         <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" multiple className="sr-only" onChange={uploadReferences} disabled={uploading || references.length >= 10} />
       </label>
 
+      <div className="rounded-lg border border-glass-border bg-panel-bg p-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <LinkIcon size={16} className="text-primary" />
+          手动添加图片链接
+        </div>
+        <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+          <textarea
+            value={linkInput}
+            onChange={(event) => setLinkInput(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                event.preventDefault();
+                addManualLinks();
+              }
+            }}
+            className="glass-input min-h-[72px] resize-y p-3 text-sm leading-5 text-foreground"
+            placeholder="粘贴图片链接，多个链接可用换行、逗号或空格分隔"
+          />
+          <button
+            type="button"
+            onClick={addManualLinks}
+            disabled={references.length >= 10 || !linkInput.trim()}
+            className="inline-flex h-10 items-center justify-center gap-2 self-end rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <Plus size={16} />
+            添加链接
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-text-muted">不会提前下载校验外链，只由下方小图自然加载；加载失败不影响保存链接。</p>
+      </div>
+
       {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
 
       <div className="rounded-lg border border-glass-border bg-panel-bg p-3">
@@ -127,32 +196,53 @@ export default function AssetImageReferenceSettingsSection({
         </div>
         {references.length > 0 ? (
           <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {references.map((url) => (
-              <div key={url} className="grid gap-2 rounded-lg border border-glass-border bg-surface-inset p-2">
-                <div className="relative aspect-video overflow-hidden rounded-md border border-glass-border bg-black/30">
-                  <img src={url} alt="风格参考图" className="h-full w-full object-cover" />
+            {references.map((url, index) => {
+              const loadFailed = imageLoadErrors[url] === true;
+              const pinned = pinnedPreviewUrl === url;
+              return (
+                <div key={url} className="grid gap-2 rounded-lg border border-glass-border bg-surface-inset p-2">
                   <button
                     type="button"
-                    title="复制参考图链接"
-                    onClick={() => void copyUrl(url)}
-                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full border border-glass-border bg-panel-bg/90 text-primary shadow-lg backdrop-blur transition-colors hover:bg-hover-bg"
+                    title={pinned ? "再次点击取消固定放大" : "点击固定居中放大"}
+                    onClick={() => setPinnedPreviewUrl((current) => (current === url ? null : url))}
+                    onMouseEnter={() => setHoverPreviewUrl(url)}
+                    onMouseLeave={() => setHoverPreviewUrl(null)}
+                    onFocus={() => setHoverPreviewUrl(url)}
+                    onBlur={() => setHoverPreviewUrl(null)}
+                    className="group relative aspect-video overflow-hidden rounded-md border border-glass-border bg-black/30 text-left"
                   >
-                    <Copy size={14} />
+                    {loadFailed ? (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-muted">
+                        <AlertCircle size={22} />
+                        <span className="text-xs">图片加载失败</span>
+                      </div>
+                    ) : (
+                      <img
+                        src={url}
+                        alt={`风格参考图 ${index + 1}`}
+                        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                        onError={() => setImageLoadErrors((current) => ({ ...current, [url]: true }))}
+                      />
+                    )}
+                    <span className="absolute bottom-2 right-2 grid h-8 w-8 place-items-center rounded-md border border-glass-border bg-panel-bg/85 text-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
+                      <Maximize2 size={15} />
+                    </span>
+                    {pinned ? <span className="absolute left-2 top-2 rounded bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">已固定</span> : null}
                   </button>
+                  <p className="truncate font-mono text-[11px] text-text-muted" title={url}>{url}</p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => void copyUrl(url)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-glass-border bg-panel-bg px-2 py-1.5 text-xs text-text-secondary hover:bg-hover-bg hover:text-foreground">
+                      <Copy size={13} />
+                      复制链接
+                    </button>
+                    <button type="button" onClick={() => removeReference(url)} className="inline-flex items-center justify-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-200 hover:bg-red-500/15">
+                      <Trash2 size={13} />
+                      删除
+                    </button>
+                  </div>
                 </div>
-                <p className="truncate font-mono text-[11px] text-text-muted" title={url}>{url}</p>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => void copyUrl(url)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-glass-border bg-panel-bg px-2 py-1.5 text-xs text-text-secondary hover:bg-hover-bg hover:text-foreground">
-                    <Copy size={13} />
-                    复制链接
-                  </button>
-                  <button type="button" onClick={() => updateReferences(references.filter((item) => item !== url))} className="inline-flex items-center justify-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-200 hover:bg-red-500/15">
-                    <Trash2 size={13} />
-                    删除
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="mt-3 flex min-h-[120px] flex-col items-center justify-center rounded-lg border border-dashed border-glass-border text-center text-text-muted">
@@ -161,6 +251,7 @@ export default function AssetImageReferenceSettingsSection({
           </div>
         )}
       </div>
+      {previewUrl ? <AssetCenteredPreview imageUrl={previewUrl} name="风格参考图" description={previewUrl} /> : null}
     </section>
   );
 }

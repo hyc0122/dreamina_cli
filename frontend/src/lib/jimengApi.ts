@@ -253,6 +253,10 @@ export interface JimengWebSessionAccount {
   id: string;
   label: string;
   sessionid_masked: string;
+  cookie_count: number;
+  has_fingerprint: boolean;
+  cookie_ready: boolean;
+  missing_cookie_names: string[];
   enabled: boolean;
   max_concurrency: number;
   cooldown_seconds: number;

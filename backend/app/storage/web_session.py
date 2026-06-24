@@ -1,4 +1,4 @@
-﻿"""Standalone Jimeng web-session account and task storage."""
+"""Standalone Jimeng web-session account and task storage."""
 
 import json
 import sqlite3
@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..jimeng_models import JimengWebSessionAccount, JimengWebSessionTask
-from ..web_session_client import mask_sessionid
+from ..web_session_client import SECURITY_COOKIE_NAMES, mask_sessionid, normalize_web_session_cookies, web_session_cookie_diagnostics
 
 
 def _now() -> str:
@@ -39,26 +39,26 @@ def create_web_session_account(
     cooldown_seconds: int = 0,
 ) -> JimengWebSessionAccount:
     clean_label = str(label or "").strip()
-    clean_sessionid = str(sessionid or "").strip()
     if not clean_label:
         raise ValueError("账号名称不能为空")
-    if not clean_sessionid:
-        raise ValueError("sessionid 不能为空")
+    cookies = normalize_web_session_cookies(str(sessionid or ""))
+    clean_sessionid = cookies["sessionid"]
     stamp = _now()
     account_id = _id("jimeng_web_account")
     with store._connect() as conn:
         conn.execute(
             """
             INSERT INTO web_session_accounts (
-                id, label, sessionid, enabled, max_concurrency, cooldown_seconds,
+                id, label, sessionid, cookie_json, enabled, max_concurrency, cooldown_seconds,
                 created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 account_id,
                 clean_label,
                 clean_sessionid,
+                _json(cookies) or "{}",
                 1 if enabled else 0,
                 max(1, int(max_concurrency or 1)),
                 max(0, int(cooldown_seconds or 0)),
@@ -77,6 +77,14 @@ def list_web_session_accounts(store: Any) -> list[JimengWebSessionAccount]:
             ORDER BY created_at ASC, id ASC
             """
         ).fetchall()
+    if any(_backfill_account_cookie_json(store, row) for row in rows):
+        with store._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM web_session_accounts
+                ORDER BY created_at ASC, id ASC
+                """
+            ).fetchall()
     return [account_from_row(row) for row in rows]
 
 
@@ -85,6 +93,9 @@ def get_web_session_account(store: Any, account_id: str) -> JimengWebSessionAcco
         row = conn.execute("SELECT * FROM web_session_accounts WHERE id = ?", (account_id,)).fetchone()
     if row is None:
         raise KeyError(f"Jimeng web session account not found: {account_id}")
+    if _backfill_account_cookie_json(store, row):
+        with store._connect() as conn:
+            row = conn.execute("SELECT * FROM web_session_accounts WHERE id = ?", (account_id,)).fetchone()
     return account_from_row(row)
 
 
@@ -93,6 +104,9 @@ def get_web_session_account_secret(store: Any, account_id: str) -> dict[str, Any
         row = conn.execute("SELECT * FROM web_session_accounts WHERE id = ?", (account_id,)).fetchone()
     if row is None:
         raise KeyError(f"Jimeng web session account not found: {account_id}")
+    if _backfill_account_cookie_json(store, row):
+        with store._connect() as conn:
+            row = conn.execute("SELECT * FROM web_session_accounts WHERE id = ?", (account_id,)).fetchone()
     return dict(row)
 
 
@@ -101,8 +115,10 @@ def update_web_session_account(store: Any, account_id: str, **updates: Any) -> J
     values = {key: value for key, value in updates.items() if key in allowed and value is not None}
     if "label" in values and not str(values["label"]).strip():
         raise ValueError("账号名称不能为空")
-    if "sessionid" in values and not str(values["sessionid"]).strip():
-        raise ValueError("sessionid 不能为空")
+    if "sessionid" in values:
+        cookies = normalize_web_session_cookies(str(values["sessionid"] or ""))
+        values["sessionid"] = cookies["sessionid"]
+        values["cookie_json"] = _json(cookies) or "{}"
     if "enabled" in values:
         values["enabled"] = 1 if bool(values["enabled"]) else 0
     if "max_concurrency" in values:
@@ -239,10 +255,16 @@ def update_web_session_task(store: Any, task_id: str, **updates: Any) -> JimengW
 
 
 def account_from_row(row: sqlite3.Row) -> JimengWebSessionAccount:
+    cookies = _account_cookie_map(row)
+    diagnostics = web_session_cookie_diagnostics(cookies)
     return JimengWebSessionAccount(
         id=row["id"],
         label=row["label"],
         sessionid_masked=mask_sessionid(row["sessionid"]),
+        cookie_count=len(cookies),
+        has_fingerprint=bool(diagnostics["has_fingerprint"]),
+        cookie_ready=bool(diagnostics["cookie_ready"]),
+        missing_cookie_names=list(diagnostics["missing_browser_cookie_names"]),
         enabled=bool(row["enabled"]),
         max_concurrency=int(row["max_concurrency"]),
         cooldown_seconds=int(row["cooldown_seconds"]),
@@ -277,6 +299,25 @@ def task_from_row(row: sqlite3.Row) -> JimengWebSessionTask:
     )
 
 
+
+def _backfill_account_cookie_json(store: Any, row: sqlite3.Row) -> bool:
+    cookies = _account_cookie_map(row)
+    if all(bool(cookies.get(key)) for key in SECURITY_COOKIE_NAMES):
+        return False
+    cookies = normalize_web_session_cookies(str(row["sessionid"] or ""), cookies)
+    with store._connect() as conn:
+        conn.execute(
+            "UPDATE web_session_accounts SET cookie_json = ?, updated_at = ? WHERE id = ?",
+            (_json(cookies) or "{}", _now(), row["id"]),
+        )
+    return True
+def _account_cookie_map(row: sqlite3.Row) -> dict[str, str]:
+    raw_cookie_json = row["cookie_json"] if "cookie_json" in row.keys() else None
+    loaded = _loads(raw_cookie_json)
+    cookies = loaded if isinstance(loaded, dict) else {}
+    if not cookies and row["sessionid"]:
+        cookies = {"sessionid": row["sessionid"]}
+    return {str(key): str(value) for key, value in cookies.items() if value}
 def _ensure_account_exists(store: Any, account_id: str) -> None:
     with store._connect() as conn:
         row = conn.execute("SELECT id FROM web_session_accounts WHERE id = ?", (account_id,)).fetchone()

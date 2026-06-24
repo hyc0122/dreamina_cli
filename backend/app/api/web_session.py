@@ -1,4 +1,4 @@
-﻿"""Standalone Jimeng web-session test endpoints."""
+"""Standalone Jimeng web-session test endpoints."""
 
 from typing import Any
 
@@ -7,12 +7,14 @@ from pydantic import BaseModel, Field
 
 from .context import _call, _dump, _now, get_store
 from ..web_session_client import (
+    WEB_GENERATE_EXTRA_PARAMS,
     build_history_query_payload,
-    build_jimeng_cookie,
     build_text_to_video_payload,
+    create_web_session_client,
     extract_submit_identity,
-    jimeng_web_request,
     parse_poll_result,
+    response_error_message,
+    web_session_error_message,
 )
 
 
@@ -21,7 +23,7 @@ router = APIRouter(prefix="/jimeng/web-session", tags=["jimeng-web-session"])
 
 class WebSessionAccountCreate(BaseModel):
     label: str
-    sessionid: str
+    sessionid: str = Field(description="sessionid 或浏览器完整 Cookie")
     enabled: bool = True
     max_concurrency: int = Field(default=1, ge=1, le=20)
     cooldown_seconds: int = Field(default=0, ge=0, le=3600)
@@ -29,7 +31,7 @@ class WebSessionAccountCreate(BaseModel):
 
 class WebSessionAccountUpdate(BaseModel):
     label: str | None = None
-    sessionid: str | None = None
+    sessionid: str | None = Field(default=None, description="sessionid 或浏览器完整 Cookie")
     enabled: bool | None = None
     max_concurrency: int | None = Field(default=None, ge=1, le=20)
     cooldown_seconds: int | None = Field(default=None, ge=0, le=3600)
@@ -111,16 +113,27 @@ def _create_and_submit_web_session_task(request: WebSessionTaskCreate):
         resolution=request.resolution,
     )
     try:
-        response = jimeng_web_request(
+        client = create_web_session_client(str(account.get("sessionid") or ""), account.get("cookie_json"))
+        response = client.signed_post(
             "/mweb/v1/aigc_draft/generate",
             payload,
-            build_jimeng_cookie(str(account.get("sessionid") or "")),
+            extra_params=WEB_GENERATE_EXTRA_PARAMS,
         )
     except Exception as exc:
         return store.update_web_session_task(task.id, status="failed", error_message=str(exc), finished_at=_now())
+    if _is_submit_error(response):
+        return store.update_web_session_task(
+            task.id,
+            status="failed",
+            raw_submit_response=response,
+            error_message=_response_error(response, account),
+            submitted_at=_now(),
+            finished_at=_now(),
+        )
+
     submit_id, history_id = extract_submit_identity(response, fallback_submit_id=str(payload.get("submit_id") or ""))
     status = "polling" if submit_id or history_id else "failed"
-    error_message = None if status == "polling" else _response_error(response)
+    error_message = None if status == "polling" else _response_error(response, account)
     return store.update_web_session_task(
         task.id,
         status=status,
@@ -141,10 +154,10 @@ def _poll_web_session_task(task_id: str):
     if not lookup_id:
         raise ValueError("任务没有 submit_id/history_id，无法轮询")
     try:
-        response = jimeng_web_request(
+        client = create_web_session_client(str(account.get("sessionid") or ""), account.get("cookie_json"))
+        response = client.signed_post(
             "/mweb/v1/get_history_by_ids",
             build_history_query_payload(lookup_id),
-            build_jimeng_cookie(str(account.get("sessionid") or "")),
         )
     except Exception as exc:
         return store.update_web_session_task(task_id, status="failed", error_message=str(exc), last_polled_at=_now())
@@ -162,5 +175,17 @@ def _poll_web_session_task(task_id: str):
     return store.update_web_session_task(task_id, **updates)
 
 
-def _response_error(response: dict[str, Any]) -> str:
-    return str(response.get("errmsg") or response.get("error") or "网页接口未返回 submit_id/history_id")
+def _is_submit_error(response: dict[str, Any]) -> bool:
+    if not isinstance(response, dict):
+        return True
+    if "ret" in response and str(response.get("ret")) != "0":
+        return True
+    data = response.get("data")
+    if isinstance(data, dict) and data.get("aigc_data") is None and (response.get("errmsg") or data.get("fail_code")):
+        return True
+    return False
+
+
+def _response_error(response: dict[str, Any], account: dict[str, Any] | None = None) -> str:
+    cookies = account.get("cookie_json") if isinstance(account, dict) else None
+    return web_session_error_message(response, cookies) or "网页接口未返回 submit_id/history_id"

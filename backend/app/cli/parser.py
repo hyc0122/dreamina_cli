@@ -15,7 +15,15 @@ def classify_dreamina_error(output: str) -> Optional[DreaminaErrorCategory]:
     text = output.lower()
     if not text.strip():
         return None
-    if "队列已满" in output or "queue is full" in text or "queue full" in text:
+    if (
+        "队列已满" in output
+        or "达到上限" in output
+        or "并发" in output
+        or "queue is full" in text
+        or "queue full" in text
+        or "exceededconcurrencylimit" in text
+        or "concurrency limit" in text
+    ):
         return DreaminaErrorCategory.QUEUE_FULL
     if "too many requests" in text or "rate limit" in text or "请求过于频繁" in output:
         return DreaminaErrorCategory.RATE_LIMITED

@@ -126,6 +126,51 @@ export const normalizeReferenceImageUrls = (value: unknown): string[] => {
   const urls = values.flatMap((item) => splitReferenceImageUrls(String(item ?? "")));
   return urls.filter((url, index) => urls.indexOf(url) === index).slice(0, 10);
 };
+export interface ReferenceImageUrlAddResult {
+  urls: string[];
+  added: string[];
+  invalid: string[];
+  duplicateCount: number;
+  skippedByLimit: number;
+}
+
+const isHttpImageReferenceUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+export const addReferenceImageUrls = (current: unknown, input: string, limit = 10): ReferenceImageUrlAddResult => {
+  const existing = normalizeReferenceImageUrls(current);
+  const candidates = splitReferenceImageUrls(input);
+  const urls = [...existing];
+  const added: string[] = [];
+  const invalid: string[] = [];
+  let duplicateCount = 0;
+  let skippedByLimit = 0;
+
+  for (const candidate of candidates) {
+    if (!isHttpImageReferenceUrl(candidate)) {
+      invalid.push(candidate);
+      continue;
+    }
+    if (urls.includes(candidate) || added.includes(candidate)) {
+      duplicateCount += 1;
+      continue;
+    }
+    if (urls.length >= limit) {
+      skippedByLimit += 1;
+      continue;
+    }
+    urls.push(candidate);
+    added.push(candidate);
+  }
+
+  return { urls, added, invalid, duplicateCount, skippedByLimit };
+};
 
 export const referenceImagesForAssetType = (settings: AssetImageSettings, assetType: JimengAssetType): string[] => {
   if (assetType === "character" && settings.styleReferenceUseCharacter) {
