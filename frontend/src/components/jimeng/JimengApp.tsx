@@ -14,12 +14,14 @@ import {
   ListChecks,
   MessageSquare,
   Moon,
+  CircleHelp,
   Settings,
   Sun,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import UpdateRequiredScreen from "@/components/jimeng/UpdateRequiredScreen";
+import JimengOnboardingGuide from "@/components/jimeng/onboarding/JimengOnboardingGuide";
 import JimengLauncherPage from "@/components/jimeng/pages/JimengLauncherPage";
 import JimengAssetManagerPage from "@/components/jimeng/pages/JimengAssetManagerPage";
 import JimengGenerationHistoryPage from "@/components/jimeng/pages/JimengGenerationHistoryPage";
@@ -45,6 +47,7 @@ interface JimengPageConfig {
 
 const THEME_STORAGE_KEY = "dreamina_cli_theme";
 const LOGIN_CACHE_KEY = "dreamina_cli_login_snapshot";
+const ONBOARDING_STORAGE_KEY = "dreamina_cli_onboarding_seen_v1";
 const APP_DISPLAY_NAME = "即梦cli自动排队助手";
 const HELP_URL = "https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink";
 const FEEDBACK_URL = "https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvMLycffc";
@@ -193,6 +196,7 @@ export default function JimengApp() {
   const [versionStatus, setVersionStatus] = useState<JimengVersionStatus | null>(null);
   const [versionChecked, setVersionChecked] = useState(false);
   const [autoOpenedUpdateVersion, setAutoOpenedUpdateVersion] = useState<string | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const activeConfig = JIMENG_PAGES.find((page) => page.id === activePage) ?? JIMENG_PAGES[0];
   const activeIndex = JIMENG_PAGES.findIndex((page) => page.id === activeConfig.id) + 1;
   const currentVersion = versionStatus?.current_version ?? runtimeInfo?.version ?? "--";
@@ -243,6 +247,24 @@ export default function JimengApp() {
   useEffect(() => {
     void refreshVersionStatus();
   }, [refreshVersionStatus]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || shellRoute !== "app") {
+      return;
+    }
+    if (window.localStorage.getItem(ONBOARDING_STORAGE_KEY) === "done") {
+      return;
+    }
+    const timer = window.setTimeout(() => setOnboardingOpen(true), 500);
+    return () => window.clearTimeout(timer);
+  }, [shellRoute]);
+
+  const closeOnboarding = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "done");
+    }
+    setOnboardingOpen(false);
+  }, []);
 
   useEffect(() => {
     if (!versionStatus?.update_required || autoOpenedUpdateVersion === versionStatus.latest_version) {
@@ -349,6 +371,14 @@ export default function JimengApp() {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setOnboardingOpen(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/15"
+            >
+              <CircleHelp size={15} />
+              新手引导
+            </button>
             <a
               href={HELP_URL}
               target="_blank"
@@ -436,6 +466,7 @@ export default function JimengApp() {
         </nav>
 
         <main className="min-h-0 flex-1 overflow-hidden">{renderPage()}</main>
+        <JimengOnboardingGuide open={onboardingOpen} onClose={closeOnboarding} onNavigate={setActivePage} />
       </div>
     </div>
   );

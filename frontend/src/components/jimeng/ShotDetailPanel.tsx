@@ -22,6 +22,7 @@ interface ShotDetailPanelProps {
   videoModelOptions?: LlmModelOption[];
   onGenerationSettingsChange: (settings: JimengVideoGenerationSettings) => void;
   onSubmitCurrent: () => void;
+  onPollCurrentSubmittedVideo?: () => Promise<void>;
 }
 
 const candidateLabel = (candidate: JimengVideoCandidate, index: number) => {
@@ -46,6 +47,7 @@ export default function ShotDetailPanel({
   videoModelOptions = [],
   onGenerationSettingsChange,
   onSubmitCurrent,
+  onPollCurrentSubmittedVideo,
 }: ShotDetailPanelProps) {
   const loadProjectData = useJimengStore((state) => state.loadProjectData);
   const [candidates, setCandidates] = useState<JimengVideoCandidate[]>([]);
@@ -53,6 +55,7 @@ export default function ShotDetailPanel({
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [pollingSubmitted, setPollingSubmitted] = useState(false);
   const [defaultingCandidateId, setDefaultingCandidateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -190,6 +193,24 @@ export default function ShotDetailPanel({
     }
   };
 
+  const pollSubmittedVideo = async () => {
+    if (!shot || !onPollCurrentSubmittedVideo || pollingSubmitted) {
+      return;
+    }
+    setPollingSubmitted(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await onPollCurrentSubmittedVideo();
+      await loadCandidates();
+      setNotice("已尝试拉取当前分镜提交结果");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "拉取提交结果失败");
+    } finally {
+      setPollingSubmitted(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-glass-border px-3 py-2.5">
@@ -253,6 +274,15 @@ export default function ShotDetailPanel({
             {exporting ? "保存中..." : "下载默认视频"}
           </button>
           </div>
+          <button
+            type="button"
+            onClick={pollSubmittedVideo}
+            disabled={!shot || !onPollCurrentSubmittedVideo || pollingSubmitted}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {pollingSubmitted ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+            {pollingSubmitted ? "正在拉取提交结果..." : "手动拉取已提交视频"}
+          </button>
           <div className="rounded-lg border border-glass-border bg-surface-inset p-2.5">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div>

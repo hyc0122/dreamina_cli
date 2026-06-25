@@ -24,12 +24,37 @@ from .schemas import (
     ShotCreate,
     ShotImport,
     ShotUpdate,
+    ShotVoiceAnalysisRequest,
 )
+from ..jimeng_models import JimengAssetType
 from ..jimeng_matching import calculate_highlights, match_assets_for_prompt, parse_csv_shots, parse_plain_text_shots
 
 
 router = APIRouter(prefix="/jimeng", tags=["jimeng-shots"])
 DEFAULT_DURATION_WHEN_UNDETECTED = 15
+VOICE_MARKERS = (
+    "对话",
+    "对白",
+    "台词",
+    "VO",
+    "vo",
+    "V.O",
+    "v.o",
+    "OS",
+    "os",
+    "O.S",
+    "o.s",
+    "画外音",
+    "旁白",
+    "内心",
+    "独白",
+    "说：",
+    "问：",
+    "答：",
+    "喊：",
+    "：\"",
+    "：“",
+)
 
 
 def _normalize_detected_duration(duration: int | None) -> int:
@@ -128,6 +153,50 @@ def clear_matched_assets(project_id: str, request: ShotAssetMatchRequest):
     return _call(clear_target_shots)
 
 
+@router.post("/projects/{project_id}/shots/analyze_silent_voice")
+def disable_silent_character_audio(project_id: str, request: ShotVoiceAnalysisRequest | None = None):
+    def analyze():
+        analysis_request = request or ShotVoiceAnalysisRequest()
+        assets_by_id = {asset.id: asset for asset in get_store().list_assets(project_id)}
+        all_shots = get_store().list_shots(project_id)
+        target_shots = _target_shots(project_id, analysis_request.shot_ids)
+        bindings_by_shot = {
+            shot.id: get_store().list_bindings(project_id, shot.id)
+            for shot in all_shots
+        }
+        frequent_audio_asset_ids = _frequent_audio_character_asset_ids(bindings_by_shot, assets_by_id)
+        disabled: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for shot in target_shots:
+            has_voice = _shot_has_voice_content(shot.prompt)
+            for binding in bindings_by_shot.get(shot.id, []):
+                asset = assets_by_id.get(binding.asset_id)
+                if (
+                    binding.asset_type != JimengAssetType.character
+                    or asset is None
+                    or not asset.audio_path
+                    or binding.asset_id not in frequent_audio_asset_ids
+                ):
+                    continue
+                if has_voice:
+                    skipped.append({"shot_id": shot.id, "shot_index": shot.shot_index, "binding_id": binding.id, "reason": "has_voice"})
+                    continue
+                if binding.voice_enabled:
+                    updated = get_store().update_binding(binding.id, voice_enabled=False)
+                    disabled.append(
+                        {
+                            "shot_id": shot.id,
+                            "shot_index": shot.shot_index,
+                            "binding_id": updated.id,
+                            "asset_id": updated.asset_id,
+                            "asset_name": asset.name,
+                        }
+                    )
+        return {"disabled": disabled, "skipped": skipped, "disabled_count": len(disabled)}
+
+    return _call(analyze)
+
+
 def _target_shots(project_id: str, shot_ids: list[str] | None):
     all_shots = get_store().list_shots(project_id)
     if not shot_ids:
@@ -149,6 +218,24 @@ def _delete_auto_bindings(project_id: str, shot_id: str) -> list[str]:
         get_store().delete_binding(binding.id)
         deleted.append(binding.id)
     return deleted
+
+
+def _frequent_audio_character_asset_ids(
+    bindings_by_shot: dict[str, list[Any]],
+    assets_by_id: dict[str, Any],
+    min_shots: int = 4,
+) -> set[str]:
+    shot_ids_by_asset: dict[str, set[str]] = {}
+    for shot_id, bindings in bindings_by_shot.items():
+        for binding in bindings:
+            asset = assets_by_id.get(binding.asset_id)
+            if binding.asset_type == JimengAssetType.character and asset and asset.audio_path:
+                shot_ids_by_asset.setdefault(binding.asset_id, set()).add(shot_id)
+    return {asset_id for asset_id, shot_ids in shot_ids_by_asset.items() if len(shot_ids) >= min_shots}
+
+
+def _shot_has_voice_content(prompt: str) -> bool:
+    return any(marker in prompt for marker in VOICE_MARKERS)
 
 
 @router.put("/projects/{project_id}/shots/{shot_id}")
@@ -180,6 +267,7 @@ def detect_shot_duration(project_id: str, shot_id: str):
 def batch_detect_project_durations(project_id: str):
     def detect_all():
         results: list[dict[str, Any]] = []
+        undetected_shots: list[dict[str, Any]] = []
         updated_count = 0
         skipped_count = 0
         for shot in get_store().list_shots(project_id):
@@ -198,7 +286,20 @@ def batch_detect_project_durations(project_id: str):
                     "shot": _dump(updated),
                 }
             )
-        return {"results": results, "updated_count": updated_count, "skipped_count": skipped_count}
+            if not detected:
+                undetected_shots.append(
+                    {
+                        "shot_id": shot.id,
+                        "shot_index": shot.shot_index,
+                        "duration": duration,
+                    }
+                )
+        return {
+            "results": results,
+            "updated_count": updated_count,
+            "skipped_count": skipped_count,
+            "undetected_shots": undetected_shots,
+        }
 
     return _call(detect_all)
 

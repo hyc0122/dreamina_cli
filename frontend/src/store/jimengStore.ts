@@ -70,6 +70,7 @@ export interface JimengStore extends JimengStateData {
   cancelQueueItem: (queueItemId: string) => Promise<void>;
   deleteQueueItem: (queueItemId: string) => Promise<void>;
   retryQueueItem: (queueItemId: string) => Promise<void>;
+  pollQueueItem: (queueItemId: string) => Promise<void>;
   reorderQueue: (queueItemIds: string[]) => Promise<void>;
 }
 
@@ -139,14 +140,11 @@ const buildVideoStateByShotId = async (projectId: string, shots: JimengShot[]): 
 };
 
 const calculateBoundPromptHighlights = (prompt: string, assets: JimengAsset[], bindings: JimengAssetBinding[]): JimengHighlightSpan[] => {
-  if (bindings.length === 0) {
-    return [];
-  }
   const boundAssetIds = new Set(bindings.map((binding) => binding.asset_id));
-  return calculatePromptHighlights(
-    prompt,
-    assets.filter((asset) => boundAssetIds.has(asset.id)),
-  );
+  return calculatePromptHighlights(prompt, assets).map((span) => ({
+    ...span,
+    bound: span.asset_id ? boundAssetIds.has(span.asset_id) : false,
+  }));
 };
 
 const buildBoundHighlightsByShotId = (
@@ -515,6 +513,22 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
       await get().loadQueue("global");
     } catch (error) {
       set({ error: errorMessageFrom(error), loading: false });
+    }
+  },
+
+  pollQueueItem: async (queueItemId) => {
+    set({ loading: true, error: null });
+    try {
+      await jimengApi.pollQueueItem(queueItemId);
+      const projectId = get().currentProject?.id;
+      if (projectId) {
+        await get().loadProjectData(projectId);
+      } else {
+        await get().loadQueue("global");
+      }
+    } catch (error) {
+      set({ error: errorMessageFrom(error), loading: false });
+      throw error;
     }
   },
 

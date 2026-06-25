@@ -15,6 +15,8 @@ class ProjectCreate(BaseModel):
     style: str = ""
     description: str = ""
     default_ratio: str = "9:16"
+    inherit_source_project_id: Optional[str] = None
+    inherit_source_shot_id: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -60,6 +62,10 @@ class ShotBatchDelete(BaseModel):
 class ShotAssetMatchRequest(BaseModel):
     shot_ids: list[str] = Field(default_factory=list)
     clear_existing_auto: bool = False
+
+
+class ShotVoiceAnalysisRequest(BaseModel):
+    shot_ids: list[str] = Field(default_factory=list)
 
 
 class RenderPromptPreviewRequest(BaseModel):

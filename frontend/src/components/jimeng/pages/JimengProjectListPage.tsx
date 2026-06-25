@@ -4,7 +4,14 @@ import clsx from "clsx";
 import { ArrowRight, Edit3, FolderOpen, Loader2, Palette, Plus, Save, Trash2, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
-import { JIMENG_VIDEO_RATIOS, jimengApi, type JimengProject, type JimengProjectStatus, type JimengStylePreset } from "@/lib/jimengApi";
+import {
+  JIMENG_VIDEO_RATIOS,
+  jimengApi,
+  type JimengProject,
+  type JimengProjectStatus,
+  type JimengShot,
+  type JimengStylePreset,
+} from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
 
 const STATUS_LABELS: Record<JimengProjectStatus, string> = {
@@ -363,6 +370,11 @@ export default function JimengProjectListPage() {
   const [description, setDescription] = useState("");
   const [stylePresets, setStylePresets] = useState<JimengStylePreset[]>([]);
   const [styleManagerOpen, setStyleManagerOpen] = useState(false);
+  const [inheritProjectId, setInheritProjectId] = useState("");
+  const [inheritShotId, setInheritShotId] = useState("");
+  const [inheritShots, setInheritShots] = useState<JimengShot[]>([]);
+  const [loadingInheritShots, setLoadingInheritShots] = useState(false);
+  const [inheritError, setInheritError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [enteringId, setEnteringId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -382,6 +394,45 @@ export default function JimengProjectListPage() {
 
   const sortedProjects = useMemo(() => [...projects].sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()), [projects]);
   const createStyleOptions = useMemo(() => styleOptionsFor(stylePresets, style), [style, stylePresets]);
+
+  useEffect(() => {
+    if (!inheritProjectId) {
+      setInheritShots([]);
+      setInheritShotId("");
+      setInheritError(null);
+      return;
+    }
+
+    let active = true;
+    setLoadingInheritShots(true);
+    setInheritError(null);
+    void jimengApi
+      .listShots(inheritProjectId)
+      .then((nextShots) => {
+        if (!active) {
+          return;
+        }
+        setInheritShots(nextShots);
+        setInheritShotId((current) => (nextShots.some((shot) => shot.id === current) ? current : nextShots[0]?.id ?? ""));
+      })
+      .catch((caught) => {
+        if (!active) {
+          return;
+        }
+        setInheritShots([]);
+        setInheritShotId("");
+        setInheritError(caught instanceof Error ? caught.message : "读取来源分镜失败");
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingInheritShots(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [inheritProjectId]);
 
   const saveStyleLibrary = async (styles: StylePresetDraft[]) => {
     const originalIds = new Set(stylePresets.map((item) => item.id));
@@ -423,11 +474,20 @@ export default function JimengProjectListPage() {
         style: style.trim(),
         default_ratio: defaultRatio,
         description: description.trim(),
+        ...(inheritProjectId && inheritShotId
+          ? {
+              inherit_source_project_id: inheritProjectId,
+              inherit_source_shot_id: inheritShotId,
+            }
+          : {}),
       });
       setName("");
       setStyle("");
       setDefaultRatio("9:16");
       setDescription("");
+      setInheritProjectId("");
+      setInheritShotId("");
+      setInheritShots([]);
       await loadProjects();
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : "创建项目失败");
@@ -488,6 +548,39 @@ export default function JimengProjectListPage() {
               风格库
             </button>
           </form>
+          <div className="mt-3 grid gap-3 rounded-lg border border-glass-border bg-surface-inset p-3 lg:grid-cols-[220px_240px_minmax(0,1fr)]">
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium text-text-secondary">继承分镜资产</span>
+              <select value={inheritProjectId} onChange={(event) => setInheritProjectId(event.target.value)} className="glass-input w-full text-sm text-foreground" disabled={creating}>
+                <option value="">不继承</option>
+                {sortedProjects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium text-text-secondary">来源分镜</span>
+              <select
+                value={inheritShotId}
+                onChange={(event) => setInheritShotId(event.target.value)}
+                className="glass-input w-full text-sm text-foreground"
+                disabled={creating || !inheritProjectId || loadingInheritShots || inheritShots.length === 0}
+              >
+                <option value="">{loadingInheritShots ? "读取中..." : "选择来源分镜"}</option>
+                {inheritShots.map((shot) => (
+                  <option key={shot.id} value={shot.id}>
+                    分镜{shot.shot_index}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="self-end rounded-md border border-glass-border bg-black/20 px-3 py-2 text-xs leading-5 text-text-muted">
+              新建剧本时只复制来源分镜已绑定的角色、场景、道具和音色图片资产，不复制候选视频。
+            </p>
+          </div>
+          {inheritError ? <p className="mt-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{inheritError}</p> : null}
           {formError ? <p className="mt-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{formError}</p> : null}
           {error ? <p className="mt-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p> : null}
         </section>

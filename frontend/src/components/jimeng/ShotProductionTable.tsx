@@ -19,6 +19,7 @@ import {
   Timer,
   Trash2,
   Video,
+  VolumeX,
   type LucideIcon,
 } from "lucide-react";
 import { type CSSProperties, useCallback, useMemo, useState } from "react";
@@ -160,6 +161,23 @@ export default function ShotProductionTable({
     [bindingsByShotId, selectedShots],
   );
   const allSelected = shots.length > 0 && shots.every((shot) => selectedShotSet.has(shot.id));
+  const unmadeShots = useMemo(
+    () =>
+      shots.filter((shot) => {
+        const state = videoStateByShotId[shot.id];
+        return !state?.hasVideo && !isShotVideoMaking(shot, queueItems);
+      }),
+    [queueItems, shots, videoStateByShotId],
+  );
+  const unmadeSelected = unmadeShots.length > 0 && unmadeShots.every((shot) => selectedShotSet.has(shot.id));
+  const unmadeShotSummary = useMemo(() => {
+    if (unmadeShots.length === 0) {
+      return "当前没有未制作视频的分镜";
+    }
+    const labels = unmadeShots.map((shot) => `分镜${shot.shot_index}`);
+    const visible = labels.slice(0, 30).join("、");
+    return `未制作视频清单（${labels.length}）：${visible}${labels.length > 30 ? ` 等共 ${labels.length} 个` : ""}`;
+  }, [unmadeShots]);
   const operationBusy = operationLabel !== null;
 
   const refreshProject = useCallback(() => loadProjectData(project.id), [loadProjectData, project.id]);
@@ -183,6 +201,16 @@ export default function ShotProductionTable({
     } finally {
       setOperationLabel(null);
     }
+  };
+
+  const selectUnmadeShots = () => {
+    if (unmadeSelected) {
+      setShotSelection([]);
+      setNotice("已取消未制作视频分镜选择");
+      return;
+    }
+    setShotSelection(unmadeShots.map((shot) => shot.id));
+    setNotice(`已选中 ${unmadeShots.length} 个未制作视频分镜`);
   };
 
   const addShot = () =>
@@ -233,7 +261,24 @@ export default function ShotProductionTable({
     runOperation("批量检测分镜时长中", async () => {
       const response = await jimengApi.batchDetectShotDurations(project.id);
       await refreshProject();
-      setNotice(`批量检测完成：已设置 ${response.updated_count} 条；未识别时长的分镜已默认按 15 秒处理`);
+      const undetectedIndexes = (response.undetected_shots ?? []).map((item) => `分镜${item.shot_index}`);
+      setNotice(
+        undetectedIndexes.length > 0
+          ? `批量检测完成：已设置 ${response.updated_count} 条；未识别 ${undetectedIndexes.join("、")}，已默认按 15 秒处理`
+          : `批量检测完成：已设置 ${response.updated_count} 条`,
+      );
+    });
+
+  const analyzeSilentVoice = () =>
+    runOperation("分析无对白音频中", async () => {
+      const targetShotIds = selectedShotIds.length > 0 ? selectedShotIds : [];
+      const response = await jimengApi.analyzeSilentVoice(project.id, { shot_ids: targetShotIds });
+      await refreshProject();
+      setNotice(
+        response.disabled_count > 0
+          ? `已关闭 ${response.disabled_count} 个无对白分镜角色音频`
+          : "未发现需要关闭的无对白角色音频",
+      );
     });
 
   const updateDuration = (shot: JimengShot, value: string) =>
@@ -323,7 +368,14 @@ export default function ShotProductionTable({
           onClick={() => setShotSelection(allSelected ? [] : shots.map((shot) => shot.id))}
           disabled={shots.length === 0}
         >
-          {allSelected ? "取消全选" : "全选分镜"}
+          {allSelected ? `取消全选（${shots.length}）` : `全选分镜（${shots.length}）`}
+        </ToolbarButton>
+        <ToolbarButton
+          icon={unmadeSelected ? CheckSquare : Video}
+          onClick={selectUnmadeShots}
+          disabled={unmadeShots.length === 0}
+        >
+          {unmadeSelected ? `取消未制作视频（${unmadeShots.length}）` : `全选未制作视频（${unmadeShots.length}）`}
         </ToolbarButton>
         <ToolbarButton icon={FileInput} onClick={() => setImportOpen(true)}>
           导入分镜
@@ -342,6 +394,9 @@ export default function ShotProductionTable({
         </ToolbarButton>
         <ToolbarButton icon={Timer} onClick={batchDetectDurations} disabled={loading || shots.length === 0}>
           批量检测时长
+        </ToolbarButton>
+        <ToolbarButton icon={VolumeX} onClick={analyzeSilentVoice} disabled={loading || shots.length === 0}>
+          分析无对白音频
         </ToolbarButton>
         <ToolbarButton icon={Replace} onClick={() => setReplaceOpen(true)} disabled={selectedShotIds.length === 0}>
           批量文本替换
@@ -382,6 +437,11 @@ export default function ShotProductionTable({
           )}
         </div>
       )}
+      {!operationLabel && unmadeShots.length > 0 ? (
+        <div className="border-b border-glass-border px-4 py-2">
+          <p className="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs leading-5 text-primary">{unmadeShotSummary}</p>
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
         <div className="space-y-3">

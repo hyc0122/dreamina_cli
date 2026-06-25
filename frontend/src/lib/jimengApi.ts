@@ -63,6 +63,7 @@ export interface JimengBatchDurationDetectionResponse {
   results: JimengDurationDetectionResult[];
   updated_count: number;
   skipped_count: number;
+  undetected_shots?: JimengDurationDetectionResult[];
 }
 
 export interface JimengAsset {
@@ -268,6 +269,23 @@ export interface JimengWebSessionAccount {
   updated_at: string;
 }
 
+export interface JimengSilentVoiceAnalysisResult {
+  disabled: Array<{
+    shot_id: string;
+    shot_index: number;
+    binding_id: string;
+    asset_id: string;
+    asset_name: string;
+  }>;
+  skipped: Array<{
+    shot_id: string;
+    shot_index: number;
+    binding_id: string;
+    reason: string;
+  }>;
+  disabled_count: number;
+}
+
 export interface JimengVersionStatus {
   app_name: string;
   current_version: string;
@@ -322,6 +340,8 @@ export interface JimengRuntimeInstancesEnvelope {
 export interface JimengHighlightSpan {
   text: string;
   asset_type: JimengAssetType;
+  asset_id?: string;
+  bound?: boolean;
   start: number;
   end: number;
 }
@@ -720,7 +740,7 @@ export const jimengApi = {
     axios.post<JimengWebSessionTask>(`${API_URL}/jimeng/web-session/tasks/${taskId}/poll`).then((res) => res.data),
   listProjects: () =>
     axios.get<JimengProject[]>(`${API_URL}/jimeng/projects`).then((res) => res.data),
-  createProject: (data: { name: string; style?: string; description?: string; default_ratio?: string }) =>
+  createProject: (data: { name: string; style?: string; description?: string; default_ratio?: string; inherit_source_project_id?: string; inherit_source_shot_id?: string }) =>
     axios.post<JimengProject>(`${API_URL}/jimeng/projects`, data).then((res) => res.data),
   getProject: (projectId: string) =>
     axios.get<JimengProject>(`${API_URL}/jimeng/projects/${projectId}`).then((res) => res.data),
@@ -755,6 +775,8 @@ export const jimengApi = {
     axios.post<JimengMatchAssetsResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/match_assets`, data).then((res) => res.data),
   clearMatchedAssets: (projectId: string, data: { shot_ids: string[] }) =>
     axios.post<JimengClearMatchedAssetsResponse>(`${API_URL}/jimeng/projects/${projectId}/shots/clear_matched_assets`, data).then((res) => res.data),
+  analyzeSilentVoice: (projectId: string, data: { shot_ids?: string[] } = {}) =>
+    axios.post<JimengSilentVoiceAnalysisResult>(`${API_URL}/jimeng/projects/${projectId}/shots/analyze_silent_voice`, data).then((res) => res.data),
 
   listAssets: (projectId: string, type?: JimengAssetType) =>
     axios.get<JimengAsset[]>(`${API_URL}/jimeng/projects/${projectId}/assets`, { params: { type } }).then((res) => res.data),
@@ -879,6 +901,8 @@ export const jimengApi = {
     axios.delete<{ deleted_id: string }>(`${API_URL}/jimeng/queue/items/${queueItemId}`).then((res) => res.data),
   retryQueueItem: (queueItemId: string) =>
     axios.post<JimengQueueItem>(`${API_URL}/jimeng/queue/items/${queueItemId}/retry`).then((res) => res.data),
+  pollQueueItem: (queueItemId: string) =>
+    axios.post<JimengQueueItem>(`${API_URL}/jimeng/queue/items/${queueItemId}/poll`).then((res) => res.data),
   reorderQueue: (queueItemIds: string[]) =>
     axios.post<{ items: JimengQueueItem[] }>(`${API_URL}/jimeng/queue/reorder`, { queue_item_ids: queueItemIds }).then((res) => res.data),
 

@@ -615,6 +615,21 @@ export default function AssetPickerDrawer({ projectId, target, assets, bindings,
                       onOpen={bindingBusy ? undefined : () => bindAsset(asset)}
                     />
                   </div>
+                  <button
+                    type="button"
+                    title={`添加${asset.name}到当前分镜`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (!bindingBusy) {
+                        void bindAsset(asset);
+                      }
+                    }}
+                    disabled={bindingBusy || bindingAssetId === asset.id}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-wait disabled:opacity-45"
+                  >
+                    {bindingAssetId === asset.id ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                    添加
+                  </button>
                 </div>
               );
             })}

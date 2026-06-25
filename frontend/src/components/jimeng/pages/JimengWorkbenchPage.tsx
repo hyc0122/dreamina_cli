@@ -169,6 +169,15 @@ export default function JimengWorkbenchPage() {
   const selectedShotSet = useMemo(() => new Set(selectedShotIds), [selectedShotIds]);
   const selectedShots = useMemo(() => shots.filter((shot) => selectedShotSet.has(shot.id)), [selectedShotSet, shots]);
   const batchSubmitTargetShots = useMemo(() => (selectedShots.length > 0 ? selectedShots : shots), [selectedShots, shots]);
+  const durationTotalSeconds = useMemo(
+    () => shots.reduce((total, shot) => total + (Number.isFinite(Number(shot.default_duration)) ? Number(shot.default_duration) : 0), 0),
+    [shots],
+  );
+  const durationTotalLabel = useMemo(() => {
+    const minutes = Math.floor(durationTotalSeconds / 60);
+    const seconds = durationTotalSeconds % 60;
+    return minutes > 0 ? `${durationTotalSeconds} 秒 / ${minutes}分${seconds}秒` : `${durationTotalSeconds} 秒`;
+  }, [durationTotalSeconds]);
   const focusedShot = useMemo(() => {
     const preferredId = focusedShotId ?? selectedShotId ?? selectedShotIds[0] ?? null;
     return shots.find((shot) => shot.id === preferredId) ?? shots[0] ?? null;
@@ -238,7 +247,7 @@ export default function JimengWorkbenchPage() {
     }
   }, [currentProject, loadProjectData, submitShots]);
 
-  const requestSubmitShots = useCallback((targetShots: JimengShot[], settings: JimengVideoGenerationSettings) => {
+  const requestSubmitShots = useCallback((targetShots: JimengShot[], settings: JimengVideoGenerationSettings, options: { blockExistingVideos?: boolean } = {}) => {
     if (submittingRef.current) {
       return false;
     }
@@ -248,6 +257,16 @@ export default function JimengWorkbenchPage() {
     if (targetShots.length === 0) {
       setSubmitError("请先选择要提交的分镜");
       return false;
+    }
+
+    if (options.blockExistingVideos) {
+      const generatedShots = targetShots.filter((shot) => videoStateByShotId[shot.id]?.hasVideo);
+      if (generatedShots.length > 0) {
+        const message = `以下分镜已经生成过视频，已停止批量提交：${generatedShots.map((shot) => `分镜${shot.shot_index}`).join("、")}`;
+        window.alert(message);
+        setSubmitError(message);
+        return false;
+      }
     }
 
     const missingImages = targetShots.filter((shot) => !shotHasBoundImage(shot));
@@ -270,11 +289,11 @@ export default function JimengWorkbenchPage() {
 
     void submitNow(targetShots.map((shot) => shot.id), settings);
     return true;
-  }, [assetById, bindingsByShotId, currentProject, shotHasBoundImage, submitNow]);
+  }, [assetById, bindingsByShotId, currentProject, shotHasBoundImage, submitNow, videoStateByShotId]);
 
   const handleSubmitSelected = useCallback(
     (settings: JimengVideoGenerationSettings = generationSettings) => {
-      return requestSubmitShots(batchSubmitTargetShots, settings);
+      return requestSubmitShots(batchSubmitTargetShots, settings, { blockExistingVideos: true });
     },
     [batchSubmitTargetShots, generationSettings, requestSubmitShots],
   );
@@ -286,6 +305,25 @@ export default function JimengWorkbenchPage() {
     }
     requestSubmitShots([focusedShot], generationSettings);
   }, [focusedShot, generationSettings, requestSubmitShots]);
+
+  const pullCurrentShotSubmittedVideo = useCallback(async () => {
+    if (!focusedShot || !currentProject) {
+      setSubmitError("请先选择一个分镜");
+      return;
+    }
+    const item = [...queue].reverse().find((queueItem) => queueItem.shot_id === focusedShot.id && queueItem.submit_id);
+    if (!item) {
+      setSubmitError(`分镜${focusedShot.shot_index} 没有可拉取的 submit_id 记录`);
+      return;
+    }
+    try {
+      setSubmitError(null);
+      await jimengApi.pollQueueItem(item.id);
+      await loadProjectData(currentProject.id);
+    } catch (error) {
+      setSubmitError(errorMessageFrom(error));
+    }
+  }, [currentProject, focusedShot, loadProjectData, queue]);
 
   const saveBatchSubmitSettings = useCallback(async (settings: JimengVideoGenerationSettings, submitIntervalSeconds: number) => {
     const interval = Math.min(300, Math.max(1, Math.round(submitIntervalSeconds || 3)));
@@ -391,6 +429,9 @@ export default function JimengWorkbenchPage() {
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <span className="inline-flex h-9 items-center rounded-md border border-glass-border bg-surface-inset px-3 text-xs text-text-secondary">
+              推荐总时长：<span className="ml-1 font-mono text-primary">{durationTotalLabel}</span>
+            </span>
             <button
               type="button"
               onClick={() => setPromptPresetManagerOpen(true)}
@@ -457,6 +498,7 @@ export default function JimengWorkbenchPage() {
               videoModelOptions={videoModelOptions}
               onGenerationSettingsChange={setGenerationSettings}
               onSubmitCurrent={handleSubmitCurrent}
+              onPollCurrentSubmittedVideo={pullCurrentShotSubmittedVideo}
             />
           )}
         </aside>

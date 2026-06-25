@@ -155,6 +155,7 @@ export default function JimengQueuePage() {
   const cancelQueueItem = useJimengStore((state) => state.cancelQueueItem);
   const deleteQueueItem = useJimengStore((state) => state.deleteQueueItem);
   const retryQueueItem = useJimengStore((state) => state.retryQueueItem);
+  const pollQueueItem = useJimengStore((state) => state.pollQueueItem);
   const reorderQueue = useJimengStore((state) => state.reorderQueue);
   const selectProject = useJimengStore((state) => state.selectProject);
   const setActivePage = useJimengStore((state) => state.setActivePage);
@@ -300,6 +301,14 @@ export default function JimengQueuePage() {
       return;
     }
     void runAction("已删除已取消队列记录", () => deleteQueueItem(item.id), item.id);
+  };
+
+  const pollQueueItemOnce = (item: JimengQueueItem) => {
+    if (!item.submit_id) {
+      setError("这条队列记录没有 submit_id，无法手动拉取结果。");
+      return;
+    }
+    void runAction("已手动拉取一次提交结果", () => pollQueueItem(item.id), item.id);
   };
 
   const reorderQueueItem = (item: JimengQueueItem, direction: "up" | "down") =>
@@ -572,6 +581,13 @@ export default function JimengQueuePage() {
                                 label="重试"
                                 onClick={() => retryQueueItemWithConfirm(item)}
                                 disabled={isBusy || isQueueItemBusy(item)}
+                              />
+                              <QueueActionButton
+                                icon={RefreshCw}
+                                label="拉取"
+                                onClick={() => pollQueueItemOnce(item)}
+                                disabled={isBusy || !item.submit_id}
+                                tone="primary"
                               />
                               <QueueActionButton
                                 icon={SquareX}

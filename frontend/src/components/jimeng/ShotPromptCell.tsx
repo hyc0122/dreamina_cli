@@ -11,6 +11,7 @@ const HIGHLIGHT_CLASS = {
   scene: "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-200",
   prop: "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-200",
 } as const;
+const UNBOUND_HIGHLIGHT_CLASS = "border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-500/25 dark:bg-zinc-500/10 dark:text-zinc-300";
 
 interface ShotPromptCellProps {
   shot: JimengShot;
@@ -29,6 +30,8 @@ function areHighlightsEqual(previous: JimengHighlightSpan[], next: JimengHighlig
     const target = next[index];
     return (
       item.asset_type === target.asset_type &&
+      item.asset_id === target.asset_id &&
+      item.bound === target.bound &&
       item.text === target.text &&
       item.start === target.start &&
       item.end === target.end
@@ -144,7 +147,7 @@ function ShotPromptCell({ shot, highlights, onSavePrompt }: ShotPromptCellProps)
               ) : (
                 <mark
                   key={`${segment.kind}-${segment.start}-${segment.end}-${index}`}
-                  className={clsx("rounded border px-1 py-0.5", HIGHLIGHT_CLASS[segment.kind])}
+                  className={clsx("rounded border px-1 py-0.5", segment.bound === false ? UNBOUND_HIGHLIGHT_CLASS : HIGHLIGHT_CLASS[segment.kind])}
                 >
                   {segment.text}
                 </mark>

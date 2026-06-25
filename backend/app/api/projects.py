@@ -3,6 +3,7 @@
 负责项目创建、列表、详情、修改、复制和删除；不要在这里放分镜、资产、队列或 CLI 登录逻辑。
 """
 
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter
@@ -56,16 +57,22 @@ def list_projects():
 
 @router.post("/projects")
 def create_project(request: ProjectCreate):
-    return _call(
-        lambda: _dump(
-            get_store().create_project(
-                request.name,
-                request.style,
-                request.description,
-                request.default_ratio,
-            )
+    def create():
+        created = get_store().create_project(
+            request.name,
+            request.style,
+            request.description,
+            request.default_ratio,
         )
-    )
+        if request.inherit_source_project_id and request.inherit_source_shot_id:
+            _inherit_assets_from_source_shot(
+                target_project_id=created.id,
+                source_project_id=request.inherit_source_project_id,
+                source_shot_id=request.inherit_source_shot_id,
+            )
+        return _dump(get_store().get_project(created.id))
+
+    return _call(create)
 
 
 @router.get("/projects/{project_id}")
@@ -122,3 +129,48 @@ def duplicate_project(project_id: str):
         return _dump(get_store().get_project(created.id))
 
     return _call(duplicate)
+
+
+def _inherit_assets_from_source_shot(target_project_id: str, source_project_id: str, source_shot_id: str) -> None:
+    store = get_store()
+    store.get_project(target_project_id)
+    store.get_shot(source_project_id, source_shot_id)
+    source_asset_by_id = {asset.id: asset for asset in store.list_assets(source_project_id)}
+    copied_asset_ids: set[str] = set()
+    for binding in store.list_bindings(source_project_id, source_shot_id):
+        if binding.asset_id in copied_asset_ids:
+            continue
+        source_asset = source_asset_by_id.get(binding.asset_id)
+        if source_asset is None:
+            continue
+        copied = store.create_asset(
+            target_project_id,
+            source_asset.type,
+            source_asset.name,
+            source_asset.aliases,
+            source_asset.description,
+            source_asset.image_model,
+            source_asset.image_ratio,
+            source_asset.image_params,
+            source_asset.video_prompt,
+            source_asset.character_kind,
+        )
+        _copy_asset_file_if_present(target_project_id, copied.type, copied.name, source_asset.image_path, "image", copied.image_ratio)
+        _copy_asset_file_if_present(target_project_id, copied.type, copied.name, source_asset.audio_path, "audio", copied.image_ratio)
+        copied_asset_ids.add(binding.asset_id)
+
+
+def _copy_asset_file_if_present(
+    target_project_id: str,
+    asset_type,
+    asset_name: str,
+    source_path: str | None,
+    file_kind: str,
+    image_ratio: str,
+) -> None:
+    if not source_path:
+        return
+    source = Path(source_path)
+    if not source.exists() or not source.is_file():
+        return
+    get_store().upsert_asset_file(target_project_id, asset_type, asset_name, source, file_kind, image_ratio=image_ratio)

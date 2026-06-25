@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from ..jimeng_models import JimengQueueStatus, JimengShotStatus
+from ..jimeng_queue import JimengQueueWorker
 from ..providers import DreaminaCliProvider
 from ..queue_worker_launcher import start_queue_worker_process
 from .context import _call, _dump, _model_data, _now, get_store, save_runtime_settings
@@ -90,6 +91,11 @@ def retry_queue_item(queue_item_id: str):
     )
 
 
+@router.post("/queue/items/{queue_item_id}/poll")
+def poll_queue_item(queue_item_id: str):
+    return _call(lambda: _dump(_poll_queue_item(queue_item_id)))
+
+
 @router.delete("/queue/items/{queue_item_id}")
 def delete_queue_item(queue_item_id: str):
     return _call(lambda: {"deleted_id": get_store().delete_canceled_queue_item(queue_item_id)})
@@ -145,6 +151,19 @@ def _cancel_queue_item(queue_item_id: str):
     )
     _restore_shot_status_after_queue_cancel(updated.project_id, updated.shot_id, item.id)
     return updated
+
+
+def _poll_queue_item(queue_item_id: str):
+    store = get_store()
+    item = store.get_queue_item(queue_item_id)
+    if not item.submit_id:
+        raise ValueError("当前队列任务没有 submit_id，无法手动拉取")
+    worker = JimengQueueWorker(
+        store=store,
+        cli=_cli(),
+        provider_factory=_provider_factory,
+    )
+    return worker.poll_item(item)
 
 
 def _restore_shot_status_after_queue_cancel(project_id: str, shot_id: str, canceled_item_id: str) -> None:

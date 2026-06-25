@@ -10,6 +10,7 @@ export type PromptHighlightSegment = {
   text: string;
   start: number;
   end: number;
+  bound?: boolean;
 };
 
 export type PromptSegment = PromptTextSegment | PromptHighlightSegment;
@@ -189,6 +190,7 @@ export function calculatePromptHighlights(prompt: string, assets: JimengAsset[])
   return selectNonOverlappingSpans(prompt, assets)
     .sort((left, right) => left.start - right.start)
     .map((span) => ({
+      asset_id: span.assetId,
       text: prompt.slice(span.start, span.end),
       asset_type: span.assetType,
       start: span.start,
@@ -222,6 +224,7 @@ export function buildPromptSegments(prompt: string, highlights: JimengHighlightS
       text: prompt.slice(highlight.start, highlight.end),
       start: highlight.start,
       end: highlight.end,
+      bound: highlight.bound,
     });
     cursor = highlight.end;
   }

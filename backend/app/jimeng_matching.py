@@ -41,8 +41,21 @@ class _CandidateSpan:
     end: int
 
 
+@dataclass(frozen=True)
+class _StructuredToken:
+    text: str
+    match_text: str
+    start: int
+    end: int
+
+
 _FIELD_PATTERN = re.compile(r"^\s*(场景|人物|道具|分镜提示词)\s*[：:]\s*(.*)$")
 _CHARACTER_FIELD_PATTERN = re.compile(r"(?m)^\s*人物\s*[：:]\s*(.*)$")
+_STRUCTURED_FIELD_PATTERNS = {
+    JimengAssetType.character: re.compile(r"(?m)^\s*人物\s*[：:]\s*(.*)$"),
+    JimengAssetType.scene: re.compile(r"(?m)^\s*场景\s*[：:]\s*(.*)$"),
+    JimengAssetType.prop: re.compile(r"(?m)^\s*道具\s*[：:]\s*(.*)$"),
+}
 _SHOT_MARKER_PATTERN = re.compile(r"(?m)^\s*#\s*\d+\s*$")
 _NAME_SPLIT_PATTERN = re.compile(r"[、;,，；]")
 _BRACKET_TRANSLATION = str.maketrans({"[": "(", "【": "(", "（": "(", "［": "(", "]": ")", "】": ")", "）": ")", "］": ")"})
@@ -93,7 +106,7 @@ def parse_csv_shots(csv_text: str) -> list[ImportedJimengShot]:
 
 def match_assets_for_prompt(prompt: str, assets: list[JimengAsset]) -> list[AssetMatch]:
     selected = sorted(
-        _select_non_overlapping_asset_spans(prompt, assets),
+        _select_non_overlapping_asset_spans(prompt, assets, structured_only=True),
         key=lambda span: (
             _ASSET_TYPE_PRIORITY.get(span.asset.type, 99),
             -(span.end - span.start),
@@ -114,7 +127,7 @@ def match_assets_for_prompt(prompt: str, assets: list[JimengAsset]) -> list[Asse
 
 
 def calculate_highlights(prompt: str, assets: list[JimengAsset]) -> list[HighlightSpan]:
-    selected = sorted(_select_non_overlapping_asset_spans(prompt, assets), key=lambda span: span.start)
+    selected = sorted(_select_non_overlapping_asset_spans(prompt, assets, structured_only=False), key=lambda span: span.start)
     return [
         HighlightSpan(
             text=prompt[span.start : span.end],
@@ -186,8 +199,12 @@ def _split_names(value: str) -> list[str]:
     return [part.strip() for part in _NAME_SPLIT_PATTERN.split(value) if part.strip()]
 
 
-def _select_non_overlapping_asset_spans(prompt: str, assets: list[JimengAsset]) -> list[_CandidateSpan]:
-    candidates = list(_iter_candidate_spans(prompt, assets))
+def _select_non_overlapping_asset_spans(prompt: str, assets: list[JimengAsset], *, structured_only: bool) -> list[_CandidateSpan]:
+    candidates = (
+        list(_iter_structured_candidate_spans(prompt, assets))
+        if structured_only
+        else list(_iter_candidate_spans(prompt, assets))
+    )
     candidates.sort(
         key=lambda span: (
             -(span.end - span.start),
@@ -212,6 +229,79 @@ def _select_non_overlapping_asset_spans(prompt: str, assets: list[JimengAsset]) 
         occupied.append((candidate.start, candidate.end))
 
     return selected
+
+
+def _iter_structured_candidate_spans(prompt: str, assets: Iterable[JimengAsset]) -> Iterable[_CandidateSpan]:
+    assets_by_type: dict[JimengAssetType, list[JimengAsset]] = {
+        JimengAssetType.character: [],
+        JimengAssetType.scene: [],
+        JimengAssetType.prop: [],
+    }
+    for asset in assets:
+        assets_by_type.setdefault(asset.type, []).append(asset)
+
+    for asset_type in (JimengAssetType.character, JimengAssetType.scene, JimengAssetType.prop):
+        for token in _structured_tokens(prompt, asset_type):
+            matches = [
+                _CandidateSpan(asset=asset, text=token.match_text, start=token.start, end=token.end)
+                for asset in assets_by_type.get(asset_type, [])
+                if _asset_matches_structured_token(asset, token, asset_type)
+            ]
+            matches.sort(key=lambda span: (-(span.end - span.start), span.asset.id))
+            if not matches:
+                continue
+            yield matches[0]
+            if asset_type == JimengAssetType.scene:
+                break
+
+
+def _structured_tokens(prompt: str, asset_type: JimengAssetType) -> list[_StructuredToken]:
+    pattern = _STRUCTURED_FIELD_PATTERNS[asset_type]
+    tokens: list[_StructuredToken] = []
+    for match in pattern.finditer(prompt):
+        value = match.group(1)
+        value_start = match.start(1)
+        token_start = 0
+        for separator in _NAME_SPLIT_PATTERN.finditer(value):
+            tokens.extend(_clean_structured_token(value, value_start, token_start, separator.start(), asset_type))
+            token_start = separator.end()
+        tokens.extend(_clean_structured_token(value, value_start, token_start, len(value), asset_type))
+    return tokens
+
+
+def _clean_structured_token(
+    value: str,
+    value_start: int,
+    start: int,
+    end: int,
+    asset_type: JimengAssetType,
+) -> list[_StructuredToken]:
+    cleaned = _clean_name_token_span(value, value_start, start, end)
+    if not cleaned:
+        return []
+    token_text, token_start, token_end = cleaned[0]
+    if asset_type != JimengAssetType.scene:
+        return [_StructuredToken(text=token_text, match_text=token_text, start=token_start, end=token_end)]
+
+    scene_match_text = _strip_bracket_qualification(token_text)
+    if not scene_match_text:
+        return []
+    scene_end = token_start + len(scene_match_text)
+    return [_StructuredToken(text=token_text, match_text=scene_match_text, start=token_start, end=scene_end)]
+
+
+def _strip_bracket_qualification(value: str) -> str:
+    first_bracket = min((index for index, ch in enumerate(value) if ch in _BRACKET_OPEN_CHARS), default=-1)
+    return value if first_bracket == -1 else value[:first_bracket].strip()
+
+
+def _asset_matches_structured_token(asset: JimengAsset, token: _StructuredToken, asset_type: JimengAssetType) -> bool:
+    accepted_tokens = [token.text]
+    if asset_type == JimengAssetType.scene:
+        accepted_tokens.insert(0, token.match_text)
+    accepted = {_normalize_name_for_match(item) for item in accepted_tokens}
+    accepted.discard("")
+    return any(_normalize_name_for_match(keyword) in accepted for keyword in _asset_keywords(asset))
 
 
 def _iter_candidate_spans(prompt: str, assets: Iterable[JimengAsset]) -> Iterable[_CandidateSpan]:
