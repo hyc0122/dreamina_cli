@@ -6,7 +6,7 @@
 
 from fastapi import APIRouter
 
-from . import app_version, assets, bindings, candidates, llm, projects, prompt_presets, queue, settings, shots, web_session
+from . import app_version, assets, bindings, candidates, jimeng_hub, llm, projects, prompt_presets, queue, settings, shots, web_session
 
 
 router = APIRouter()
@@ -21,3 +21,4 @@ router.include_router(settings.router)
 router.include_router(llm.router)
 router.include_router(prompt_presets.router)
 router.include_router(web_session.router)
+router.include_router(jimeng_hub.router)

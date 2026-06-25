@@ -9,7 +9,7 @@ from typing import Any, Callable
 from .api.context import dreamina_cli, get_store, load_runtime_settings
 from .jimeng_queue import JimengQueueWorker
 from .jimeng_storage import JimengStore
-from .providers import DreaminaCliProvider
+from .providers import DreaminaCliProvider, JimengHubProvider
 from .queue.scheduler import PersistentQueueScheduler
 
 
@@ -62,16 +62,21 @@ def build_runtime() -> QueueWorkerRuntime:
     store = get_store()
     settings = load_runtime_settings()
     provider = DreaminaCliProvider(dreamina_cli())
+
+    def provider_factory(provider_name: str, account_id: str | None = None) -> Any:
+        if provider_name == "jimeng_hub":
+            return JimengHubProvider(store, account_id=account_id)
+        return DreaminaCliProvider(dreamina_cli())
+
     worker = JimengQueueWorker(
         store=store,
         cli=provider,
-        provider_factory=lambda provider_name, account_id=None: DreaminaCliProvider(dreamina_cli()),
+        provider_factory=provider_factory,
         poll_seconds=int(settings.get("poll_seconds") or 30),
         duration=int(settings.get("duration") or 5),
         ratio=str(settings.get("ratio") or "9:16"),
         video_resolution=str(settings.get("video_resolution") or "720p"),
         model_version=str(settings.get("model_version") or "seedance2.0fast"),
-        force_provider_name="dreamina_cli",
     )
     worker_id = f"{socket.gethostname()}-{os.getpid()}"
     scheduler = PersistentQueueScheduler(

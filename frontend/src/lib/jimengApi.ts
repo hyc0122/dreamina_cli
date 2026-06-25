@@ -17,7 +17,7 @@ export type JimengQueueStatus =
   | "canceled"
   | "orphaned";
 export type JimengPromptScope = "system" | "user";
-export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "web_session" | "settings";
+export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "web_session" | "hub" | "settings";
 export type JimengRightPanelMode = "preview" | "asset_picker";
 export type JimengShotMoveDirection = "up" | "down";
 export type JimengShotImportFormat = "plain" | "csv";
@@ -562,6 +562,17 @@ export const JIMENG_VIDEO_MODELS = [
   { value: "seedance2.0_vip", label: "Seedance 2.0 VIP" },
 ] as const;
 
+export const JIMENG_HUB_VIDEO_MODELS = [
+  { value: "hub-seedance2.0-fast", label: "hub-seedance2.0 Fast" },
+  { value: "hub-seedance2.0-mini", label: "hub-seedance2.0 Mini" },
+  { value: "hub-seedance2.0", label: "hub-seedance2.0" },
+  { value: "hub-seedance2.0-fast-vip", label: "hub-seedance2.0 Fast VIP" },
+  { value: "hub-seedance2.0-vip", label: "hub-seedance2.0 VIP" },
+] as const;
+
+export const providerForJimengVideoModel = (modelVersion: string, fallback = "dreamina_cli") =>
+  modelVersion.startsWith("hub-") ? "jimeng_hub" : fallback === "jimeng_hub" ? "dreamina_cli" : fallback;
+
 export const JIMENG_VIDEO_RATIOS = ["1:1", "3:4", "16:9", "4:3", "9:16", "21:9"] as const;
 export const JIMENG_VIDEO_DURATION_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 4);
 
@@ -738,6 +749,20 @@ export const jimengApi = {
     axios.post<JimengWebSessionTask>(`${API_URL}/jimeng/web-session/tasks`, data).then((res) => res.data),
   pollWebSessionTask: (taskId: string) =>
     axios.post<JimengWebSessionTask>(`${API_URL}/jimeng/web-session/tasks/${taskId}/poll`).then((res) => res.data),
+  listJimengHubAccounts: () =>
+    axios.get<JimengWebSessionAccountsEnvelope>(`${API_URL}/jimeng/hub/accounts`).then((res) => res.data),
+  createJimengHubAccount: (data: { label: string; sessionid: string; enabled?: boolean; max_concurrency?: number; cooldown_seconds?: number }) =>
+    axios.post<JimengWebSessionAccount>(`${API_URL}/jimeng/hub/accounts`, data).then((res) => res.data),
+  updateJimengHubAccount: (accountId: string, data: Partial<{ label: string; sessionid: string; enabled: boolean; max_concurrency: number; cooldown_seconds: number }>) =>
+    axios.put<JimengWebSessionAccount>(`${API_URL}/jimeng/hub/accounts/${accountId}`, data).then((res) => res.data),
+  deleteJimengHubAccount: (accountId: string) =>
+    axios.delete<{ deleted: string }>(`${API_URL}/jimeng/hub/accounts/${accountId}`).then((res) => res.data),
+  listJimengHubTasks: (data: { account_id?: string; limit?: number } = {}) =>
+    axios.get<JimengWebSessionTasksEnvelope>(`${API_URL}/jimeng/hub/tasks`, { params: data }).then((res) => res.data),
+  createJimengHubTask: (data: { account_id: string; prompt: string; model?: string; ratio?: string; duration?: number; resolution?: string }) =>
+    axios.post<JimengWebSessionTask>(`${API_URL}/jimeng/hub/tasks`, data).then((res) => res.data),
+  pollJimengHubTask: (taskId: string) =>
+    axios.post<JimengWebSessionTask>(`${API_URL}/jimeng/hub/tasks/${taskId}/poll`).then((res) => res.data),
   listProjects: () =>
     axios.get<JimengProject[]>(`${API_URL}/jimeng/projects`).then((res) => res.data),
   createProject: (data: { name: string; style?: string; description?: string; default_ratio?: string; inherit_source_project_id?: string; inherit_source_shot_id?: string }) =>

@@ -1,5 +1,8 @@
 # 更新日志
 
+## v1.00.050 - 2026-06-25 21:08:40 +08:00
+- JiMengHub 多账号网页通道：新增正式 Hub provider、Hub 账号/任务 API alias、前端 JiMengHub 页面、官方CLI 与 Hub 模型分组，以及分镜队列按 `hub-*` 模型自动进入 `jimeng_hub` provider 的链路。详细说明：docs/releases/v1.00.050-jimenghub-provider.md
+
 ## v1.00.049 - 2026-06-25 13:38:43 +08:00
 - 分镜工作台引导和匹配优化：新增“全选未制作视频”清单提示、新手引导、创建剧本继承来源分镜资产、结构化角色/场景/道具匹配、未识别时长提示、无对白音频分析、已提交视频手动拉取和批量提交已生成视频拦截。详细说明：docs/releases/v1.00.049-workbench-guidance-and-matching.md
 

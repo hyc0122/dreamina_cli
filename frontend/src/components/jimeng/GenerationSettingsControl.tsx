@@ -3,10 +3,12 @@
 import clsx from "clsx";
 import {
   DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
+  JIMENG_HUB_VIDEO_MODELS,
   JIMENG_VIDEO_DURATION_OPTIONS,
   JIMENG_VIDEO_MODELS,
   JIMENG_VIDEO_RATIOS,
   clampJimengVideoDuration,
+  providerForJimengVideoModel,
   type JimengVideoGenerationSettings,
 } from "@/lib/jimengApi";
 import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
@@ -37,11 +39,17 @@ const MODE_HELP: Record<JimengVideoGenerationSettings["generation_mode"], string
 export function normalizeGenerationSettings(
   value?: Partial<JimengVideoGenerationSettings>,
 ): JimengVideoGenerationSettings {
+  const modelVersion = value?.model_version ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.model_version;
+  const provider = providerForJimengVideoModel(
+    modelVersion,
+    value?.provider ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.provider,
+  );
   return {
     ...DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
     ...value,
-    provider: "dreamina_cli",
-    account_id: "",
+    provider,
+    model_version: modelVersion,
+    account_id: value?.account_id ?? "",
     duration_source: value?.duration_source === "global" ? "global" : "per_shot",
     duration: clampJimengVideoDuration(value?.duration ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.duration),
     poll_seconds: Math.max(5, Number(value?.poll_seconds ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.poll_seconds) || 30),
@@ -85,11 +93,20 @@ export default function GenerationSettingsControl({
           onChange={(event) => update("model_version", event.target.value)}
           className="glass-input h-10 w-full text-sm text-foreground"
         >
-          {JIMENG_VIDEO_MODELS.map((model) => (
-            <option key={model.value} value={model.value}>
-              {model.label}
-            </option>
-          ))}
+          <optgroup label="官方CLI">
+            {JIMENG_VIDEO_MODELS.map((model) => (
+              <option key={model.value} value={model.value}>
+                {model.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="JiMengHub">
+            {JIMENG_HUB_VIDEO_MODELS.map((model) => (
+              <option key={model.value} value={model.value}>
+                {model.label}
+              </option>
+            ))}
+          </optgroup>
           {videoModelOptions.length > 0 ? (
             <optgroup label="大模型视频模型">
               {videoModelOptions.map((model) => (

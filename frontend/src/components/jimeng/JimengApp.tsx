@@ -28,6 +28,7 @@ import JimengGenerationHistoryPage from "@/components/jimeng/pages/JimengGenerat
 import JimengProjectListPage from "@/components/jimeng/pages/JimengProjectListPage";
 import JimengQueuePage from "@/components/jimeng/pages/JimengQueuePage";
 import JimengSettingsPage from "@/components/jimeng/pages/JimengSettingsPage";
+import JimengHubPage from "@/components/jimeng/pages/JimengHubPage";
 import JimengWebSessionTestPage from "@/components/jimeng/pages/JimengWebSessionTestPage";
 import JimengWorkbenchPage from "@/components/jimeng/pages/JimengWorkbenchPage";
 import LlmSettingsPage from "@/components/jimeng/llm/LlmSettingsPage";
@@ -103,10 +104,17 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     icon: KeyRound,
   },
   {
+    id: "hub",
+    label: "JiMengHub",
+    placeholderTitle: "JiMengHub",
+    placeholderText: "管理网页 Cookie 多账号和 Hub 通道测试。",
+    icon: KeyRound,
+  },
+  {
     id: "settings",
-    label: "即梦设置",
-    placeholderTitle: "即梦设置",
-    placeholderText: "配置 CLI 登录、路径和提示词模板。",
+    label: "官方CLI",
+    placeholderTitle: "官方CLI",
+    placeholderText: "配置官方 CLI 登录、路径和提交默认参数。",
     icon: Settings,
   },
 ];
@@ -321,6 +329,9 @@ export default function JimengApp() {
     }
     if (activePage === "web_session") {
       return <JimengWebSessionTestPage />;
+    }
+    if (activePage === "hub") {
+      return <JimengHubPage />;
     }
     if (activePage === "settings") {
       return <JimengSettingsPage />;
