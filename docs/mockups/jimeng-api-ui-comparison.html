@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>即梦 API 接入与 UI 改版对比草图</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f8fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fbff;
+      --line: #dfe7f0;
+      --text: #1b2638;
+      --muted: #6b7890;
+      --brand: #17b8b0;
+      --brand-soft: #dff8f6;
+      --blue: #5b6cff;
+      --blue-soft: #eef0ff;
+      --warn: #ff5b6b;
+      --warn-soft: #fff0f1;
+      --shadow: 0 18px 48px rgba(31, 45, 61, 0.08);
+      font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(90deg, rgba(91, 108, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(91, 108, 255, 0.04) 1px, transparent 1px),
+        var(--bg);
+      background-size: 32px 32px;
+      color: var(--text);
+    }
+
+    .page {
+      padding: 24px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: 0;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 980px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 8px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 0.92fr 1.2fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .section-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+    }
+
+    .section-header h2 {
+      margin: 0 0 6px;
+      font-size: 20px;
+    }
+
+    .section-header p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .mock {
+      padding: 18px;
+      min-height: 540px;
+    }
+
+    .old-shell {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #f6f8fb;
+    }
+
+    .old-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 56px;
+      padding: 0 16px;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .old-title,
+    .new-logo {
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .nav-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      overflow: hidden;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav-item,
+    .tool-btn,
+    .side-item,
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 12px;
+      background: #fff;
+      color: #344154;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .nav-item.active,
+    .side-item.active,
+    .pill.active {
+      border-color: #aeb7ff;
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .nav-item.removed {
+      border-color: #ffbac1;
+      background: var(--warn-soft);
+      color: var(--warn);
+      text-decoration: line-through;
+    }
+
+    .old-content {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 14px;
+    }
+
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .fake-input,
+    .fake-area,
+    .fake-row {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f9fbfe;
+    }
+
+    .fake-input {
+      height: 38px;
+      margin-bottom: 10px;
+    }
+
+    .fake-area {
+      height: 86px;
+      margin-bottom: 10px;
+    }
+
+    .fake-row {
+      height: 48px;
+      margin-bottom: 10px;
+    }
+
+    .alert {
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--warn-soft);
+      color: var(--warn);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .new-shell {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      min-height: 540px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .sidebar {
+      padding: 18px;
+      border-right: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff, #f4fbfb);
+    }
+
+    .new-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 72px;
+      border-radius: 14px;
+      background: var(--brand-soft);
+      color: #07978e;
+      margin-bottom: 22px;
+    }
+
+    .side-title {
+      margin: 18px 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .side-item {
+      justify-content: flex-start;
+      width: 100%;
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.78);
+    }
+
+    .side-item.active {
+      border-color: #b8ebe8;
+      background: var(--brand-soft);
+      color: #07978e;
+    }
+
+    .main {
+      min-width: 0;
+      background: rgba(255,255,255,0.8);
+    }
+
+    .main-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .main-title h3 {
+      margin: 0 0 4px;
+      font-size: 20px;
+    }
+
+    .main-title span {
+      color: var(--muted);
+    }
+
+    .main-body {
+      padding: 18px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .model-table {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .table-row {
+      display: grid;
+      grid-template-columns: 1.1fr 1.2fr 1.1fr 0.8fr 0.8fr;
+      min-height: 62px;
+      align-items: center;
+      border-bottom: 1px solid #edf1f6;
+      padding: 0 18px;
+      gap: 12px;
+    }
+
+    .table-row:last-child {
+      border-bottom: none;
+    }
+
+    .table-head {
+      min-height: 42px;
+      background: #fbfdff;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .cap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+    }
+
+    .icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--brand-soft);
+      color: #07978e;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+    }
+
+    .status {
+      display: inline-flex;
+      width: fit-content;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #fff4d8;
+      color: #b27600;
+      font-weight: 800;
+    }
+
+    .action {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      height: 34px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      color: #07978e;
+      font-weight: 800;
+    }
+
+    .decision {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .option {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 18px;
+    }
+
+    .option.recommended {
+      border-color: #88dcd7;
+      box-shadow: var(--shadow);
+    }
+
+    .option h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .option p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .option ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #344154;
+      line-height: 1.8;
+    }
+
+    .compare-note {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border: 1px solid #b8ebe8;
+      background: var(--brand-soft);
+      border-radius: 12px;
+      color: #066c66;
+      line-height: 1.7;
+      font-weight: 650;
+    }
+
+    @media (max-width: 1200px) {
+      .grid,
+      .decision {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <h1>即梦 API 接入与 UI 改版对比草图</h1>
+        <p>这张草图只用于确认方向：删除“网页测试”和“JiMengHub”，改接 `jimeng-api`，同时把界面从顶部横向导航逐步改成类似 jimenghub 的左侧工作台布局。</p>
+      </div>
+      <span class="badge">草图 v1</span>
+    </section>
+
+    <section class="grid">
+      <div class="section">
+        <div class="section-header">
+          <h2>当前结构：顶部横向导航</h2>
+          <p>优点是改动小；缺点是模块越来越多后很挤，网页测试和 JiMengHub 也会继续混在主流程里。</p>
+        </div>
+        <div class="mock">
+          <div class="old-shell">
+            <div class="old-top">
+              <div class="old-title">即梦cli自动排队助手</div>
+              <span class="badge">v1.00.050</span>
+              <span class="tool-btn">根目录 G:\...</span>
+            </div>
+            <div class="nav-row">
+              <span class="nav-item">剧本列表</span>
+              <span class="nav-item active">分镜工作台</span>
+              <span class="nav-item">资产管理</span>
+              <span class="nav-item">即梦排队</span>
+              <span class="nav-item">生成记录</span>
+              <span class="nav-item">大模型设置</span>
+              <span class="nav-item removed">网页测试</span>
+              <span class="nav-item removed">JiMengHub</span>
+              <span class="nav-item">官方CLI</span>
+            </div>
+            <div class="old-content">
+              <div class="card">
+                <h3>旧测试/账号池</h3>
+                <div class="alert">删除：网页测试与 JiMengHub 不再进入主导航</div>
+                <div class="fake-input"></div>
+                <div class="fake-area"></div>
+                <div class="tool-btn" style="width: 100%;">提交网页测试</div>
+              </div>
+              <div class="card">
+                <h3>旧任务记录</h3>
+                <div class="fake-row"></div>
+                <div class="fake-row"></div>
+                <div class="fake-row"></div>
+                <div class="fake-row"></div>
+                <div class="fake-row"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2>推荐结构：左侧模块栏 + 即梦 API 通道</h2>
+          <p>接近 jimenghub 的布局，但保留当前项目的剧本、资产、分镜、队列主流程；`jimeng-api` 作为新的后端能力通道接入。</p>
+        </div>
+        <div class="mock">
+          <div class="new-shell">
+            <aside class="sidebar">
+              <div class="new-logo">即梦助手</div>
+              <div class="side-title">创作</div>
+              <div class="side-item">剧本列表</div>
+              <div class="side-item active">分镜工作台</div>
+              <div class="side-item">资产管理</div>
+              <div class="side-title">生产</div>
+              <div class="side-item">自动排队</div>
+              <div class="side-item">生成记录</div>
+              <div class="side-title">配置</div>
+              <div class="side-item">大模型设置</div>
+              <div class="side-item">官方CLI</div>
+              <div class="side-item">即梦 API</div>
+            </aside>
+            <section class="main">
+              <div class="main-top">
+                <div class="main-title">
+                  <h3>分镜工作台</h3>
+                  <span>破图寻龙讯，同海养万人 · 推荐总时长 3635 秒</span>
+                </div>
+                <div>
+                  <span class="tool-btn">v1.00.050</span>
+                  <span class="tool-btn">使用说明</span>
+                  <span class="tool-btn">问题反馈</span>
+                </div>
+              </div>
+              <div class="main-body">
+                <div class="tabs">
+                  <span class="pill active">分镜制作</span>
+                  <span class="pill">资产匹配</span>
+                  <span class="pill">批量提交</span>
+                  <span class="pill">即梦 API 通道</span>
+                </div>
+                <div class="model-table">
+                  <div class="table-row table-head">
+                    <div>能力</div>
+                    <div>服务通道</div>
+                    <div>前端显示模型</div>
+                    <div>状态</div>
+                    <div>操作</div>
+                  </div>
+                  <div class="table-row">
+                    <div class="cap"><span class="icon">文</span>文本推理</div>
+                    <div>大模型设置</div>
+                    <div>gpt-5.5 / 自定义</div>
+                    <div><span class="status">待配置 Key</span></div>
+                    <div><span class="action">模型服务</span></div>
+                  </div>
+                  <div class="table-row">
+                    <div class="cap"><span class="icon">图</span>图像生成</div>
+                    <div>大模型设置</div>
+                    <div>gpt-image-2 / 自定义</div>
+                    <div><span class="status">可选</span></div>
+                    <div><span class="action">模型服务</span></div>
+                  </div>
+                  <div class="table-row">
+                    <div class="cap"><span class="icon">视</span>视频生成</div>
+                    <div>官方CLI / 即梦 API</div>
+                    <div>api-seedance2.0-fast</div>
+                    <div><span class="status">新通道</span></div>
+                    <div><span class="action">配置账号</span></div>
+                  </div>
+                  <div class="table-row">
+                    <div class="cap"><span class="icon">队</span>自动队列</div>
+                    <div>本地后端统一调度</div>
+                    <div>按任务绑定通道</div>
+                    <div><span class="status">保留</span></div>
+                    <div><span class="action">查看队列</span></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="decision">
+      <div class="option">
+        <h3>A. 只替换接口</h3>
+        <p>保留现在顶部导航，只删除网页测试/JiMengHub，然后把 jimeng-api 接到后端。</p>
+        <ul>
+          <li>最快落地</li>
+          <li>界面拥挤问题还在</li>
+          <li>后续新增模块会继续挤顶部导航</li>
+        </ul>
+      </div>
+      <div class="option recommended">
+        <h3>B. 推荐：左侧工作台</h3>
+        <p>按 jimenghub 的空间结构重排，但业务流程仍沿用当前项目。</p>
+        <ul>
+          <li>删除测试模块痕迹</li>
+          <li>新增“即梦 API”正式配置入口</li>
+          <li>官方CLI、即梦API、大模型分区清楚</li>
+          <li>适合后续继续加功能</li>
+        </ul>
+      </div>
+      <div class="option">
+        <h3>C. 全量重做后台</h3>
+        <p>完全照 jimenghub 管理后台重做全部页面和交互。</p>
+        <ul>
+          <li>视觉统一度最高</li>
+          <li>改动最大，容易影响现有稳定功能</li>
+          <li>需要分多轮验收</li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="compare-note">
+      我的建议是选 B：视觉上向 jimenghub 靠近，但不把现有项目推倒重来。先做外壳和导航，再接 `jimeng-api` 通道，最后逐页迁移分镜、资产、队列、设置页面。
+    </div>
+  </main>
+</body>
+</html>

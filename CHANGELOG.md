@@ -1,5 +1,8 @@
 # 更新日志
 
+## v1.00.051 - 2026-06-25 21:59:10 +08:00
+- jimeng-api 正式接入设计与左侧工作台 UI 改版草图：确认删除“网页测试”和“JiMengHub”临时入口，后续改为以 `jimeng-api` 作为正式即梦 API 通道，并将整体 UI 改为左侧工作台结构。详细说明：docs/releases/v1.00.051-jimeng-api-left-sidebar-design.md
+
 ## v1.00.050 - 2026-06-25 21:08:40 +08:00
 - JiMengHub 多账号网页通道：新增正式 Hub provider、Hub 账号/任务 API alias、前端 JiMengHub 页面、官方CLI 与 Hub 模型分组，以及分镜队列按 `hub-*` 模型自动进入 `jimeng_hub` provider 的链路。详细说明：docs/releases/v1.00.050-jimenghub-provider.md
 
