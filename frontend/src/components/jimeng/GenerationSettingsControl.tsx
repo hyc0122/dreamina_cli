@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import {
   DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
-  JIMENG_HUB_VIDEO_MODELS,
+  JIMENG_API_VIDEO_MODELS,
   JIMENG_VIDEO_DURATION_OPTIONS,
   JIMENG_VIDEO_MODELS,
   JIMENG_VIDEO_RATIOS,
@@ -100,8 +100,8 @@ export default function GenerationSettingsControl({
               </option>
             ))}
           </optgroup>
-          <optgroup label="JiMengHub">
-            {JIMENG_HUB_VIDEO_MODELS.map((model) => (
+          <optgroup label="即梦 API">
+            {JIMENG_API_VIDEO_MODELS.map((model) => (
               <option key={model.value} value={model.value}>
                 {model.label}
               </option>

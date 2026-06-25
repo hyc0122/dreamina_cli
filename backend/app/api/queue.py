@@ -10,7 +10,7 @@ from fastapi import APIRouter
 
 from ..jimeng_models import JimengQueueStatus, JimengShotStatus
 from ..jimeng_queue import JimengQueueWorker
-from ..providers import DreaminaCliProvider, JimengHubProvider
+from ..providers import DreaminaCliProvider, JimengApiProvider
 from ..queue_worker_launcher import start_queue_worker_process
 from .context import _call, _dump, _model_data, _now, get_store, save_runtime_settings
 from .schemas import QueueBatchCreate, QueueItemCreate, QueueReorder
@@ -223,9 +223,13 @@ def _start_queue_worker_payload() -> dict[str, Any]:
 
 
 def _provider_factory(provider_name: str, account_id: str | None = None) -> Any:
-    """保留旧测试和扩展调用使用的官方单账号 provider 工厂。"""
-    if provider_name == "jimeng_hub":
-        return JimengHubProvider(get_store(), account_id=account_id)
+    """按队列任务选择正式视频生成通道。"""
+    if provider_name == "jimeng_api":
+        settings = get_store().get_runtime_settings()
+        return JimengApiProvider(
+            base_url=str(settings.get("jimeng_api_base_url") or "http://localhost:5100"),
+            sessions=settings.get("jimeng_api_sessions") or [],
+        )
     return DreaminaCliProvider(_cli())
 
 

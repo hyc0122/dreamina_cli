@@ -22,8 +22,6 @@ from .jimeng_models import (
     JimengShotStatus,
     JimengStylePreset,
     JimengVideoCandidate,
-    JimengWebSessionAccount,
-    JimengWebSessionTask,
 )
 from .storage import projects as project_storage
 from .storage import shots as shot_storage
@@ -34,7 +32,6 @@ from .storage import bindings as binding_storage
 from .storage import candidates as candidate_storage
 from .storage import presets as preset_storage
 from .storage import settings as settings_storage
-from .storage import web_session as web_session_storage
 
 
 _ASSET_DIRS = {
@@ -290,49 +287,6 @@ class JimengStore:
                     ON llm_asset_image_records(status);
                 CREATE INDEX IF NOT EXISTS idx_llm_asset_image_records_asset_status
                     ON llm_asset_image_records(asset_id, status);
-                CREATE TABLE IF NOT EXISTS web_session_accounts (
-                    id TEXT PRIMARY KEY,
-                    label TEXT NOT NULL,
-                    sessionid TEXT NOT NULL,
-                    cookie_json TEXT NOT NULL DEFAULT '{}',
-                    enabled INTEGER NOT NULL DEFAULT 1,
-                    max_concurrency INTEGER NOT NULL DEFAULT 1,
-                    cooldown_seconds INTEGER NOT NULL DEFAULT 0,
-                    last_error TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_web_session_accounts_enabled
-                    ON web_session_accounts(enabled, created_at);
-
-                CREATE TABLE IF NOT EXISTS web_session_video_tasks (
-                    id TEXT PRIMARY KEY,
-                    account_id TEXT NOT NULL,
-                    prompt TEXT NOT NULL,
-                    model TEXT NOT NULL,
-                    ratio TEXT NOT NULL DEFAULT '9:16',
-                    duration INTEGER NOT NULL DEFAULT 5,
-                    resolution TEXT NOT NULL DEFAULT '720p',
-                    status TEXT NOT NULL DEFAULT 'draft',
-                    submit_id TEXT,
-                    history_id TEXT,
-                    result_url TEXT,
-                    raw_submit_response TEXT,
-                    raw_poll_response TEXT,
-                    error_message TEXT,
-                    submitted_at TEXT,
-                    last_polled_at TEXT,
-                    finished_at TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    FOREIGN KEY(account_id) REFERENCES web_session_accounts(id) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS idx_web_session_tasks_account_created
-                    ON web_session_video_tasks(account_id, created_at);
-                CREATE INDEX IF NOT EXISTS idx_web_session_tasks_status_created
-                    ON web_session_video_tasks(status, created_at);
-
-
                 CREATE TABLE IF NOT EXISTS runtime_settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL,
@@ -392,13 +346,6 @@ class JimengStore:
                     "accent": "TEXT NOT NULL DEFAULT '#6478ff'",
                 },
             )
-            self._ensure_columns(
-                conn,
-                "web_session_accounts",
-                {
-                    "cookie_json": "TEXT NOT NULL DEFAULT '{}'",
-                },
-            )
             self._seed_default_style_presets(conn)
 
     def _seed_default_style_presets(self, conn: sqlite3.Connection) -> None:
@@ -438,59 +385,6 @@ class JimengStore:
 
     def update_runtime_settings(self, values: dict[str, Any]) -> dict[str, Any]:
         return settings_storage.update_runtime_settings(self, values)
-    def create_web_session_account(
-        self,
-        label: str,
-        sessionid: str,
-        enabled: bool = True,
-        max_concurrency: int = 1,
-        cooldown_seconds: int = 0,
-    ) -> JimengWebSessionAccount:
-        return web_session_storage.create_web_session_account(
-            self,
-            label,
-            sessionid,
-            enabled,
-            max_concurrency,
-            cooldown_seconds,
-        )
-
-    def list_web_session_accounts(self) -> list[JimengWebSessionAccount]:
-        return web_session_storage.list_web_session_accounts(self)
-
-    def get_web_session_account(self, account_id: str) -> JimengWebSessionAccount:
-        return web_session_storage.get_web_session_account(self, account_id)
-
-    def get_web_session_account_secret(self, account_id: str) -> dict[str, Any]:
-        return web_session_storage.get_web_session_account_secret(self, account_id)
-
-    def update_web_session_account(self, account_id: str, **updates: Any) -> JimengWebSessionAccount:
-        return web_session_storage.update_web_session_account(self, account_id, **updates)
-
-    def delete_web_session_account(self, account_id: str) -> str:
-        return web_session_storage.delete_web_session_account(self, account_id)
-
-    def create_web_session_task(
-        self,
-        account_id: str,
-        prompt: str,
-        model: str,
-        ratio: str = "9:16",
-        duration: int = 5,
-        resolution: str = "720p",
-    ) -> JimengWebSessionTask:
-        return web_session_storage.create_web_session_task(self, account_id, prompt, model, ratio, duration, resolution)
-
-    def list_web_session_tasks(self, account_id: str | None = None, limit: int = 100) -> list[JimengWebSessionTask]:
-        return web_session_storage.list_web_session_tasks(self, account_id, limit)
-
-    def get_web_session_task(self, task_id: str) -> JimengWebSessionTask:
-        return web_session_storage.get_web_session_task(self, task_id)
-
-    def update_web_session_task(self, task_id: str, **updates: Any) -> JimengWebSessionTask:
-        return web_session_storage.update_web_session_task(self, task_id, **updates)
-
-
     def create_project(self, name: str, style: str = "", description: str = "", default_ratio: str = "9:16") -> JimengProject:
         return project_storage.create_project(self, name, style, description, default_ratio)
 

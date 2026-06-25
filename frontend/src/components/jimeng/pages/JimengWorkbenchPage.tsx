@@ -12,6 +12,7 @@ import {
   DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
   clampJimengVideoDuration,
   jimengApi,
+  providerForJimengVideoModel,
   type JimengAsset,
   type JimengAssetBinding,
   type JimengAssetType,
@@ -30,7 +31,7 @@ const settingsToGenerationSettings = (
   projectRatio?: string,
 ): JimengVideoGenerationSettings => ({
   ...current,
-  provider: "dreamina_cli",
+  provider: providerForJimengVideoModel(settings.model_version || current.model_version, settings.generation_provider || current.provider),
   account_id: "",
   model_version: settings.model_version || current.model_version,
   duration: settings.duration === undefined ? current.duration : clampJimengVideoDuration(settings.duration),

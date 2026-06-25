@@ -1,5 +1,8 @@
 # 更新日志
 
+## v1.00.052 - 2026-06-25 22:19:08 +08:00
+- jimeng-api 正式通道和左侧工作台布局：删除“网页测试”和“JiMengHub”相关入口、路由、provider 和旧存储代码；新增“即梦 API”设置页，支持配置 `jimeng-api` 服务地址、SessionID 账号池、`api-*` 模型和默认提交参数；分镜提交可按 `api-*` 模型进入 `jimeng_api` provider；主应用外壳改为类似工作台的左侧分组导航。详细说明：docs/releases/v1.00.052-jimeng-api-channel-sidebar-shell.md
+
 ## v1.00.051 - 2026-06-25 21:59:10 +08:00
 - jimeng-api 正式接入设计与左侧工作台 UI 改版草图：确认删除“网页测试”和“JiMengHub”临时入口，后续改为以 `jimeng-api` 作为正式即梦 API 通道，并将整体 UI 改为左侧工作台结构。详细说明：docs/releases/v1.00.051-jimeng-api-left-sidebar-design.md
 

@@ -200,17 +200,6 @@ export function filterGenerationCandidates(
   });
 }
 
-export const WEB_SESSION_REQUIRED_COOKIE_NAMES = ["ttwid", "odin_tt", "user_spaces_idc"] as const;
-
-export type WebSessionRequiredCookieName = (typeof WEB_SESSION_REQUIRED_COOKIE_NAMES)[number];
-
-export function getMissingWebSessionCookieNames(value: string): WebSessionRequiredCookieName[] {
-  const normalized = String(value ?? "");
-  return WEB_SESSION_REQUIRED_COOKIE_NAMES.filter((name) => {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return !new RegExp(`(?:^|[;\\s])${escaped}\\s*=`, "i").test(normalized);
-  });
-}
 export function insertPromptVariable(
   value: string,
   variable: string,

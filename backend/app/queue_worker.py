@@ -9,7 +9,7 @@ from typing import Any, Callable
 from .api.context import dreamina_cli, get_store, load_runtime_settings
 from .jimeng_queue import JimengQueueWorker
 from .jimeng_storage import JimengStore
-from .providers import DreaminaCliProvider, JimengHubProvider
+from .providers import DreaminaCliProvider, JimengApiProvider
 from .queue.scheduler import PersistentQueueScheduler
 
 
@@ -64,8 +64,12 @@ def build_runtime() -> QueueWorkerRuntime:
     provider = DreaminaCliProvider(dreamina_cli())
 
     def provider_factory(provider_name: str, account_id: str | None = None) -> Any:
-        if provider_name == "jimeng_hub":
-            return JimengHubProvider(store, account_id=account_id)
+        if provider_name == "jimeng_api":
+            latest_settings = load_runtime_settings()
+            return JimengApiProvider(
+                base_url=str(latest_settings.get("jimeng_api_base_url") or "http://localhost:5100"),
+                sessions=latest_settings.get("jimeng_api_sessions") or [],
+            )
         return DreaminaCliProvider(dreamina_cli())
 
     worker = JimengQueueWorker(

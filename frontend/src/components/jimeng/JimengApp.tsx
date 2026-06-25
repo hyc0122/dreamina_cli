@@ -5,6 +5,7 @@ import {
   BadgeDollarSign,
   BookOpen,
   Bot,
+  Clapperboard,
   ExternalLink,
   Film,
   FolderOpen,
@@ -28,8 +29,7 @@ import JimengGenerationHistoryPage from "@/components/jimeng/pages/JimengGenerat
 import JimengProjectListPage from "@/components/jimeng/pages/JimengProjectListPage";
 import JimengQueuePage from "@/components/jimeng/pages/JimengQueuePage";
 import JimengSettingsPage from "@/components/jimeng/pages/JimengSettingsPage";
-import JimengHubPage from "@/components/jimeng/pages/JimengHubPage";
-import JimengWebSessionTestPage from "@/components/jimeng/pages/JimengWebSessionTestPage";
+import JimengApiPage from "@/components/jimeng/pages/JimengApiPage";
 import JimengWorkbenchPage from "@/components/jimeng/pages/JimengWorkbenchPage";
 import LlmSettingsPage from "@/components/jimeng/llm/LlmSettingsPage";
 import { jimengApi } from "@/lib/jimengApi";
@@ -97,17 +97,10 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     icon: Bot,
   },
   {
-    id: "web_session",
-    label: "网页测试",
-    placeholderTitle: "网页测试",
-    placeholderText: "独立测试 SessionID 网页生视频请求。",
-    icon: KeyRound,
-  },
-  {
-    id: "hub",
-    label: "JiMengHub",
-    placeholderTitle: "JiMengHub",
-    placeholderText: "管理网页 Cookie 多账号和 Hub 通道测试。",
+    id: "jimeng_api",
+    label: "即梦 API",
+    placeholderTitle: "即梦 API",
+    placeholderText: "配置 jimeng-api 服务、SessionID 账号和 API 模型。",
     icon: KeyRound,
   },
   {
@@ -117,6 +110,12 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     placeholderText: "配置官方 CLI 登录、路径和提交默认参数。",
     icon: Settings,
   },
+];
+
+const PAGE_GROUPS: Array<{ title: string; pages: JimengPageConfig[] }> = [
+  { title: "创作", pages: JIMENG_PAGES.filter((page) => ["projects", "workbench", "assets"].includes(page.id)) },
+  { title: "生产", pages: JIMENG_PAGES.filter((page) => ["queue", "history"].includes(page.id)) },
+  { title: "配置", pages: JIMENG_PAGES.filter((page) => ["llm", "jimeng_api", "settings"].includes(page.id)) },
 ];
 
 const getInitialTheme = (): ThemeMode => {
@@ -327,11 +326,8 @@ export default function JimengApp() {
     if (activePage === "llm") {
       return <LlmSettingsPage />;
     }
-    if (activePage === "web_session") {
-      return <JimengWebSessionTestPage />;
-    }
-    if (activePage === "hub") {
-      return <JimengHubPage />;
+    if (activePage === "jimeng_api") {
+      return <JimengApiPage />;
     }
     if (activePage === "settings") {
       return <JimengSettingsPage />;
@@ -360,28 +356,75 @@ export default function JimengApp() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden px-3 py-2 sm:px-4">
-      <div className="flex h-full w-full flex-col gap-2">
-        <header className="shrink-0 border-b border-glass-border pb-2">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="font-display text-lg font-bold text-foreground">{appName}</h1>
-            <span className="rounded-md border border-glass-border bg-surface-inset px-2 py-1 text-xs text-text-muted">面向分镜批量生成</span>
-            <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-mono text-primary">
-              {currentVersion}
-            </span>
-            {runtimeInfo?.project_dir && (
-              <span
-                className="inline-flex max-w-full items-center gap-1 rounded-md border border-glass-border bg-surface-inset px-2 py-1 text-xs text-text-muted sm:max-w-[520px]"
-                title={`项目根目录：${runtimeInfo.project_dir}\n数据目录：${runtimeInfo.data_dir}\n输出目录：${runtimeInfo.output_dir}`}
-              >
-                <FolderOpen size={13} className="shrink-0 text-primary" />
-                <span className="shrink-0 text-text-secondary">根目录</span>
-                <span className="truncate font-mono text-foreground">{runtimeInfo.project_dir}</span>
-              </span>
-            )}
+    <div className="h-screen w-screen overflow-hidden p-3 sm:p-4">
+      <div className="grid h-full w-full gap-3 lg:grid-cols-[230px_minmax(0,1fr)]">
+        <aside className="hidden min-h-0 overflow-hidden rounded-2xl border border-glass-border bg-panel-bg/80 p-4 shadow-xl backdrop-blur-xl lg:flex lg:flex-col">
+          <div className="grid h-20 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-center">
+            <div>
+              <div className="font-display text-xl font-bold text-foreground">{appName}</div>
+              <div className="mt-1 font-mono text-xs text-primary">{currentVersion}</div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <nav className="mt-5 flex min-h-0 flex-1 flex-col gap-4 overflow-auto" aria-label="即梦模块导航">
+            {PAGE_GROUPS.map((group) => (
+              <div key={group.title}>
+                <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">{group.title}</div>
+                <div className="space-y-1.5">
+                  {group.pages.map((page) => {
+                    const isActive = activePage === page.id;
+                    const Icon = page.icon;
+                    return (
+                      <button
+                        key={page.id}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => setActivePage(page.id)}
+                        className={clsx(
+                          "flex h-11 w-full items-center gap-3 rounded-xl border px-3 text-left text-sm font-semibold transition-colors",
+                          isActive
+                            ? "border-primary/30 bg-primary/10 text-foreground"
+                            : "border-transparent text-text-secondary hover:border-glass-border hover:bg-hover-bg hover:text-foreground",
+                        )}
+                      >
+                        <Icon size={17} className={isActive ? "text-primary" : ""} />
+                        <span>{page.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+          <div className="mt-4 rounded-xl border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-muted">
+            <div className="flex items-center gap-2 font-semibold text-foreground">
+              <Clapperboard size={14} className="text-primary" />
+              当前模块
+            </div>
+            <div className="mt-1">{activeConfig.label}</div>
+          </div>
+        </aside>
+
+        <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-glass-border bg-app-bg/70 shadow-xl backdrop-blur-xl">
+          <header className="shrink-0 border-b border-glass-border bg-panel-bg/80 p-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+                <h1 className="font-display text-lg font-bold text-foreground lg:hidden">{appName}</h1>
+                <span className="rounded-md border border-glass-border bg-surface-inset px-2 py-1 text-xs text-text-muted">面向分镜批量生成</span>
+                <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-mono text-primary">
+                  {currentVersion}
+                </span>
+                {runtimeInfo?.project_dir && (
+                  <span
+                    className="inline-flex max-w-full items-center gap-1 rounded-md border border-glass-border bg-surface-inset px-2 py-1 text-xs text-text-muted sm:max-w-[520px]"
+                    title={`项目根目录：${runtimeInfo.project_dir}\n数据目录：${runtimeInfo.data_dir}\n输出目录：${runtimeInfo.output_dir}`}
+                  >
+                    <FolderOpen size={13} className="shrink-0 text-primary" />
+                    <span className="shrink-0 text-text-secondary">根目录</span>
+                    <span className="truncate font-mono text-foreground">{runtimeInfo.project_dir}</span>
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setOnboardingOpen(true)}
@@ -448,10 +491,8 @@ export default function JimengApp() {
               </span>
             </div>
           </div>
-          </div>
-        </header>
-
-        <nav className="flex shrink-0 gap-2 overflow-x-auto border-b border-glass-border pb-2 sm:flex-wrap" aria-label="即梦批量模块导航">
+            </div>
+            <nav className="mt-3 flex shrink-0 gap-2 overflow-x-auto lg:hidden" aria-label="即梦批量模块导航">
           {JIMENG_PAGES.map((page) => {
             const isActive = activePage === page.id;
             const Icon = page.icon;
@@ -475,8 +516,10 @@ export default function JimengApp() {
             );
           })}
         </nav>
+          </header>
 
-        <main className="min-h-0 flex-1 overflow-hidden">{renderPage()}</main>
+          <main className="min-h-0 flex-1 overflow-hidden">{renderPage()}</main>
+        </div>
         <JimengOnboardingGuide open={onboardingOpen} onClose={closeOnboarding} onNavigate={setActivePage} />
       </div>
     </div>

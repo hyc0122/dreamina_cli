@@ -26,6 +26,11 @@ class JimengApiHttpResponse:
 HttpPost = Callable[[str, dict[str, str], dict[str, str], list[tuple[str, Path]], float], JimengApiHttpResponse]
 
 _MODEL_MAP = {
+    "apiseedance2.0fast": "jimeng-video-seedance-2.0-fast",
+    "apiseedance2.0fastvip": "jimeng-video-seedance-2.0-fast",
+    "apiseedance2.0": "jimeng-video-seedance-2.0",
+    "apiseedance2.0vip": "jimeng-video-seedance-2.0",
+    "apiseedance2.0mini": "jimeng-video-seedance-2.0-mini",
     "seedance2.0fast": "jimeng-video-seedance-2.0-fast",
     "seedance2.0fast_vip": "jimeng-video-seedance-2.0-fast",
     "seedance2.0": "jimeng-video-seedance-2.0",
@@ -141,7 +146,7 @@ class JimengApiProvider:
             return DreaminaTaskResult(
                 gen_status="failed",
                 raw_output="jimeng api has no enabled sessionid",
-                error_message="Jimeng API 没有启用的 sessionid，请先在即梦设置里填写并启用。",
+                error_message="Jimeng API 没有启用的 sessionid，请先在“即梦 API”页面填写并启用。",
             )
 
         errors: list[str] = []
@@ -184,7 +189,7 @@ def _normalize_session(session: JimengApiSession | dict[str, Any]) -> JimengApiS
 
 
 def _api_model_name(model_version: str) -> str:
-    normalized = str(model_version or "").strip().lower().replace("_", "")
+    normalized = str(model_version or "").strip().lower().replace("_", "").replace("-", "")
     return _MODEL_MAP.get(normalized, model_version or "jimeng-video-seedance-2.0-fast")
 
 

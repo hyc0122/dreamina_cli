@@ -35,16 +35,16 @@ _DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     "max_retry_attempts": 5,
     "retry_base_seconds": 30,
     "queue_enabled": False,
+    "jimeng_api_base_url": "http://localhost:5100",
+    "jimeng_api_model": "api-seedance2.0-fast",
+    "jimeng_api_generation_mode": "omni_reference",
+    "jimeng_api_ratio": "9:16",
+    "jimeng_api_duration": 5,
+    "jimeng_api_concurrency": 1,
+    "jimeng_api_sessions": [],
 }
 _STABLE_RUNTIME_SETTING_KEYS = set(_DEFAULT_RUNTIME_SETTINGS)
 _REMOVED_RUNTIME_SETTING_KEYS = {
-    "jimeng_api_base_url",
-    "jimeng_api_model",
-    "jimeng_api_generation_mode",
-    "jimeng_api_ratio",
-    "jimeng_api_duration",
-    "jimeng_api_concurrency",
-    "jimeng_api_sessions",
     "llm_default_provider_id",
     "llm_default_model_id",
     "llm_providers",
