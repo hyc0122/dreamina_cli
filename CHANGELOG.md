@@ -1,5 +1,8 @@
 # 更新日志
 
+## v1.00.053 - 2026-06-25 22:39:59 +08:00
+- 队列在途状态误判修复：`jimeng-api` 返回中没有视频 URL 时直接标记失败并提示检查服务日志或账号任务；前端队列状态优先显示错误/失败，不再因为存在 `submit_id` 就覆盖成“在途中”。详细说明：docs/releases/v1.00.053-jimeng-api-no-url-status-fix.md
+
 ## v1.00.052 - 2026-06-25 22:19:08 +08:00
 - jimeng-api 正式通道和左侧工作台布局：删除“网页测试”和“JiMengHub”相关入口、路由、provider 和旧存储代码；新增“即梦 API”设置页，支持配置 `jimeng-api` 服务地址、SessionID 账号池、`api-*` 模型和默认提交参数；分镜提交可按 `api-*` 模型进入 `jimeng_api` provider；主应用外壳改为类似工作台的左侧分组导航。详细说明：docs/releases/v1.00.052-jimeng-api-channel-sidebar-shell.md
 

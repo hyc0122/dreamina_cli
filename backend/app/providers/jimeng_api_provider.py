@@ -221,6 +221,10 @@ def _parse_video_response(text: str) -> DreaminaTaskResult:
     submit_id = _find_first_value(data, {"submit_id", "task_id", "id"})
     status = _find_first_value(data, {"gen_status", "status", "state"})
     error = _find_first_value(data, {"error", "error_message", "message"}) if not result_url else None
+    if not result_url and not error:
+        suffix = f"，submit_id: {submit_id}" if submit_id else ""
+        error = f"Jimeng API 未返回视频 URL{suffix}，请检查 jimeng-api 服务日志或即梦账号是否实际创建任务。"
+        status = "failed"
     return DreaminaTaskResult(
         submit_id=submit_id,
         gen_status="completed" if result_url and not status else status,

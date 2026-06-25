@@ -126,9 +126,6 @@ export function getQueueFilterStatus(item: JimengQueueItem): JimengQueueFilterSt
   if (WAITING_QUEUE_STATUSES.has(item.status)) {
     return "waiting";
   }
-  if (RUNNING_QUEUE_STATUSES.has(item.status) || RUNNING_GEN_STATUSES.has(genStatus) || item.submit_id) {
-    return "running";
-  }
   if (
     FAILED_QUEUE_STATUSES.has(item.status) ||
     FAILED_GEN_STATUSES.has(genStatus) ||
@@ -137,6 +134,9 @@ export function getQueueFilterStatus(item: JimengQueueItem): JimengQueueFilterSt
     rawOutput.includes("exceededconcurrencylimit")
   ) {
     return "failed";
+  }
+  if (RUNNING_QUEUE_STATUSES.has(item.status) || RUNNING_GEN_STATUSES.has(genStatus) || item.submit_id) {
+    return "running";
   }
   return "failed";
 }
