@@ -17,7 +17,7 @@ export type JimengQueueStatus =
   | "canceled"
   | "orphaned";
 export type JimengPromptScope = "system" | "user";
-export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "settings";
+export type JimengPageMode = "creator" | "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "settings";
 export type JimengRightPanelMode = "preview" | "asset_picker";
 export type JimengShotMoveDirection = "up" | "down";
 export type JimengShotImportFormat = "plain" | "csv";
@@ -283,6 +283,36 @@ export interface JimengVersionStatus {
   checked_at: string;
 }
 
+export interface CreatorModelOption {
+  provider_id: string;
+  provider_name: string;
+  model_id: string;
+  model_name: string;
+  value: string;
+  label: string;
+}
+
+export interface CreatorChatFallbackRequest {
+  prompt: string;
+  model_id?: string;
+  fallback_model_id_1?: string;
+  fallback_model_id_2?: string;
+  timeout_seconds?: number;
+  temperature?: number;
+  max_tokens?: number;
+}
+
+export interface CreatorChatFallbackResponse {
+  content: string;
+  provider_id: string;
+  model_id: string;
+  attempts?: Array<{
+    provider_id: string;
+    model_id: string;
+    ok: boolean;
+    error?: string | null;
+  }>;
+}
 export interface JimengRuntimeInstancesEnvelope {
   instances: JimengRuntimeInfo[];
   scan_range: {
@@ -658,6 +688,10 @@ export const jimengApi = {
     axios.get<JimengRuntimeInfo>(`${API_URL}/health`).then((res) => res.data),
   getAppVersion: () =>
     axios.get<JimengVersionStatus>(`${API_URL}/app/version`).then((res) => res.data),
+  listCreatorModelOptions: () =>
+    axios.get<{ options: CreatorModelOption[]; default_model_id: string }>(`${API_URL}/jimeng/creator/model_options`).then((res) => res.data),
+  creatorChatFallback: (data: CreatorChatFallbackRequest) =>
+    axios.post<CreatorChatFallbackResponse>(`${API_URL}/jimeng/creator/chat/fallback`, data).then((res) => res.data),
   listRuntimeInstances: () =>
     axios.get<JimengRuntimeInstancesEnvelope>(`${API_URL}/runtime/instances`).then((res) => res.data),
   shutdownRuntime: () =>

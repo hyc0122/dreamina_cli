@@ -16,10 +16,12 @@ import {
   Moon,
   CircleHelp,
   Settings,
+  Sparkles,
   Sun,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import CreatorAssistantPage from "@/components/creator/pages/CreatorAssistantPage";
 import UpdateRequiredScreen from "@/components/jimeng/UpdateRequiredScreen";
 import JimengOnboardingGuide from "@/components/jimeng/onboarding/JimengOnboardingGuide";
 import JimengLauncherPage from "@/components/jimeng/pages/JimengLauncherPage";
@@ -53,10 +55,16 @@ const FEEDBACK_URL = "https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvM
 
 const JIMENG_PAGES: JimengPageConfig[] = [
   {
+    id: "creator",
+    label: "创作助手",
+    placeholderTitle: "创作助手",
+    placeholderText: "小说拆解、短剧剧本、分镜草稿创作和作品评测。",
+    icon: Sparkles,
+  },{
     id: "projects",
-    label: "剧本列表",
-    placeholderTitle: "剧本列表",
-    placeholderText: "管理即梦批量项目。",
+    label: "漫剧制作",
+    placeholderTitle: "漫剧制作",
+    placeholderText: "管理漫剧制作项目、分镜和资产。",
     icon: FolderOpen,
   },
   {
@@ -104,7 +112,7 @@ const JIMENG_PAGES: JimengPageConfig[] = [
 ];
 
 const PAGE_GROUPS: Array<{ title: string; pages: JimengPageConfig[] }> = [
-  { title: "创作", pages: JIMENG_PAGES.filter((page) => ["projects", "workbench", "assets"].includes(page.id)) },
+  { title: "创作", pages: JIMENG_PAGES.filter((page) => ["creator", "projects", "workbench", "assets"].includes(page.id)) },
   { title: "生产", pages: JIMENG_PAGES.filter((page) => ["queue", "history"].includes(page.id)) },
   { title: "配置", pages: JIMENG_PAGES.filter((page) => ["llm", "settings"].includes(page.id)) },
 ];
@@ -299,6 +307,9 @@ export default function JimengApp() {
   }, []);
 
   const renderPage = () => {
+    if (activePage === "creator") {
+      return <CreatorAssistantPage />;
+    }
     if (activePage === "projects") {
       return <JimengProjectListPage />;
     }
