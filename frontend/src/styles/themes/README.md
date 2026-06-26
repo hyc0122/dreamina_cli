@@ -2,7 +2,8 @@
 
 本目录集中管理软件全局视觉风格，业务组件不要再分散写整套主题色。
 
-- `app-themes.css`：深色、浅色、赛博朋克主题的语义颜色 token 和全局皮肤效果。
+- `app-themes.css`：深色、浅色、赛博朋克主题的语义颜色 token。
+- `cyberpunk-components.css`：赛博朋克主题的机甲边框、切角、光条、按钮、表格和卡片效果。
 - `frontend/src/index.css`：只负责引入主题、基础 body 样式、通用工具类和动画。
 - `frontend/tailwind.config.ts`：`primary`、`secondary`、`accent` 等颜色必须使用 CSS 变量，不再写死颜色。
 

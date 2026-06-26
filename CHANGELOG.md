@@ -1,3 +1,6 @@
+## v1.00.061 - 2026-06-26 18:15:33 +08:00
+
+- 赛博朋克组件皮肤增强：新增独立 `frontend/src/styles/themes/cyberpunk-components.css`，把演示模块里的机甲边框、切角、光条、霓虹按钮、输入框、表格和卡片层级抽成全局组件皮肤；保留 `app-themes.css` 专门管理深色、浅色和赛博颜色变量，避免样式散落到各业务模块。详细说明：docs/releases/v1.00.061-cyberpunk-components-theme.md
 ## v1.00.060 - 2026-06-26 17:50:01 +08:00
 
 - 全局赛博朋克默认风格：软件首次打开默认进入赛博朋克视觉；深色、浅色和赛博主题集中迁移到 frontend/src/styles/themes/，Tailwind 主色改为 CSS 变量统一控制，所有模块复用同一套全局皮肤效果。详细说明：docs/releases/v1.00.060-cyberpunk-global-theme.md
