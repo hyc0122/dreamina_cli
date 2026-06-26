@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
 import ProgressBar from './components/ProgressBar/ProgressBar';
 import ConfigPanel from './components/ConfigPanel/ConfigPanel';
@@ -367,6 +367,20 @@ function ActiveProjectShell() {
   );
 }
 
+function RouteProjectExitSync({ routeHash, routeNonce }: Required<ScriptCreatorAppProps>) {
+  const { activeProject, closeProject } = useApp();
+  const previousRouteKey = useRef(`${routeHash}:${routeNonce}`);
+
+  useEffect(() => {
+    const nextRouteKey = `${routeHash}:${routeNonce}`;
+    const routeChanged = previousRouteKey.current !== nextRouteKey;
+    previousRouteKey.current = nextRouteKey;
+    if (!routeChanged || !activeProject) return;
+    closeProject();
+  }, [activeProject, closeProject, routeHash, routeNonce]);
+
+  return null;
+}
 function AppContent({ routeHash }: { routeHash: WorkbenchRoute }) {
   const { activeProject } = useApp();
 
@@ -496,11 +510,13 @@ function DebugPanel() {
 
 type ScriptCreatorAppProps = {
   routeHash?: WorkbenchRoute;
+  routeNonce?: number;
 };
 
-export default function App({ routeHash = '' }: ScriptCreatorAppProps) {
+export default function App({ routeHash = '', routeNonce = 0 }: ScriptCreatorAppProps) {
   return (
     <AppProvider>
+      <RouteProjectExitSync routeHash={routeHash} routeNonce={routeNonce} />
       <AppContent routeHash={routeHash} />
       <DebugPanel />
     </AppProvider>

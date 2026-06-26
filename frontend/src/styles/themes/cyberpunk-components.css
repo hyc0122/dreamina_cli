@@ -154,8 +154,7 @@ html.cyber .glass-input:focus {
 }
 
 html.cyber .bg-primary,
-html.cyber .bg-primary\/90,
-html.cyber button[class*="bg-primary"] {
+html.cyber .bg-primary\/90 {
   color: #e9f7ff !important;
   background: linear-gradient(90deg, rgba(74, 125, 255, 0.88), rgba(185, 69, 255, 0.88)) !important;
   border: 1px solid rgba(185, 69, 255, 0.72) !important;

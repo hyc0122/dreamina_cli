@@ -247,6 +247,7 @@ export default function JimengApp() {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [creatorRouteHash, setCreatorRouteHash] = useState(() => (typeof window === "undefined" ? "" : window.location.hash));
+  const [creatorRouteNonce, setCreatorRouteNonce] = useState(0);
   const activeConfig = JIMENG_PAGES.find((page) => page.id === activePage) ?? JIMENG_PAGES[0];
   const activeIndex = JIMENG_PAGES.findIndex((page) => page.id === activeConfig.id) + 1;
   const normalizedCreatorRoute = creatorRouteHash === "#/app" ? "" : creatorRouteHash;
@@ -299,6 +300,7 @@ export default function JimengApp() {
       if (item.creatorRoute === undefined) {
         return;
       }
+      setCreatorRouteNonce((current) => current + 1);
       setCreatorRoute(item.creatorRoute);
     },
     [setActivePage, setCreatorRoute],
@@ -407,7 +409,7 @@ export default function JimengApp() {
 
   const renderPage = () => {
     if (activePage === "creator") {
-      return <CreatorAssistantPage routeHash={normalizedCreatorRoute as CreatorRouteHash} />;
+      return <CreatorAssistantPage routeHash={normalizedCreatorRoute as CreatorRouteHash} routeNonce={creatorRouteNonce} />;
     }
     if (activePage === "projects") {
       return <JimengProjectListPage />;

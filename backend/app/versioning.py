@@ -14,7 +14,7 @@ from typing import Any
 
 
 APP_NAME = "即梦cli自动排队助手"
-DEFAULT_CURRENT_VERSION = "v1.00.062"
+DEFAULT_CURRENT_VERSION = "v1.00.063"
 DEFAULT_UPDATE_CHECK_URL = "https://version.j11.net/"
 DEFAULT_UPDATE_DOC_URL = "https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink"
 
@@ -33,6 +33,21 @@ def normalize_app_version(value: Any) -> str | None:
         return None
     major, minor, patch = (int(part) for part in match.groups())
     return f"v{major}.{minor:02d}.{patch:03d}"
+
+
+def app_version_parts(value: Any) -> tuple[int, int, int] | None:
+    match = _VERSION_RE.search(str(value or ""))
+    if not match:
+        return None
+    return tuple(int(part) for part in match.groups())
+
+
+def requires_major_line_update(current: str, latest: str) -> bool:
+    current_parts = app_version_parts(current)
+    latest_parts = app_version_parts(latest)
+    if not current_parts or not latest_parts:
+        return current != latest
+    return latest_parts[:2] != current_parts[:2]
 
 
 def project_root() -> Path:
@@ -139,16 +154,23 @@ def build_version_status(remote_text: str | None = None) -> dict[str, Any]:
     remote_url = extract_remote_update_url(raw_text or "") if raw_text else None
     latest = latest or current
     mismatch = latest != current
+    update_required = requires_major_line_update(current, latest) if mismatch else False
+    if update_required:
+        message = "检测到大版本更新，请更新后再打开前端。"
+    elif mismatch:
+        message = "检测到小版本更新，可继续使用，建议空闲时更新。"
+    else:
+        message = "当前已是最新版本。"
 
     return {
         "app_name": APP_NAME,
         "current_version": current,
         "latest_version": latest,
         "update_available": mismatch,
-        "update_required": mismatch,
+        "update_required": update_required,
         "update_check_url": source_url,
         "update_url": remote_url or doc_url,
-        "message": "检测到新版本，请更新后再打开前端。" if mismatch else "当前已是最新版本。",
+        "message": message,
         "error": error,
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
