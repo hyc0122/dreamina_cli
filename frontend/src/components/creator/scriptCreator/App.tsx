@@ -9,6 +9,7 @@ import ProjectWorkbench from './components/ProjectWorkbench/ProjectWorkbench';
 import GlobalSettingsPage from './components/GlobalSettings/GlobalSettingsPage';
 import { deriveEpisodeProductionStates, describeEpisodeProductionState } from './utils/episodeStateMachine';
 import { GenerationConfig, ProjectStage, WorkflowMode } from './types';
+import type { WorkbenchRoute } from './components/ProjectWorkbench/ProjectWorkbench';
 import {
   WorkspacePreset,
   applyCreationPreset,
@@ -342,10 +343,10 @@ function ActiveProjectShell() {
   const isProductionPage = hasProductionContent || (isGenerating && progress.step !== 'idle');
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_72%_18%,rgba(36,69,111,0.18),transparent_34%)] text-slate-100 lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+    <div className="h-full min-h-0 overflow-hidden bg-[radial-gradient(circle_at_72%_18%,rgba(36,69,111,0.18),transparent_34%)] text-slate-100 lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
       <ProjectFlowSidebar />
-      <main className="min-h-full min-w-0">
-        <div className="space-y-6 px-5 py-5 lg:px-8">
+      <main className="min-h-0 min-w-0 overflow-auto">
+        <div className="min-h-0 space-y-6 px-5 py-5 lg:px-8">
           <ProgressBar />
 
           {isProductionPage ? (
@@ -366,16 +367,14 @@ function ActiveProjectShell() {
   );
 }
 
-function AppContent() {
+function AppContent({ routeHash }: { routeHash: WorkbenchRoute }) {
   const { activeProject } = useApp();
-  const routeHash = useWorkspaceRoute();
 
   if (!activeProject) {
     return (
-      <div className="min-h-full bg-[radial-gradient(circle_at_72%_18%,rgba(36,69,111,0.18),transparent_34%)] lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
-        <Sidebar />
-        <div className="min-w-0">
-          {routeHash === '#settings' ? <GlobalSettingsPage /> : <ProjectWorkbench routeHash={routeHash as '' | '#novel' | '#screenplay' | '#storyboard' | '#score' | '#settings'} />}
+      <div className="h-full min-h-0 overflow-hidden bg-[radial-gradient(circle_at_72%_18%,rgba(36,69,111,0.18),transparent_34%)]">
+        <div className="h-full min-w-0 overflow-auto">
+          {routeHash === '#settings' ? <GlobalSettingsPage /> : <ProjectWorkbench routeHash={routeHash} />}
         </div>
       </div>
     );
@@ -495,10 +494,14 @@ function DebugPanel() {
   );
 }
 
-export default function App() {
+type ScriptCreatorAppProps = {
+  routeHash?: WorkbenchRoute;
+};
+
+export default function App({ routeHash = '' }: ScriptCreatorAppProps) {
   return (
     <AppProvider>
-      <AppContent />
+      <AppContent routeHash={routeHash} />
       <DebugPanel />
     </AppProvider>
   );

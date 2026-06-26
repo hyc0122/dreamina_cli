@@ -1,4 +1,4 @@
-﻿import { ChangeEvent, useRef, useState } from 'react';
+import { ChangeEvent, useRef, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { ProjectRunStatus, ProjectStage, ScriptProject } from '../../types';
 import { episodesFromFinalRecords, leadingUsableEpisodes } from '../../utils/episodeRecovery';
@@ -8,7 +8,7 @@ import {
 } from '../../utils/workspacePreset';
 
 type ProjectCategory = 'novel' | 'screenplay' | 'storyboard' | 'score';
-type WorkbenchRoute = '' | '#novel' | '#screenplay' | '#storyboard' | '#score' | '#settings';
+export type WorkbenchRoute = '' | '#novel' | '#screenplay' | '#storyboard' | '#score' | '#settings';
 
 const categoryCopy: Record<ProjectCategory, { title: string; hint: string }> = {
   novel: { title: '小说创作', hint: '小说正文专区' },
@@ -213,7 +213,7 @@ export default function ProjectWorkbench({ routeHash }: { routeHash: WorkbenchRo
   };
 
   return (
-    <main className="mx-auto max-w-[1500px] px-6 py-8">
+    <main className="mx-auto min-h-full max-w-[1500px] px-6 py-8">
       {isHome ? (
         <section className="mb-7 rounded-3xl border border-[#1d2a3e] bg-[#0b1725]/90 p-7">
           <p className="text-sm font-black text-blue-300">项目首页</p>

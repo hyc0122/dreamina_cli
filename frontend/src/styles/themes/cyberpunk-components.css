@@ -102,15 +102,23 @@ html.cyber section.glass-panel {
   clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
 }
 
-html.cyber nav button[aria-expanded] {
-  border-color: rgba(0, 229, 255, 0.28) !important;
-  background: linear-gradient(90deg, rgba(185, 69, 255, 0.28), rgba(0, 229, 255, 0.08)) !important;
+html.cyber nav .nav-group-button {
+  border-color: rgba(0, 229, 255, 0.56) !important;
+  background: linear-gradient(90deg, rgba(185, 69, 255, 0.32), rgba(0, 229, 255, 0.12)) !important;
   color: #00e5ff !important;
   text-shadow: 0 0 10px rgba(0, 229, 255, 0.55);
+  box-shadow:
+    0 0 14px rgba(0, 229, 255, 0.18),
+    inset 3px 0 0 rgba(0, 229, 255, 0.72) !important;
 }
 
-html.cyber nav button[aria-pressed="true"],
-html.cyber nav button:hover,
+html.cyber nav .nav-child-button[aria-pressed="true"] {
+  border-color: rgba(0, 229, 255, 0.34) !important;
+  background-image: linear-gradient(90deg, rgba(0, 229, 255, 0.10), rgba(185, 69, 255, 0.06));
+  box-shadow: inset 2px 0 0 rgba(0, 229, 255, 0.45) !important;
+}
+
+html.cyber nav .nav-child-button:hover,
 html.cyber .glass-button:hover,
 html.cyber button:hover,
 html.cyber a:hover {

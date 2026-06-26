@@ -280,20 +280,28 @@ export default function JimengApp() {
     return () => window.removeEventListener("hashchange", syncRoute);
   }, []);
 
+  const setCreatorRoute = useCallback((routeHash: CreatorRouteHash) => {
+    if (typeof window === "undefined") {
+      setCreatorRouteHash(routeHash);
+      return;
+    }
+    if (window.location.hash === routeHash) {
+      setCreatorRouteHash(routeHash);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      return;
+    }
+    window.location.hash = routeHash;
+  }, []);
+
   const selectNavItem = useCallback(
     (item: JimengNavItem) => {
       setActivePage(item.pageId);
-      if (item.creatorRoute === undefined || typeof window === "undefined") {
+      if (item.creatorRoute === undefined) {
         return;
       }
-      if (window.location.hash === item.creatorRoute) {
-        setCreatorRouteHash(item.creatorRoute);
-        window.dispatchEvent(new HashChangeEvent("hashchange"));
-        return;
-      }
-      window.location.hash = item.creatorRoute;
+      setCreatorRoute(item.creatorRoute);
     },
-    [setActivePage],
+    [setActivePage, setCreatorRoute],
   );
 
   const isNavItemActive = useCallback(
@@ -399,7 +407,7 @@ export default function JimengApp() {
 
   const renderPage = () => {
     if (activePage === "creator") {
-      return <CreatorAssistantPage />;
+      return <CreatorAssistantPage routeHash={normalizedCreatorRoute as CreatorRouteHash} />;
     }
     if (activePage === "projects") {
       return <JimengProjectListPage />;
@@ -466,7 +474,7 @@ export default function JimengApp() {
                     aria-expanded={!groupCollapsed}
                     onClick={() => toggleNavGroup(group.title)}
                     className={clsx(
-                      "group/title mb-2 flex h-9 w-full items-center justify-between rounded-xl border px-3 text-left text-xs font-bold tracking-[0.16em] transition-all duration-200",
+                      "nav-group-button group/title mb-2 flex h-9 w-full items-center justify-between rounded-xl border px-3 text-left text-xs font-bold tracking-[0.16em] transition-all duration-200",
                       groupActive
                         ? "border-primary/40 bg-primary/15 text-primary shadow-[0_0_0_1px_rgba(100,108,255,0.12)]"
                         : "border-glass-border bg-surface-inset text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-primary",
@@ -490,7 +498,7 @@ export default function JimengApp() {
                             aria-pressed={isActive}
                             onClick={() => selectNavItem(page)}
                             className={clsx(
-                              "group/nav flex h-11 w-full items-center gap-3 rounded-xl border px-3 text-left text-sm font-semibold transition-all duration-200",
+                              "nav-child-button group/nav flex h-11 w-full items-center gap-3 rounded-xl border px-3 text-left text-sm font-semibold transition-all duration-200",
                               isActive
                                 ? "border-primary/35 bg-primary/10 text-foreground shadow-[0_0_0_1px_rgba(100,108,255,0.12)]"
                                 : "border-transparent text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-foreground hover:shadow-[0_0_0_1px_rgba(100,108,255,0.12)]",
@@ -635,7 +643,7 @@ export default function JimengApp() {
                 aria-pressed={isActive}
                 onClick={() => selectNavItem(page)}
                 className={clsx(
-                  "group/mobile-nav flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all duration-200",
+                  "nav-child-button group/mobile-nav flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all duration-200",
                   isActive
                     ? "border-primary/40 bg-primary/10 text-foreground"
                     : "border-transparent text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-foreground",
