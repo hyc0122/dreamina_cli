@@ -14,7 +14,7 @@ from typing import Any
 
 
 APP_NAME = "即梦cli自动排队助手"
-DEFAULT_CURRENT_VERSION = "v1.00.058"
+DEFAULT_CURRENT_VERSION = "v1.00.059"
 DEFAULT_UPDATE_CHECK_URL = "https://version.j11.net/"
 DEFAULT_UPDATE_DOC_URL = "https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink"
 

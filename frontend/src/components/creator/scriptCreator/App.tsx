@@ -19,9 +19,9 @@ import {
 
 const workflowCopy: Record<WorkflowMode, { title: string; subtitle: string; action: string }> = {
   create: {
-    title: '项目首页',
+    title: '剧本项目',
     subtitle: '先选小说、剧本或15秒分镜创作稿，再进入前三集验证',
-    action: '进入项目首页',
+    action: '进入剧本项目',
   },
   score: {
     title: '作品评测',
@@ -115,8 +115,8 @@ function Sidebar() {
   };
 
   const items: Array<{ preset: WorkspacePreset; label: string; desc: string; mark: string }> = [
-    { preset: 'home', label: '项目首页', desc: '查看本地项目和运行状态', mark: '01' },
-    { preset: 'settings', label: '全局设置', desc: 'API Key 和模型配置', mark: '02' },
+    { preset: 'home', label: '剧本项目', desc: '查看本地剧本项目和运行状态', mark: '01' },
+    { preset: 'settings', label: '创作模型设置', desc: '首选、备用模型和并发配置', mark: '02' },
     { preset: 'novel', label: '小说创作', desc: '一集一集输出小说正文', mark: '03' },
     { preset: 'screenplay', label: '剧本创作', desc: '一集一集输出短剧剧本', mark: '04' },
     { preset: 'storyboard', label: '15秒分镜稿创作', desc: '按15秒分镜段输出', mark: '05' },
@@ -125,12 +125,7 @@ function Sidebar() {
 
   return (
     <aside className="hidden min-h-full border-r border-[#1d2a3e] bg-[#07111d]/80 px-5 py-6 lg:block">
-      <div className="mb-8 border-b border-[#1d2a3e] pb-6">
-        <p className="text-xl font-black leading-7 text-[#8fa8ff]">字字动画</p>
-        <p className="text-3xl font-black leading-10 text-white">创作助手</p>
-      </div>
-
-      <nav className="space-y-2">
+      <nav className="space-y-2 pt-1">
         {items.map((item) => {
           const active = isActive(item.preset);
           const locked = isGenerating && activeProject && item.preset === 'score' && !active;
@@ -158,10 +153,6 @@ function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-8 rounded-xl border border-[#1d2a3e] bg-[#0b1725] px-4 py-3">
-        <p className="text-xs font-bold text-slate-300">联系客服</p>
-        <p className="mt-1 select-all text-sm font-black text-blue-300">xiaoyu828308</p>
-      </div>
     </aside>
   );
 }
@@ -230,7 +221,7 @@ function ProjectFlowSidebar() {
           title={navigationLockTitle}
           className="mb-4 text-sm font-bold text-slate-400 hover:text-blue-300"
         >
-          ‹ 返回项目首页
+          ‹ 返回剧本项目
         </button>
         <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-300">{tool.title}</p>
         <h1 className="mt-2 line-clamp-3 text-2xl font-black leading-8 text-white">{activeProject.name}</h1>
@@ -282,7 +273,7 @@ function ProjectFlowSidebar() {
         </button>
         <div className="rounded-xl border border-[#1d2a3e] bg-[#0b1725] px-4 py-3">
           <p className="text-xs font-bold text-slate-300">当前侧栏只服务本项目</p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">小说、剧本、分镜和评测入口已回到项目首页。</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">小说、剧本、分镜和评测入口已回到剧本项目。</p>
         </div>
       </div>
     </aside>

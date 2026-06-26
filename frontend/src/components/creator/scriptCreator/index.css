@@ -74,3 +74,75 @@
 .creator-assistant-scope [class*="text-slate-600"] {
   color: var(--color-text-muted) !important;
 }
+
+.creator-assistant-scope [class*="bg-cyber-dark"],
+.creator-assistant-scope [class*="bg-cyber-purple"],
+.creator-assistant-scope [class*="bg-slate-950"],
+.creator-assistant-scope [class*="bg-slate-900"],
+.creator-assistant-scope [class*="bg-gray-950"],
+.creator-assistant-scope [class*="bg-gray-900"],
+.creator-assistant-scope [class*="bg-gray-800"] {
+  background-color: var(--color-bg-surface) !important;
+}
+
+.creator-assistant-scope [class*="bg-slate-800"],
+.creator-assistant-scope [class*="bg-slate-700"],
+.creator-assistant-scope [class*="bg-gray-700"] {
+  background-color: var(--color-bg-inset) !important;
+}
+
+.creator-assistant-scope [class*="border-gray-"],
+.creator-assistant-scope [class*="border-slate-"] {
+  border-color: var(--color-border-default) !important;
+}
+
+.creator-assistant-scope [class*="text-gray-100"],
+.creator-assistant-scope [class*="text-gray-200"],
+.creator-assistant-scope [class*="text-slate-100"],
+.creator-assistant-scope [class*="text-slate-200"],
+.creator-assistant-scope [class*="text-white"] {
+  color: var(--color-text-primary) !important;
+}
+
+.creator-assistant-scope [class*="text-gray-300"],
+.creator-assistant-scope [class*="text-gray-400"],
+.creator-assistant-scope [class*="text-slate-300"],
+.creator-assistant-scope [class*="text-slate-400"] {
+  color: var(--color-text-secondary) !important;
+}
+
+.creator-assistant-scope [class*="text-gray-500"],
+.creator-assistant-scope [class*="text-gray-600"],
+.creator-assistant-scope [class*="text-slate-500"],
+.creator-assistant-scope [class*="text-slate-600"] {
+  color: var(--color-text-muted) !important;
+}
+
+.creator-assistant-scope [class*="text-blue-100"],
+.creator-assistant-scope [class*="text-blue-200"] {
+  color: var(--color-primary) !important;
+}
+
+.dark .creator-assistant-scope [class*="text-blue-100"],
+.dark .creator-assistant-scope [class*="text-blue-200"] {
+  color: #bfdbfe !important;
+}
+
+.creator-assistant-scope input,
+.creator-assistant-scope textarea,
+.creator-assistant-scope select {
+  border-color: var(--color-border-default) !important;
+  background-color: var(--color-bg-input) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.creator-assistant-scope input::placeholder,
+.creator-assistant-scope textarea::placeholder {
+  color: var(--color-text-muted) !important;
+}
+
+.creator-assistant-scope textarea[readonly],
+.creator-assistant-scope pre {
+  background-color: var(--color-bg-elevated) !important;
+  color: var(--color-text-primary) !important;
+}

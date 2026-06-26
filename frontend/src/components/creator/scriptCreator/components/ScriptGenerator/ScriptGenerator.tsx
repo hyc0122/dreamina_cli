@@ -515,7 +515,7 @@ export default function ScriptGenerator() {
   const shouldShowTrialJudgment =
     config.workflowMode === 'create' &&
     !isGenerating &&
-    completedVisibleEpisodes.length === trialEpisodeCount &&
+    completedVisibleEpisodes.length >= trialEpisodeCount &&
     totalEpisodes > trialEpisodeCount;
   const trialJudgment = shouldShowTrialJudgment ? buildTrialJudgment(completedVisibleEpisodes.slice(0, trialEpisodeCount)) : null;
   const trialRewriteInstructions = trialJudgment

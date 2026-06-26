@@ -5,6 +5,7 @@ import {
   BadgeDollarSign,
   BookOpen,
   Bot,
+  ChevronDown,
   Clapperboard,
   ExternalLink,
   Film,
@@ -46,6 +47,16 @@ interface JimengPageConfig {
   icon: LucideIcon;
 }
 
+type CreatorRouteHash = "" | "#settings" | "#novel" | "#screenplay" | "#storyboard" | "#score";
+
+interface JimengNavItem {
+  id: string;
+  pageId: JimengPageMode;
+  label: string;
+  icon: LucideIcon;
+  creatorRoute?: CreatorRouteHash;
+}
+
 const THEME_STORAGE_KEY = "dreamina_cli_theme";
 const LOGIN_CACHE_KEY = "dreamina_cli_login_snapshot";
 const ONBOARDING_STORAGE_KEY = "dreamina_cli_onboarding_seen_v1";
@@ -63,9 +74,9 @@ const JIMENG_PAGES: JimengPageConfig[] = [
   },
   {
     id: "projects",
-    label: "漫剧制作",
-    placeholderTitle: "漫剧制作",
-    placeholderText: "管理漫剧制作项目、分镜和资产。",
+    label: "漫剧项目",
+    placeholderTitle: "漫剧项目",
+    placeholderText: "管理漫剧项目、分镜和资产。",
     icon: FolderOpen,
   },
   {
@@ -112,12 +123,34 @@ const JIMENG_PAGES: JimengPageConfig[] = [
   },
 ];
 
-const PAGE_GROUPS: Array<{ title: string; pages: JimengPageConfig[] }> = [
-  { title: "????", pages: JIMENG_PAGES.filter((page) => ["creator"].includes(page.id)) },
-  { title: "????", pages: JIMENG_PAGES.filter((page) => ["projects", "workbench", "assets"].includes(page.id)) },
-  { title: "??", pages: JIMENG_PAGES.filter((page) => ["queue", "history"].includes(page.id)) },
-  { title: "??", pages: JIMENG_PAGES.filter((page) => ["llm", "settings"].includes(page.id)) },
+const pageNavItem = (pageId: JimengPageMode, label?: string): JimengNavItem => {
+  const page = JIMENG_PAGES.find((item) => item.id === pageId) ?? JIMENG_PAGES[0];
+  return {
+    id: page.id,
+    pageId: page.id,
+    label: label ?? page.label,
+    icon: page.icon,
+  };
+};
+
+const PAGE_GROUPS: Array<{ title: string; pages: JimengNavItem[] }> = [
+  {
+    title: "创作助手",
+    pages: [
+      { id: "creator-home", pageId: "creator", label: "剧本项目", icon: FolderOpen, creatorRoute: "" },
+      { id: "creator-settings", pageId: "creator", label: "创作模型设置", icon: Bot, creatorRoute: "#settings" },
+      { id: "creator-novel", pageId: "creator", label: "小说创作", icon: BookOpen, creatorRoute: "#novel" },
+      { id: "creator-screenplay", pageId: "creator", label: "剧本创作", icon: Clapperboard, creatorRoute: "#screenplay" },
+      { id: "creator-storyboard", pageId: "creator", label: "15秒分镜稿创作", icon: Film, creatorRoute: "#storyboard" },
+      { id: "creator-score", pageId: "creator", label: "作品评测", icon: Sparkles, creatorRoute: "#score" },
+    ],
+  },
+  { title: "漫剧创作", pages: [pageNavItem("projects"), pageNavItem("workbench"), pageNavItem("assets")] },
+  { title: "生产", pages: [pageNavItem("queue"), pageNavItem("history")] },
+  { title: "配置", pages: [pageNavItem("llm"), pageNavItem("settings")] },
 ];
+
+const ALL_NAV_ITEMS = PAGE_GROUPS.flatMap((group) => group.pages);
 
 const getInitialTheme = (): ThemeMode => {
   if (typeof window === "undefined") {
@@ -205,8 +238,21 @@ export default function JimengApp() {
   const [versionChecked, setVersionChecked] = useState(false);
   const [autoOpenedUpdateVersion, setAutoOpenedUpdateVersion] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [creatorRouteHash, setCreatorRouteHash] = useState(() => (typeof window === "undefined" ? "" : window.location.hash));
   const activeConfig = JIMENG_PAGES.find((page) => page.id === activePage) ?? JIMENG_PAGES[0];
   const activeIndex = JIMENG_PAGES.findIndex((page) => page.id === activeConfig.id) + 1;
+  const normalizedCreatorRoute = creatorRouteHash === "#/app" ? "" : creatorRouteHash;
+  const activeNavItem =
+    ALL_NAV_ITEMS.find((item) => {
+      if (item.pageId !== activePage) {
+        return false;
+      }
+      if (item.pageId !== "creator") {
+        return true;
+      }
+      return (item.creatorRoute ?? "") === normalizedCreatorRoute;
+    }) ?? ALL_NAV_ITEMS.find((item) => item.pageId === activePage);
   const currentVersion = versionStatus?.current_version ?? runtimeInfo?.version ?? "--";
   const appName = versionStatus?.app_name ?? runtimeInfo?.app_name ?? APP_DISPLAY_NAME;
 
@@ -218,10 +264,46 @@ export default function JimengApp() {
   }, [theme]);
 
   useEffect(() => {
-    const syncRoute = () => setShellRoute(getShellRoute());
+    const syncRoute = () => {
+      setShellRoute(getShellRoute());
+      setCreatorRouteHash(window.location.hash);
+    };
     window.addEventListener("hashchange", syncRoute);
     syncRoute();
     return () => window.removeEventListener("hashchange", syncRoute);
+  }, []);
+
+  const selectNavItem = useCallback(
+    (item: JimengNavItem) => {
+      setActivePage(item.pageId);
+      if (item.creatorRoute === undefined || typeof window === "undefined") {
+        return;
+      }
+      if (window.location.hash === item.creatorRoute) {
+        setCreatorRouteHash(item.creatorRoute);
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+        return;
+      }
+      window.location.hash = item.creatorRoute;
+    },
+    [setActivePage],
+  );
+
+  const isNavItemActive = useCallback(
+    (item: JimengNavItem) => {
+      if (activePage !== item.pageId) {
+        return false;
+      }
+      if (item.pageId !== "creator") {
+        return true;
+      }
+      return (item.creatorRoute ?? "") === normalizedCreatorRoute;
+    },
+    [activePage, normalizedCreatorRoute],
+  );
+
+  const toggleNavGroup = useCallback((title: string) => {
+    setCollapsedGroups((current) => ({ ...current, [title]: !current[title] }));
   }, []);
 
   const openMainApp = useCallback(() => {
@@ -367,41 +449,70 @@ export default function JimengApp() {
             </div>
           </div>
           <nav className="mt-5 flex min-h-0 flex-1 flex-col gap-4 overflow-auto" aria-label="即梦模块导航">
-            {PAGE_GROUPS.map((group) => (
-              <div key={group.title}>
-                <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">{group.title}</div>
-                <div className="space-y-1.5">
-                  {group.pages.map((page) => {
-                    const isActive = activePage === page.id;
-                    const Icon = page.icon;
-                    return (
-                      <button
-                        key={page.id}
-                        type="button"
-                        aria-pressed={isActive}
-                        onClick={() => setActivePage(page.id)}
-                        className={clsx(
-                          "group/nav flex h-11 w-full items-center gap-3 rounded-xl border px-3 text-left text-sm font-semibold transition-all duration-200",
-                          isActive
-                            ? "border-primary/35 bg-primary/10 text-foreground shadow-[0_0_0_1px_rgba(100,108,255,0.12)]"
-                            : "border-transparent text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-foreground hover:shadow-[0_0_0_1px_rgba(100,108,255,0.12)]",
-                        )}
-                      >
-                        <Icon size={17} className={isActive ? "text-primary" : "text-text-muted transition-colors group-hover/nav:text-primary"} />
-                        <span>{page.label}</span>
-                      </button>
-                    );
-                  })}
+            {PAGE_GROUPS.map((group) => {
+              const groupActive = group.pages.some((page) => isNavItemActive(page));
+              const groupCollapsed = Boolean(collapsedGroups[group.title]);
+              return (
+                <div key={group.title}>
+                  <button
+                    type="button"
+                    aria-expanded={!groupCollapsed}
+                    onClick={() => toggleNavGroup(group.title)}
+                    className={clsx(
+                      "group/title mb-2 flex h-9 w-full items-center justify-between rounded-xl border px-3 text-left text-xs font-bold tracking-[0.16em] transition-all duration-200",
+                      groupActive
+                        ? "border-primary/40 bg-primary/15 text-primary shadow-[0_0_0_1px_rgba(100,108,255,0.12)]"
+                        : "border-glass-border bg-surface-inset text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-primary",
+                    )}
+                  >
+                    <span>{group.title}</span>
+                    <ChevronDown
+                      size={15}
+                      className={clsx("transition-transform duration-200", groupCollapsed ? "-rotate-90" : "rotate-0")}
+                    />
+                  </button>
+                  {!groupCollapsed && (
+                    <div className="space-y-1.5">
+                      {group.pages.map((page) => {
+                        const isActive = isNavItemActive(page);
+                        const Icon = page.icon;
+                        return (
+                          <button
+                            key={page.id}
+                            type="button"
+                            aria-pressed={isActive}
+                            onClick={() => selectNavItem(page)}
+                            className={clsx(
+                              "group/nav flex h-11 w-full items-center gap-3 rounded-xl border px-3 text-left text-sm font-semibold transition-all duration-200",
+                              isActive
+                                ? "border-primary/35 bg-primary/10 text-foreground shadow-[0_0_0_1px_rgba(100,108,255,0.12)]"
+                                : "border-transparent text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-foreground hover:shadow-[0_0_0_1px_rgba(100,108,255,0.12)]",
+                            )}
+                          >
+                            <Icon size={17} className={isActive ? "text-primary" : "text-text-muted transition-colors group-hover/nav:text-primary"} />
+                            <span>{page.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </nav>
-          <div className="mt-4 rounded-xl border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-muted">
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/10 p-3 text-xs leading-5 text-text-muted">
+            <div className="flex items-center gap-2 font-semibold text-foreground">
+              <MessageSquare size={14} className="text-primary" />
+              联系客服
+            </div>
+            <div className="mt-1 select-all font-mono font-semibold text-primary">微信客服：jmqh888</div>
+          </div>
+          <div className="mt-3 rounded-xl border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-muted">
             <div className="flex items-center gap-2 font-semibold text-foreground">
               <Clapperboard size={14} className="text-primary" />
               当前模块
             </div>
-            <div className="mt-1">{activeConfig.label}</div>
+            <div className="mt-1">{activeNavItem?.label ?? activeConfig.label}</div>
           </div>
         </aside>
 
@@ -494,8 +605,8 @@ export default function JimengApp() {
           </div>
             </div>
             <nav className="mt-3 flex shrink-0 gap-2 overflow-x-auto lg:hidden" aria-label="即梦批量模块导航">
-          {JIMENG_PAGES.map((page) => {
-            const isActive = activePage === page.id;
+          {ALL_NAV_ITEMS.map((page) => {
+            const isActive = isNavItemActive(page);
             const Icon = page.icon;
 
             return (
@@ -503,7 +614,7 @@ export default function JimengApp() {
                 key={page.id}
                 type="button"
                 aria-pressed={isActive}
-                onClick={() => setActivePage(page.id)}
+                onClick={() => selectNavItem(page)}
                 className={clsx(
                   "group/mobile-nav flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all duration-200",
                   isActive
