@@ -20,7 +20,7 @@ interface JimengOnboardingGuideProps {
 const STEPS: OnboardingStep[] = [
   {
     title: "新建剧本",
-    body: "在剧本列表输入项目名称，选择风格和横竖屏，必要时选择继承某个旧分镜的资产。",
+    body: "在剧本列表输入项目名称，选择风格和横竖屏，必要时选择继承旧剧本的全文资产。",
     targetPage: "projects",
   },
   {

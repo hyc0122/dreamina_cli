@@ -64,8 +64,8 @@ def create_project(request: ProjectCreate):
             request.description,
             request.default_ratio,
         )
-        if request.inherit_source_project_id and request.inherit_source_shot_id:
-            _inherit_assets_from_source_shot(
+        if request.inherit_source_project_id:
+            _inherit_assets_from_source_project(
                 target_project_id=created.id,
                 source_project_id=request.inherit_source_project_id,
                 source_shot_id=request.inherit_source_shot_id,
@@ -131,17 +131,16 @@ def duplicate_project(project_id: str):
     return _call(duplicate)
 
 
-def _inherit_assets_from_source_shot(target_project_id: str, source_project_id: str, source_shot_id: str) -> None:
+def _inherit_assets_from_source_project(target_project_id: str, source_project_id: str, source_shot_id: str | None = None) -> None:
     store = get_store()
     store.get_project(target_project_id)
-    store.get_shot(source_project_id, source_shot_id)
-    source_asset_by_id = {asset.id: asset for asset in store.list_assets(source_project_id)}
-    copied_asset_ids: set[str] = set()
-    for binding in store.list_bindings(source_project_id, source_shot_id):
-        if binding.asset_id in copied_asset_ids:
-            continue
-        source_asset = source_asset_by_id.get(binding.asset_id)
-        if source_asset is None:
+    store.get_project(source_project_id)
+    if source_shot_id:
+        store.get_shot(source_project_id, source_shot_id)
+    existing_keys = {(asset.type.value, asset.name) for asset in store.list_assets(target_project_id)}
+    for source_asset in store.list_assets(source_project_id):
+        asset_key = (source_asset.type.value, source_asset.name)
+        if asset_key in existing_keys:
             continue
         copied = store.create_asset(
             target_project_id,
@@ -157,7 +156,7 @@ def _inherit_assets_from_source_shot(target_project_id: str, source_project_id: 
         )
         _copy_asset_file_if_present(target_project_id, copied.type, copied.name, source_asset.image_path, "image", copied.image_ratio)
         _copy_asset_file_if_present(target_project_id, copied.type, copied.name, source_asset.audio_path, "audio", copied.image_ratio)
-        copied_asset_ids.add(binding.asset_id)
+        existing_keys.add(asset_key)
 
 
 def _copy_asset_file_if_present(

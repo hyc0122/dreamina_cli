@@ -474,10 +474,10 @@ export default function JimengProjectListPage() {
         style: style.trim(),
         default_ratio: defaultRatio,
         description: description.trim(),
-        ...(inheritProjectId && inheritShotId
+        ...(inheritProjectId
           ? {
               inherit_source_project_id: inheritProjectId,
-              inherit_source_shot_id: inheritShotId,
+              ...(inheritShotId ? { inherit_source_shot_id: inheritShotId } : {}),
             }
           : {}),
       });
@@ -550,7 +550,7 @@ export default function JimengProjectListPage() {
           </form>
           <div className="mt-3 grid gap-3 rounded-lg border border-glass-border bg-surface-inset p-3 lg:grid-cols-[220px_240px_minmax(0,1fr)]">
             <label className="space-y-1.5">
-              <span className="text-xs font-medium text-text-secondary">继承分镜资产</span>
+              <span className="text-xs font-medium text-text-secondary">继承全文资产</span>
               <select value={inheritProjectId} onChange={(event) => setInheritProjectId(event.target.value)} className="glass-input w-full text-sm text-foreground" disabled={creating}>
                 <option value="">不继承</option>
                 {sortedProjects.map((project) => (
@@ -561,14 +561,14 @@ export default function JimengProjectListPage() {
               </select>
             </label>
             <label className="space-y-1.5">
-              <span className="text-xs font-medium text-text-secondary">来源分镜</span>
+              <span className="text-xs font-medium text-text-secondary">来源分镜（可选）</span>
               <select
                 value={inheritShotId}
                 onChange={(event) => setInheritShotId(event.target.value)}
                 className="glass-input w-full text-sm text-foreground"
                 disabled={creating || !inheritProjectId || loadingInheritShots || inheritShots.length === 0}
               >
-                <option value="">{loadingInheritShots ? "读取中..." : "选择来源分镜"}</option>
+                <option value="">{loadingInheritShots ? "读取中..." : "不指定来源分镜"}</option>
                 {inheritShots.map((shot) => (
                   <option key={shot.id} value={shot.id}>
                     分镜{shot.shot_index}
@@ -577,7 +577,7 @@ export default function JimengProjectListPage() {
               </select>
             </label>
             <p className="self-end rounded-md border border-glass-border bg-black/20 px-3 py-2 text-xs leading-5 text-text-muted">
-              新建剧本时只复制来源分镜已绑定的角色、场景、道具和音色图片资产，不复制候选视频。
+              新建剧本时复制来源剧本的全部角色、场景、道具、图片和音色资产；不复制旧分镜、绑定关系和候选视频。来源分镜只用于定位来源剧本。
             </p>
           </div>
           {inheritError ? <p className="mt-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{inheritError}</p> : null}
