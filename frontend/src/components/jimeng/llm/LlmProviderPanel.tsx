@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { Eye, EyeOff, Plus, ServerCog, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { JimengLlmProviderSetting } from "@/lib/jimengApi";
-import { createDefaultLlmProviders } from "@/components/jimeng/llm/llmDefaults";
+import { createDefaultLlmProviders, VOLCENGINE_ARK_BASE_URL } from "@/components/jimeng/llm/llmDefaults";
 import LlmModelList from "@/components/jimeng/llm/LlmModelList";
 
 const JIASU_OFFICIAL_URL = "https://jiasuapi.com/";
@@ -86,7 +86,7 @@ export default function LlmProviderPanel({
           </div>
           <h2 className="mt-2 font-display text-xl font-semibold text-foreground">大模型供应商</h2>
           <p className="mt-2 text-sm leading-6 text-text-secondary">
-            这里独立管理佳速 API / OpenAI 兼容接口，只用于资产图片纯文本生图，不影响即梦 CLI。
+            这里独立管理佳速 API、OpenAI 兼容接口和火山方舟，用于文本推理、资产生图和可选文生视频。
           </p>
         </div>
         <button
@@ -184,10 +184,16 @@ export default function LlmProviderPanel({
                   <span className="text-xs font-medium text-text-muted">接口类型</span>
                   <select
                     value={activeProvider.kind}
-                    onChange={(event) => updateProvider({ kind: event.target.value })}
+                    onChange={(event) =>
+                      updateProvider({
+                        kind: event.target.value,
+                        base_url: event.target.value === "volcengine_ark" && !activeProvider.base_url ? VOLCENGINE_ARK_BASE_URL : activeProvider.base_url,
+                      })
+                    }
                     className="glass-input h-10 w-full text-sm text-foreground"
                   >
                     <option value="openai_compatible">OpenAI 标准接口</option>
+                    <option value="volcengine_ark">火山方舟 Ark</option>
                   </select>
                 </label>
                 {isJiasuApiProvider ? (

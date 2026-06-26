@@ -12,6 +12,7 @@ from .models import LlmChatCompletion, LlmGeneratedImage, LlmImageTaskStart, Llm
 
 JIASU_MEDIA_HOSTS = {"api.lk888.ai", "api.lk666.ai"}
 DEFAULT_JIASU_BASE_URL = "https://api.lk888.ai"
+DEFAULT_VOLCENGINE_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 JIASU_STATUS_MAX_POLLS = 60
 JIASU_STATUS_POLL_INTERVAL_SECONDS = 3
 URL_OPEN_MAX_ATTEMPTS = 3
@@ -482,6 +483,21 @@ def _openai_chat_endpoint(base_url: str) -> str:
     return _join_url(value, "/v1/chat/completions")
 
 
+def _volcengine_ark_api_root(base_url: str) -> str:
+    value = str(base_url or DEFAULT_VOLCENGINE_ARK_BASE_URL).strip().rstrip("/")
+    for suffix in ("/chat/completions", "/contents/generations/tasks", "/api/v3"):
+        if value.endswith(suffix):
+            value = value[: -len(suffix)]
+            break
+    if value.endswith("/api/v3"):
+        return value
+    return _join_url(value, "/api/v3")
+
+
+def _volcengine_ark_chat_endpoint(base_url: str) -> str:
+    return _join_url(_volcengine_ark_api_root(base_url), "/chat/completions")
+
+
 def _openai_chat_body(
     messages: list[dict[str, str]],
     model_id: str,
@@ -534,7 +550,7 @@ def call_chat_completion(
     max_tokens: int = 4096,
     timeout: int = 180,
 ) -> LlmChatCompletion:
-    if settings.kind != "openai_compatible":
+    if settings.kind not in {"openai_compatible", "volcengine_ark"}:
         raise ValueError("当前仅支持 OpenAI 兼容文本接口")
     if not _normalized_api_key(settings.api_key):
         raise ValueError("大模型供应商缺少 API Key")
@@ -545,8 +561,9 @@ def call_chat_completion(
     ]
     if not clean_messages:
         raise ValueError("文本聊天请求缺少消息内容")
+    endpoint = _volcengine_ark_chat_endpoint(settings.base_url) if settings.kind == "volcengine_ark" else _openai_chat_endpoint(settings.base_url)
     request = urllib.request.Request(
-        _openai_chat_endpoint(settings.base_url),
+        endpoint,
         data=json.dumps(_openai_chat_body(clean_messages, model_id, temperature, max_tokens), ensure_ascii=False).encode("utf-8"),
         headers=_auth_headers(settings),
         method="POST",

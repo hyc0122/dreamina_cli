@@ -7,7 +7,7 @@ from fastapi import APIRouter
 
 from .creator import router as creator_router
 
-from . import app_version, assets, bindings, candidates, llm, projects, prompt_presets, queue, settings, shots
+from . import app_version, assets, bindings, candidates, llm, projects, prompt_manager, prompt_presets, queue, settings, shots
 
 
 router = APIRouter()
@@ -20,5 +20,6 @@ router.include_router(candidates.router)
 router.include_router(queue.router)
 router.include_router(settings.router)
 router.include_router(llm.router)
+router.include_router(prompt_manager.router)
 router.include_router(prompt_presets.router)
 router.include_router(creator_router)

@@ -9,7 +9,7 @@ import {
   clampJimengVideoDuration,
   type JimengVideoGenerationSettings,
 } from "@/lib/jimengApi";
-import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
+import { encodeLlmModelValue, parseLlmModelValue, type LlmModelOption } from "@/components/jimeng/llm/modelOptions";
 
 interface GenerationSettingsControlProps {
   value: JimengVideoGenerationSettings;
@@ -38,14 +38,14 @@ export function normalizeGenerationSettings(
   value?: Partial<JimengVideoGenerationSettings>,
 ): JimengVideoGenerationSettings {
   const requestedModelVersion = value?.model_version ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.model_version;
-  const modelVersion = requestedModelVersion.startsWith("api-") ? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.model_version : requestedModelVersion;
-  const provider = "dreamina_cli";
+  const llmModel = parseLlmModelValue(requestedModelVersion);
+  const modelVersion = llmModel?.modelId ?? (requestedModelVersion.startsWith("api-") ? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.model_version : requestedModelVersion);
   return {
     ...DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
     ...value,
-    provider,
-    model_version: modelVersion,
-    account_id: value?.account_id ?? "",
+    provider: llmModel ? "volcengine_ark" : "dreamina_cli",
+    model_version: llmModel?.modelId ?? modelVersion,
+    account_id: llmModel?.providerId ?? value?.account_id ?? "",
     duration_source: value?.duration_source === "global" ? "global" : "per_shot",
     duration: clampJimengVideoDuration(value?.duration ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.duration),
     poll_seconds: Math.max(5, Number(value?.poll_seconds ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.poll_seconds) || 30),
@@ -59,6 +59,10 @@ export default function GenerationSettingsControl({
   videoModelOptions = [],
 }: GenerationSettingsControlProps) {
   const normalizedValue = normalizeGenerationSettings(value);
+  const selectedModelValue =
+    normalizedValue.provider === "volcengine_ark" && normalizedValue.account_id
+      ? encodeLlmModelValue(normalizedValue.account_id, normalizedValue.model_version)
+      : normalizedValue.model_version;
   const update = <K extends keyof JimengVideoGenerationSettings>(key: K, nextValue: JimengVideoGenerationSettings[K]) => {
     onChange(normalizeGenerationSettings({ ...normalizedValue, [key]: nextValue }));
   };
@@ -85,7 +89,7 @@ export default function GenerationSettingsControl({
       <label className="space-y-1.5">
         <span className="text-xs font-medium text-text-muted">视频模型</span>
         <select
-          value={normalizedValue.model_version}
+          value={selectedModelValue}
           onChange={(event) => update("model_version", event.target.value)}
           className="glass-input h-10 w-full text-sm text-foreground"
         >

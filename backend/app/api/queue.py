@@ -10,7 +10,7 @@ from fastapi import APIRouter
 
 from ..jimeng_models import JimengQueueStatus, JimengShotStatus
 from ..jimeng_queue import JimengQueueWorker
-from ..providers import DreaminaCliProvider
+from ..providers.factory import build_video_generation_provider
 from ..queue_worker_launcher import start_queue_worker_process
 from .context import _call, _dump, _model_data, _now, get_store, save_runtime_settings
 from .schemas import QueueBatchCreate, QueueItemCreate, QueueReorder
@@ -223,8 +223,12 @@ def _start_queue_worker_payload() -> dict[str, Any]:
 
 
 def _provider_factory(provider_name: str, account_id: str | None = None) -> Any:
-    """队列任务统一使用官方 CLI 视频生成通道。"""
-    return DreaminaCliProvider(_cli())
+    return build_video_generation_provider(
+        store=get_store(),
+        provider_name=provider_name,
+        account_id=account_id,
+        cli_factory=_cli,
+    )
 
 
 def _reorder_rows(table: str, id_column: str, position_column: str, ids: list[str]) -> None:

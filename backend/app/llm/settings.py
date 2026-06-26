@@ -1,4 +1,4 @@
-﻿"""大模型设置读写。
+"""大模型设置读写。
 
 大模型配置独立保存在 runtime data 的 llm/settings.json 中，避免和即梦 CLI 设置混在一起。
 """
@@ -12,6 +12,9 @@ from .models import LlmAssetImageSettings, LlmModelSetting, LlmProviderSetting, 
 
 JIASU_API_BASE_URL = "https://api.lk888.ai"
 JIASU_DEFAULT_IMAGE_MODEL = "gpt-image-2"
+VOLCENGINE_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+VOLCENGINE_ARK_TEXT_MODEL = "doubao-seed-1-6-250615"
+VOLCENGINE_ARK_VIDEO_MODEL = "doubao-seedance-2-0-fast-260615"
 LEGACY_JIASU_BASE_URLS = {
     "https://api.lk888.ai/api": "https://api.lk888.ai",
     "https://api.lk666.ai/api": "https://api.lk666.ai",
@@ -38,7 +41,19 @@ def default_llm_settings() -> LlmSettings:
                     LlmModelSetting(id="gpt-5.1", name="GPT-5.1", type="text", enabled=True),
                     LlmModelSetting(id="gpt-5.2", name="GPT-5.2", type="text", enabled=True),
                 ],
-            )
+            ),
+            LlmProviderSetting(
+                id="volcengine_ark",
+                name="火山方舟",
+                kind="volcengine_ark",
+                enabled=False,
+                base_url=VOLCENGINE_ARK_BASE_URL,
+                api_key="",
+                models=[
+                    LlmModelSetting(id=VOLCENGINE_ARK_TEXT_MODEL, name="Doubao Seed 1.6", type="text", enabled=True),
+                    LlmModelSetting(id=VOLCENGINE_ARK_VIDEO_MODEL, name="Seedance 2.0 Fast", type="video", enabled=True),
+                ],
+            ),
         ],
         asset_image=LlmAssetImageSettings(),
     )
@@ -84,6 +99,10 @@ def load_llm_settings(store: JimengStore) -> LlmSettings:
         raise ValueError(f"大模型设置文件格式错误: {path}") from exc
     base = model_dump(default_llm_settings())
     base.update(data)
+    existing_provider_ids = {provider.get("id") for provider in base.get("providers", [])}
+    for default_provider in model_dump(default_llm_settings()).get("providers", []):
+        if default_provider.get("id") not in existing_provider_ids:
+            base.setdefault("providers", []).append(default_provider)
     return normalize_llm_settings(LlmSettings(**base))
 
 

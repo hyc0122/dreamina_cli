@@ -30,7 +30,7 @@ export const parseLlmModelValue = (value: string): { providerId: string; modelId
 export const buildLlmModelOptions = (settings: JimengLlmSettings | null | undefined, type: "image" | "video"): LlmModelOption[] =>
   (settings?.providers ?? []).flatMap((provider) =>
     provider.models
-      .filter((model) => model.enabled && model.type === type)
+      .filter((model) => provider.enabled && model.enabled && model.type === type)
       .map((model) => ({
         value: encodeLlmModelValue(provider.id, model.id),
         label: `${provider.name} / ${model.name}`,

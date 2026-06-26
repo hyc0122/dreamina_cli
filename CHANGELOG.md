@@ -1,3 +1,6 @@
+## v1.00.065 - 2026-06-27 04:09:48 +08:00
+
+- 火山方舟与提示词管理模块接入：大模型设置新增火山方舟供应商，支持文本推理和文生视频模型；分镜视频模型可选择启用的方舟视频模型进入独立 provider；新增独立“提示词管理”模块，使用单独 SQLite 管理官方、用户和 VIP 模板，并支持完整提示词组合与复制。详细说明：docs/releases/v1.00.065-ark-prompt-manager-implementation.md
 ## v1.00.064 - 2026-06-26 21:00:24 +08:00
 
 - 提示词管理与云端同步设计：确认新增独立“提示词管理”模块，分为视频创作提示词和创作作品提示词；设计本地独立 `prompt_manager.sqlite3`、云端独立 `prompt_cloud.sqlite3`、免费模板同步、用户模板自动上传和 VIP 模板后台预留。详细说明：docs/releases/v1.00.064-prompt-manager-cloud-design.md

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import clsx from "clsx";
 import {
@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clapperboard,
   ExternalLink,
+  FileText,
   Film,
   FolderOpen,
   History,
@@ -23,6 +24,8 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import CreatorAssistantPage from "@/components/creator/pages/CreatorAssistantPage";
+import PromptManagerPage from "@/components/prompts/PromptManagerPage";
+import { PROMPT_MANAGER_GROUPS as PROMPT_NAV_GROUPS } from "@/components/prompts/promptManagerConfig";
 import UpdateRequiredScreen from "@/components/jimeng/UpdateRequiredScreen";
 import JimengOnboardingGuide from "@/components/jimeng/onboarding/JimengOnboardingGuide";
 import JimengLauncherPage from "@/components/jimeng/pages/JimengLauncherPage";
@@ -34,7 +37,13 @@ import JimengSettingsPage from "@/components/jimeng/pages/JimengSettingsPage";
 import JimengWorkbenchPage from "@/components/jimeng/pages/JimengWorkbenchPage";
 import LlmSettingsPage from "@/components/jimeng/llm/LlmSettingsPage";
 import { jimengApi } from "@/lib/jimengApi";
-import type { JimengCliResult, JimengPageMode, JimengRuntimeInfo, JimengVersionStatus } from "@/lib/jimengApi";
+import type {
+  JimengCliResult,
+  JimengPageMode,
+  JimengRuntimeInfo,
+  JimengVersionStatus,
+  PromptManagerTemplateType,
+} from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
 
 type ThemeMode = "dark" | "light" | "cyber";
@@ -55,6 +64,7 @@ interface JimengNavItem {
   label: string;
   icon: LucideIcon;
   creatorRoute?: CreatorRouteHash;
+  promptTemplateType?: PromptManagerTemplateType;
 }
 
 const THEME_STORAGE_KEY = "dreamina_cli_theme";
@@ -72,6 +82,13 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     placeholderTitle: "创作助手",
     placeholderText: "小说拆解、短剧剧本、分镜草稿创作和作品评测。",
     icon: Sparkles,
+  },
+  {
+    id: "prompt_manager",
+    label: "提示词管理",
+    placeholderTitle: "提示词管理",
+    placeholderText: "维护视频创作和创作作品提示词模板。",
+    icon: FileText,
   },
   {
     id: "projects",
@@ -134,6 +151,14 @@ const pageNavItem = (pageId: JimengPageMode, label?: string): JimengNavItem => {
   };
 };
 
+const promptNavItem = (templateType: PromptManagerTemplateType, label: string): JimengNavItem => ({
+  id: "prompt-manager-" + templateType,
+  pageId: "prompt_manager",
+  label,
+  icon: FileText,
+  promptTemplateType: templateType,
+});
+
 const PAGE_GROUPS: Array<{ title: string; pages: JimengNavItem[] }> = [
   {
     title: "创作助手",
@@ -145,6 +170,10 @@ const PAGE_GROUPS: Array<{ title: string; pages: JimengNavItem[] }> = [
       { id: "creator-storyboard", pageId: "creator", label: "15秒分镜稿创作", icon: Film, creatorRoute: "#storyboard" },
       { id: "creator-score", pageId: "creator", label: "作品评测", icon: Sparkles, creatorRoute: "#score" },
     ],
+  },
+  {
+    title: "提示词管理",
+    pages: PROMPT_NAV_GROUPS.flatMap((group) => group.items.map((item) => promptNavItem(item.type, item.label))),
   },
   { title: "漫剧创作", pages: [pageNavItem("projects"), pageNavItem("workbench"), pageNavItem("assets")] },
   { title: "生产", pages: [pageNavItem("queue"), pageNavItem("history")] },
@@ -248,6 +277,7 @@ export default function JimengApp() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [creatorRouteHash, setCreatorRouteHash] = useState(() => (typeof window === "undefined" ? "" : window.location.hash));
   const [creatorRouteNonce, setCreatorRouteNonce] = useState(0);
+  const [promptTemplateType, setPromptTemplateType] = useState<PromptManagerTemplateType>("prompt_reasoning");
   const activeConfig = JIMENG_PAGES.find((page) => page.id === activePage) ?? JIMENG_PAGES[0];
   const activeIndex = JIMENG_PAGES.findIndex((page) => page.id === activeConfig.id) + 1;
   const normalizedCreatorRoute = creatorRouteHash === "#/app" ? "" : creatorRouteHash;
@@ -255,6 +285,9 @@ export default function JimengApp() {
     ALL_NAV_ITEMS.find((item) => {
       if (item.pageId !== activePage) {
         return false;
+      }
+      if (item.pageId === "prompt_manager") {
+        return item.promptTemplateType === promptTemplateType;
       }
       if (item.pageId !== "creator") {
         return true;
@@ -297,6 +330,10 @@ export default function JimengApp() {
   const selectNavItem = useCallback(
     (item: JimengNavItem) => {
       setActivePage(item.pageId);
+      if (item.promptTemplateType) {
+        setPromptTemplateType(item.promptTemplateType);
+        return;
+      }
       if (item.creatorRoute === undefined) {
         return;
       }
@@ -311,12 +348,15 @@ export default function JimengApp() {
       if (activePage !== item.pageId) {
         return false;
       }
+      if (item.pageId === "prompt_manager") {
+        return item.promptTemplateType === promptTemplateType;
+      }
       if (item.pageId !== "creator") {
         return true;
       }
       return (item.creatorRoute ?? "") === normalizedCreatorRoute;
     },
-    [activePage, normalizedCreatorRoute],
+    [activePage, normalizedCreatorRoute, promptTemplateType],
   );
 
   const toggleNavGroup = useCallback((title: string) => {
@@ -410,6 +450,9 @@ export default function JimengApp() {
   const renderPage = () => {
     if (activePage === "creator") {
       return <CreatorAssistantPage routeHash={normalizedCreatorRoute as CreatorRouteHash} routeNonce={creatorRouteNonce} />;
+    }
+    if (activePage === "prompt_manager") {
+      return <PromptManagerPage activeType={promptTemplateType} />;
     }
     if (activePage === "projects") {
       return <JimengProjectListPage />;

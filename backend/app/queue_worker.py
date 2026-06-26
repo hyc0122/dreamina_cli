@@ -10,6 +10,7 @@ from .api.context import dreamina_cli, get_store, load_runtime_settings
 from .jimeng_queue import JimengQueueWorker
 from .jimeng_storage import JimengStore
 from .providers import DreaminaCliProvider
+from .providers.factory import build_video_generation_provider
 from .queue.scheduler import PersistentQueueScheduler
 
 
@@ -64,7 +65,12 @@ def build_runtime() -> QueueWorkerRuntime:
     provider = DreaminaCliProvider(dreamina_cli())
 
     def provider_factory(provider_name: str, account_id: str | None = None) -> Any:
-        return DreaminaCliProvider(dreamina_cli())
+        return build_video_generation_provider(
+            store=store,
+            provider_name=provider_name,
+            account_id=account_id,
+            cli_factory=dreamina_cli,
+        )
 
     worker = JimengQueueWorker(
         store=store,

@@ -1,7 +1,10 @@
-﻿import type { JimengLlmProviderSetting, JimengLlmSettings } from "@/lib/jimengApi";
+import type { JimengLlmProviderSetting, JimengLlmSettings } from "@/lib/jimengApi";
 
 export const JIASU_API_BASE_URL = "https://api.lk888.ai";
 export const JIASU_DEFAULT_IMAGE_MODEL = "gpt-image-2";
+export const VOLCENGINE_ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
+export const VOLCENGINE_ARK_TEXT_MODEL = "doubao-seed-1-6-250615";
+export const VOLCENGINE_ARK_VIDEO_MODEL = "doubao-seedance-2-0-fast-260615";
 
 const LEGACY_JIASU_BASE_URLS: Record<string, string> = {
   "https://api.lk888.ai/api": "https://api.lk888.ai",
@@ -33,6 +36,18 @@ export const createDefaultLlmProviders = (): JimengLlmProviderSetting[] => [
       { id: "gpt-5.2", name: "GPT-5.2", type: "text", enabled: true },
     ],
   },
+  {
+    id: "volcengine_ark",
+    name: "火山方舟",
+    kind: "volcengine_ark",
+    enabled: false,
+    base_url: VOLCENGINE_ARK_BASE_URL,
+    api_key: "",
+    models: [
+      { id: VOLCENGINE_ARK_TEXT_MODEL, name: "Doubao Seed 1.6", type: "text", enabled: true },
+      { id: VOLCENGINE_ARK_VIDEO_MODEL, name: "Seedance 2.0 Fast", type: "video", enabled: true },
+    ],
+  },
 ];
 
 export const DEFAULT_LLM_SETTINGS: JimengLlmSettings = {
@@ -49,7 +64,14 @@ export const DEFAULT_LLM_SETTINGS: JimengLlmSettings = {
 };
 
 export const normalizeLlmSettings = (settings?: Partial<JimengLlmSettings>): JimengLlmSettings => {
-  const providers = (settings?.providers?.length ? settings.providers : createDefaultLlmProviders()).map((provider) => ({
+  const mergedProviders = settings?.providers?.length ? settings.providers : createDefaultLlmProviders();
+  const defaultProviders = createDefaultLlmProviders();
+  for (const defaultProvider of defaultProviders) {
+    if (!mergedProviders.some((provider) => provider.id === defaultProvider.id)) {
+      mergedProviders.push(defaultProvider);
+    }
+  }
+  const providers = mergedProviders.map((provider) => ({
     ...provider,
     base_url: normalizeProviderBaseUrl(provider.base_url),
     models:

@@ -1,4 +1,4 @@
-import axios from "axios";
+﻿import axios from "axios";
 import { API_URL } from "@/lib/api";
 
 export type JimengProjectStatus = "draft" | "working" | "has_failed" | "completed";
@@ -17,11 +17,62 @@ export type JimengQueueStatus =
   | "canceled"
   | "orphaned";
 export type JimengPromptScope = "system" | "user";
-export type JimengPageMode = "creator" | "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "settings";
+export type JimengPageMode =
+  | "creator"
+  | "projects"
+  | "workbench"
+  | "assets"
+  | "queue"
+  | "history"
+  | "llm"
+  | "settings"
+  | "prompt_manager";
 export type JimengRightPanelMode = "preview" | "asset_picker";
 export type JimengShotMoveDirection = "up" | "down";
 export type JimengShotImportFormat = "plain" | "csv";
 export type JimengQueueSortOrder = "asc" | "desc" | "position";
+export type PromptManagerCategory = "video" | "creative";
+export type PromptManagerTemplateSource = "official" | "user" | "vip";
+export type PromptManagerTemplateType =
+  | "prompt_reasoning"
+  | "story_plot"
+  | "character_extract"
+  | "scene_extract"
+  | "prop_extract"
+  | "shot_adjust"
+  | "novel_to_storyboard";
+
+export interface PromptManagerTemplate {
+  id: string;
+  category: PromptManagerCategory;
+  type: PromptManagerTemplateType;
+  source: PromptManagerTemplateSource;
+  name: string;
+  content_separator: string;
+  record_separator: string;
+  output_start: string;
+  output_end: string;
+  sop_prompt: string;
+  content: string;
+  variables: string[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromptManagerTemplatePayload {
+  category?: PromptManagerCategory;
+  type?: PromptManagerTemplateType;
+  name?: string;
+  content?: string;
+  content_separator?: string;
+  record_separator?: string;
+  output_start?: string;
+  output_end?: string;
+  sop_prompt?: string;
+  variables?: string[];
+  enabled?: boolean;
+}
 
 export interface JimengProject {
   id: string;
@@ -956,6 +1007,22 @@ export const jimengApi = {
   capabilities: () =>
     axios.get<JimengCliCapabilities>(`${API_URL}/jimeng/settings/cli_capabilities`).then((res) => res.data),
 
+  listPromptManagerTemplates: (options: { type?: PromptManagerTemplateType; category?: PromptManagerCategory } = {}) =>
+    axios
+      .get<PromptManagerTemplate[]>(`${API_URL}/jimeng/prompt-manager/templates`, {
+        params: { type: options.type, category: options.category },
+      })
+      .then((res) => res.data),
+  createPromptManagerTemplate: (data: Required<Pick<PromptManagerTemplatePayload, "category" | "type" | "name">> & PromptManagerTemplatePayload) =>
+    axios.post<PromptManagerTemplate>(`${API_URL}/jimeng/prompt-manager/templates`, data).then((res) => res.data),
+  updatePromptManagerTemplate: (templateId: string, data: PromptManagerTemplatePayload) =>
+    axios.put<PromptManagerTemplate>(`${API_URL}/jimeng/prompt-manager/templates/${templateId}`, data).then((res) => res.data),
+  deletePromptManagerTemplate: (templateId: string) =>
+    axios.delete<{ deleted: string }>(`${API_URL}/jimeng/prompt-manager/templates/${templateId}`).then((res) => res.data),
+  duplicatePromptManagerTemplate: (templateId: string) =>
+    axios.post<PromptManagerTemplate>(`${API_URL}/jimeng/prompt-manager/templates/${templateId}/duplicate`).then((res) => res.data),
+  getPromptManagerFullPrompt: (templateId: string) =>
+    axios.get<{ full_prompt: string }>(`${API_URL}/jimeng/prompt-manager/templates/${templateId}/full-prompt`).then((res) => res.data),
   listPromptPresets: (enabledOnly = false) =>
     axios.get<JimengPromptPreset[]>(`${API_URL}/jimeng/prompt_presets`, { params: { enabled_only: enabledOnly } }).then((res) => res.data),
   createPromptPreset: (data: { name: string; scope?: JimengPromptScope; content: string; variables?: string[]; is_default?: boolean; enabled?: boolean }) =>
