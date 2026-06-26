@@ -60,7 +60,8 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     placeholderTitle: "创作助手",
     placeholderText: "小说拆解、短剧剧本、分镜草稿创作和作品评测。",
     icon: Sparkles,
-  },{
+  },
+  {
     id: "projects",
     label: "漫剧制作",
     placeholderTitle: "漫剧制作",
@@ -112,9 +113,10 @@ const JIMENG_PAGES: JimengPageConfig[] = [
 ];
 
 const PAGE_GROUPS: Array<{ title: string; pages: JimengPageConfig[] }> = [
-  { title: "创作", pages: JIMENG_PAGES.filter((page) => ["creator", "projects", "workbench", "assets"].includes(page.id)) },
-  { title: "生产", pages: JIMENG_PAGES.filter((page) => ["queue", "history"].includes(page.id)) },
-  { title: "配置", pages: JIMENG_PAGES.filter((page) => ["llm", "settings"].includes(page.id)) },
+  { title: "????", pages: JIMENG_PAGES.filter((page) => ["creator"].includes(page.id)) },
+  { title: "????", pages: JIMENG_PAGES.filter((page) => ["projects", "workbench", "assets"].includes(page.id)) },
+  { title: "??", pages: JIMENG_PAGES.filter((page) => ["queue", "history"].includes(page.id)) },
+  { title: "??", pages: JIMENG_PAGES.filter((page) => ["llm", "settings"].includes(page.id)) },
 ];
 
 const getInitialTheme = (): ThemeMode => {
@@ -379,13 +381,13 @@ export default function JimengApp() {
                         aria-pressed={isActive}
                         onClick={() => setActivePage(page.id)}
                         className={clsx(
-                          "flex h-11 w-full items-center gap-3 rounded-xl border px-3 text-left text-sm font-semibold transition-colors",
+                          "group/nav flex h-11 w-full items-center gap-3 rounded-xl border px-3 text-left text-sm font-semibold transition-all duration-200",
                           isActive
-                            ? "border-primary/30 bg-primary/10 text-foreground"
-                            : "border-transparent text-text-secondary hover:border-glass-border hover:bg-hover-bg hover:text-foreground",
+                            ? "border-primary/35 bg-primary/10 text-foreground shadow-[0_0_0_1px_rgba(100,108,255,0.12)]"
+                            : "border-transparent text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-foreground hover:shadow-[0_0_0_1px_rgba(100,108,255,0.12)]",
                         )}
                       >
-                        <Icon size={17} className={isActive ? "text-primary" : ""} />
+                        <Icon size={17} className={isActive ? "text-primary" : "text-text-muted transition-colors group-hover/nav:text-primary"} />
                         <span>{page.label}</span>
                       </button>
                     );
@@ -503,13 +505,13 @@ export default function JimengApp() {
                 aria-pressed={isActive}
                 onClick={() => setActivePage(page.id)}
                 className={clsx(
-                  "flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all duration-200",
+                  "group/mobile-nav flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all duration-200",
                   isActive
                     ? "border-primary/40 bg-primary/10 text-foreground"
-                    : "border-transparent text-text-secondary hover:border-glass-border hover:bg-hover-bg hover:text-foreground",
+                    : "border-transparent text-text-secondary hover:border-primary/35 hover:bg-primary/10 hover:text-foreground",
                 )}
               >
-                <Icon size={16} className={isActive ? "text-primary" : ""} />
+                <Icon size={16} className={isActive ? "text-primary" : "text-text-muted transition-colors group-hover/mobile-nav:text-primary"} />
                 <span>{page.label}</span>
               </button>
             );

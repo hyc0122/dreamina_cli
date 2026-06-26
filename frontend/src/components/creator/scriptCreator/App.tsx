@@ -124,7 +124,7 @@ function Sidebar() {
   ];
 
   return (
-    <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r border-[#1d2a3e] bg-[#07111d] px-5 py-6 lg:block">
+    <aside className="hidden min-h-full border-r border-[#1d2a3e] bg-[#07111d]/80 px-5 py-6 lg:block">
       <div className="mb-8 border-b border-[#1d2a3e] pb-6">
         <p className="text-xl font-black leading-7 text-[#8fa8ff]">字字动画</p>
         <p className="text-3xl font-black leading-10 text-white">创作助手</p>
@@ -140,10 +140,10 @@ function Sidebar() {
               type="button"
               onClick={() => setMode(item.preset)}
               title={locked ? '当前项目正在生成，停止或完成后再切换评测工具' : undefined}
-              className={`group w-full rounded-xl border px-4 py-4 text-left transition ${
+              className={`group w-full rounded-xl border px-4 py-4 text-left transition-all duration-200 ${
                 active
                   ? 'border-blue-400/70 bg-[#13233a] text-white shadow-[inset_3px_0_0_#60a5fa]'
-                  : 'border-transparent bg-transparent text-slate-400 hover:border-[#26354d] hover:bg-[#0d1928] hover:text-slate-100'
+                  : 'border-transparent bg-transparent text-slate-400 hover:border-blue-400/60 hover:bg-blue-500/10 hover:text-blue-300'
               } ${locked ? 'cursor-not-allowed opacity-50' : ''}`}
             >
               <div className="flex items-center justify-between gap-3">
@@ -158,7 +158,7 @@ function Sidebar() {
         })}
       </nav>
 
-      <div className="absolute bottom-6 left-5 right-5 rounded-xl border border-[#1d2a3e] bg-[#0b1725] px-4 py-3">
+      <div className="mt-8 rounded-xl border border-[#1d2a3e] bg-[#0b1725] px-4 py-3">
         <p className="text-xs font-bold text-slate-300">联系客服</p>
         <p className="mt-1 select-all text-sm font-black text-blue-300">xiaoyu828308</p>
       </div>
@@ -222,7 +222,7 @@ function ProjectFlowSidebar() {
   const navigationLockTitle = isGenerating ? '当前项目正在生成，返回后任务仍按当前项目保存' : undefined;
 
   return (
-    <aside className="fixed inset-y-0 left-0 hidden w-[248px] border-r border-[#1d2a3e] bg-[#07111d] px-5 py-6 lg:flex lg:flex-col">
+    <aside className="hidden min-h-full border-r border-[#1d2a3e] bg-[#07111d]/80 px-5 py-6 lg:flex lg:flex-col">
       <div className="border-b border-[#1d2a3e] pb-5">
         <button
           type="button"
@@ -351,9 +351,9 @@ function ActiveProjectShell() {
   const isProductionPage = hasProductionContent || (isGenerating && progress.step !== 'idle');
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_72%_18%,rgba(36,69,111,0.26),transparent_34%),linear-gradient(180deg,#07111d_0%,#081321_100%)] text-slate-100">
+    <div className="min-h-full bg-[radial-gradient(circle_at_72%_18%,rgba(36,69,111,0.18),transparent_34%)] text-slate-100 lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
       <ProjectFlowSidebar />
-      <main className="min-h-screen lg:pl-[248px]">
+      <main className="min-h-full min-w-0">
         <div className="space-y-6 px-5 py-5 lg:px-8">
           <ProgressBar />
 
@@ -381,9 +381,9 @@ function AppContent() {
 
   if (!activeProject) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_72%_18%,rgba(36,69,111,0.26),transparent_34%),linear-gradient(180deg,#07111d_0%,#081321_100%)]">
+      <div className="min-h-full bg-[radial-gradient(circle_at_72%_18%,rgba(36,69,111,0.18),transparent_34%)] lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
         <Sidebar />
-        <div className="lg:pl-[248px]">
+        <div className="min-w-0">
           {routeHash === '#settings' ? <GlobalSettingsPage /> : <ProjectWorkbench routeHash={routeHash as '' | '#novel' | '#screenplay' | '#storyboard' | '#score' | '#settings'} />}
         </div>
       </div>
