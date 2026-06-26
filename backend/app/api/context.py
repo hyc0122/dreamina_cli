@@ -1,7 +1,6 @@
-"""即梦 API 共享上下文。
+"""即梦业务共享上下文。
 
-这里集中管理路由层共用的 Store、异常转换、序列化和轻量工具函数，避免已拆分接口继续依赖旧的
-`jimeng_api.py` 大文件。
+把存储、CLI、通用响应转换和运行设置集中在这里，避免各路由互相导入。
 """
 
 import os
@@ -35,13 +34,6 @@ _DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     "max_retry_attempts": 5,
     "retry_base_seconds": 30,
     "queue_enabled": False,
-    "jimeng_api_base_url": "http://localhost:5100",
-    "jimeng_api_model": "api-seedance2.0-fast",
-    "jimeng_api_generation_mode": "omni_reference",
-    "jimeng_api_ratio": "9:16",
-    "jimeng_api_duration": 5,
-    "jimeng_api_concurrency": 1,
-    "jimeng_api_sessions": [],
 }
 _STABLE_RUNTIME_SETTING_KEYS = set(_DEFAULT_RUNTIME_SETTINGS)
 _REMOVED_RUNTIME_SETTING_KEYS = {

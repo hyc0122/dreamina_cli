@@ -89,13 +89,6 @@ const DEFAULT_SETTINGS: Required<JimengSettings> = {
   result_poll_interval_seconds: 30,
   max_retry_attempts: 5,
   retry_base_seconds: 30,
-  jimeng_api_base_url: "http://localhost:5100",
-  jimeng_api_model: "api-seedance2.0-fast",
-  jimeng_api_generation_mode: "omni_reference",
-  jimeng_api_ratio: "16:9",
-  jimeng_api_duration: 5,
-  jimeng_api_concurrency: 1,
-  jimeng_api_sessions: [],
 };
 
 const normalizeSettings = (value: JimengSettings = {}): Required<JimengSettings> => ({

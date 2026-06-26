@@ -61,14 +61,18 @@ const formatUpdatedAt = (value: string): string => {
 function ProjectCard({
   project,
   entering,
+  deleting,
   stylePresets,
   onEnter,
+  onDelete,
   onUpdated,
 }: {
   project: JimengProject;
   entering: boolean;
+  deleting: boolean;
   stylePresets: JimengStylePreset[];
   onEnter: (projectId: string) => void;
+  onDelete: (project: JimengProject) => void;
   onUpdated: () => Promise<void> | void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -181,15 +185,21 @@ function ProjectCard({
             </button>
           </div>
         ) : (
-          <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground">
-            <Edit3 size={14} />
-            编辑
-          </button>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => onDelete(project)} disabled={deleting || entering} className="inline-flex items-center gap-1.5 rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/15 disabled:cursor-wait disabled:opacity-60">
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              删除
+            </button>
+            <button type="button" onClick={() => setEditing(true)} disabled={deleting || entering} className="inline-flex items-center gap-1.5 rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-wait disabled:opacity-60">
+              <Edit3 size={14} />
+              编辑
+            </button>
+          </div>
         )}
         <button
           type="button"
           onClick={() => onEnter(project.id)}
-          disabled={entering}
+          disabled={entering || deleting}
           className={clsx("inline-flex items-center gap-2 rounded-md border border-primary/35 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-wait disabled:opacity-60", editing && "hidden")}
         >
           {entering ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
@@ -361,6 +371,7 @@ export default function JimengProjectListPage() {
   const projects = useJimengStore((state) => state.projects);
   const loading = useJimengStore((state) => state.loading);
   const error = useJimengStore((state) => state.error);
+  const currentProject = useJimengStore((state) => state.currentProject);
   const loadProjects = useJimengStore((state) => state.loadProjects);
   const selectProject = useJimengStore((state) => state.selectProject);
 
@@ -377,6 +388,7 @@ export default function JimengProjectListPage() {
   const [inheritError, setInheritError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [enteringId, setEnteringId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -505,6 +517,35 @@ export default function JimengProjectListPage() {
     }
   };
 
+  const deleteProject = async (project: JimengProject) => {
+    if (!window.confirm("删除剧本「" + project.name + "」？这会删除该剧本及其分镜、资产、候选视频等项目数据。")) {
+      return;
+    }
+    setDeletingId(project.id);
+    setFormError(null);
+    try {
+      await jimengApi.deleteProject(project.id);
+      if (currentProject?.id === project.id) {
+        useJimengStore.setState({
+          currentProject: null,
+          shots: [],
+          assets: [],
+          bindingsByShotId: {},
+          queue: [],
+          selectedShotIds: [],
+          selectedShotId: null,
+          highlightsByShotId: {},
+          activePage: "projects",
+        });
+      }
+      await loadProjects();
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : "删除剧本失败");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto pr-1">
       <div className="space-y-5 pb-4">
@@ -588,7 +629,7 @@ export default function JimengProjectListPage() {
         {sortedProjects.length > 0 ? (
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {sortedProjects.map((project) => (
-              <ProjectCard key={project.id} project={project} stylePresets={stylePresets} entering={enteringId === project.id} onEnter={enterProject} onUpdated={loadProjects} />
+              <ProjectCard key={project.id} project={project} stylePresets={stylePresets} entering={enteringId === project.id} deleting={deletingId === project.id} onEnter={enterProject} onDelete={deleteProject} onUpdated={loadProjects} />
             ))}
           </section>
         ) : (

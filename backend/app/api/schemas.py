@@ -1,6 +1,6 @@
-"""即梦 API 请求模型。
+"""即梦业务请求模型。
 
-拆分路由共用这些 Pydantic 模型，避免各业务接口继续从旧的 `jimeng_api.py` 大文件导入请求结构。
+拆分路由共用这些 Pydantic 模型，避免各业务接口重复定义请求结构。
 """
 
 from typing import Any, Optional
@@ -150,13 +150,6 @@ class SettingsUpdate(BaseModel):
     cli_initial_poll_seconds: Optional[int] = Field(default=None, ge=1, le=60)
     max_retry_attempts: Optional[int] = Field(default=None, ge=0, le=20)
     retry_base_seconds: Optional[int] = Field(default=None, ge=5, le=600)
-    jimeng_api_base_url: Optional[str] = None
-    jimeng_api_model: Optional[str] = None
-    jimeng_api_generation_mode: Optional[str] = None
-    jimeng_api_ratio: Optional[str] = None
-    jimeng_api_duration: Optional[int] = None
-    jimeng_api_concurrency: Optional[int] = None
-    jimeng_api_sessions: Optional[list[dict[str, Any]]] = None
 
 
 class CliAccountCreate(BaseModel):

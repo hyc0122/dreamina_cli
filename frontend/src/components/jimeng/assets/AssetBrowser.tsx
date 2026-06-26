@@ -103,7 +103,7 @@ function AssetBrowser({
             alt={asset.name}
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+            className="h-full w-full object-contain p-1 transition-transform duration-200 group-hover:scale-[1.02]"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-muted">

@@ -11,7 +11,6 @@ import {
   FolderOpen,
   History,
   Image as ImageIcon,
-  KeyRound,
   ListChecks,
   MessageSquare,
   Moon,
@@ -29,7 +28,6 @@ import JimengGenerationHistoryPage from "@/components/jimeng/pages/JimengGenerat
 import JimengProjectListPage from "@/components/jimeng/pages/JimengProjectListPage";
 import JimengQueuePage from "@/components/jimeng/pages/JimengQueuePage";
 import JimengSettingsPage from "@/components/jimeng/pages/JimengSettingsPage";
-import JimengApiPage from "@/components/jimeng/pages/JimengApiPage";
 import JimengWorkbenchPage from "@/components/jimeng/pages/JimengWorkbenchPage";
 import LlmSettingsPage from "@/components/jimeng/llm/LlmSettingsPage";
 import { jimengApi } from "@/lib/jimengApi";
@@ -97,13 +95,6 @@ const JIMENG_PAGES: JimengPageConfig[] = [
     icon: Bot,
   },
   {
-    id: "jimeng_api",
-    label: "即梦 API",
-    placeholderTitle: "即梦 API",
-    placeholderText: "配置 jimeng-api 服务、SessionID 账号和 API 模型。",
-    icon: KeyRound,
-  },
-  {
     id: "settings",
     label: "官方CLI",
     placeholderTitle: "官方CLI",
@@ -115,7 +106,7 @@ const JIMENG_PAGES: JimengPageConfig[] = [
 const PAGE_GROUPS: Array<{ title: string; pages: JimengPageConfig[] }> = [
   { title: "创作", pages: JIMENG_PAGES.filter((page) => ["projects", "workbench", "assets"].includes(page.id)) },
   { title: "生产", pages: JIMENG_PAGES.filter((page) => ["queue", "history"].includes(page.id)) },
-  { title: "配置", pages: JIMENG_PAGES.filter((page) => ["llm", "jimeng_api", "settings"].includes(page.id)) },
+  { title: "配置", pages: JIMENG_PAGES.filter((page) => ["llm", "settings"].includes(page.id)) },
 ];
 
 const getInitialTheme = (): ThemeMode => {
@@ -325,9 +316,6 @@ export default function JimengApp() {
     }
     if (activePage === "llm") {
       return <LlmSettingsPage />;
-    }
-    if (activePage === "jimeng_api") {
-      return <JimengApiPage />;
     }
     if (activePage === "settings") {
       return <JimengSettingsPage />;

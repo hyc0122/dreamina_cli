@@ -1,7 +1,6 @@
-"""即梦业务 API 总路由。
+"""即梦业务路由聚合。
 
-各业务域只在这里挂载一次。旧 ``jimeng_api.py`` 仅用于兼容历史导入，
-不得再次挂载，否则 FastAPI 会按注册顺序静默覆盖同名接口。
+各业务域只在这里挂载一次，避免重复 include router。
 """
 
 from fastapi import APIRouter

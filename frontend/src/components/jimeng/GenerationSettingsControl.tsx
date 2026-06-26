@@ -3,12 +3,10 @@
 import clsx from "clsx";
 import {
   DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
-  JIMENG_API_VIDEO_MODELS,
   JIMENG_VIDEO_DURATION_OPTIONS,
   JIMENG_VIDEO_MODELS,
   JIMENG_VIDEO_RATIOS,
   clampJimengVideoDuration,
-  providerForJimengVideoModel,
   type JimengVideoGenerationSettings,
 } from "@/lib/jimengApi";
 import type { LlmModelOption } from "@/components/jimeng/llm/modelOptions";
@@ -39,11 +37,9 @@ const MODE_HELP: Record<JimengVideoGenerationSettings["generation_mode"], string
 export function normalizeGenerationSettings(
   value?: Partial<JimengVideoGenerationSettings>,
 ): JimengVideoGenerationSettings {
-  const modelVersion = value?.model_version ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.model_version;
-  const provider = providerForJimengVideoModel(
-    modelVersion,
-    value?.provider ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.provider,
-  );
+  const requestedModelVersion = value?.model_version ?? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.model_version;
+  const modelVersion = requestedModelVersion.startsWith("api-") ? DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS.model_version : requestedModelVersion;
+  const provider = "dreamina_cli";
   return {
     ...DEFAULT_JIMENG_VIDEO_GENERATION_SETTINGS,
     ...value,
@@ -95,13 +91,6 @@ export default function GenerationSettingsControl({
         >
           <optgroup label="官方CLI">
             {JIMENG_VIDEO_MODELS.map((model) => (
-              <option key={model.value} value={model.value}>
-                {model.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="即梦 API">
-            {JIMENG_API_VIDEO_MODELS.map((model) => (
               <option key={model.value} value={model.value}>
                 {model.label}
               </option>

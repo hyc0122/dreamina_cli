@@ -17,7 +17,7 @@ export type JimengQueueStatus =
   | "canceled"
   | "orphaned";
 export type JimengPromptScope = "system" | "user";
-export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "jimeng_api" | "settings";
+export type JimengPageMode = "projects" | "workbench" | "assets" | "queue" | "history" | "llm" | "settings";
 export type JimengRightPanelMode = "preview" | "asset_picker";
 export type JimengShotMoveDirection = "up" | "down";
 export type JimengShotImportFormat = "plain" | "csv";
@@ -380,7 +380,7 @@ export interface JimengQueueWorkerStartResponse {
 
 export interface JimengSettings {
   dreamina_executable?: string;
-  generation_provider?: "dreamina_cli" | "jimeng_api" | string;
+  generation_provider?: "dreamina_cli" | string;
   model_version?: string;
   poll_seconds?: number;
   duration?: number;
@@ -391,21 +391,7 @@ export interface JimengSettings {
   result_poll_interval_seconds?: number;
   max_retry_attempts?: number;
   retry_base_seconds?: number;
-  jimeng_api_base_url?: string;
-  jimeng_api_model?: string;
-  jimeng_api_generation_mode?: string;
-  jimeng_api_ratio?: string;
-  jimeng_api_duration?: number;
-  jimeng_api_concurrency?: number;
-  jimeng_api_sessions?: JimengApiSessionSetting[];
 }
-
-export interface JimengApiSessionSetting {
-  label: string;
-  sessionid: string;
-  enabled: boolean;
-}
-
 export interface JimengLlmModelSetting {
   id: string;
   name: string;
@@ -497,7 +483,7 @@ export interface JimengLlmAssetImageRecordsEnvelope {
 }
 
 export interface JimengVideoGenerationSettings {
-  provider: "dreamina_cli" | "jimeng_api" | string;
+  provider: "dreamina_cli" | string;
   generation_mode: "auto" | "multimodal2video" | "text2video";
   duration_source?: "per_shot" | "global";
   model_version: string;
@@ -515,17 +501,6 @@ export const JIMENG_VIDEO_MODELS = [
   { value: "seedance2.0fast_vip", label: "Seedance 2.0 Fast VIP" },
   { value: "seedance2.0_vip", label: "Seedance 2.0 VIP" },
 ] as const;
-
-export const JIMENG_API_VIDEO_MODELS = [
-  { value: "api-seedance2.0-fast", label: "api-seedance2.0 Fast" },
-  { value: "api-seedance2.0-mini", label: "api-seedance2.0 Mini" },
-  { value: "api-seedance2.0", label: "api-seedance2.0" },
-  { value: "api-seedance2.0-fast-vip", label: "api-seedance2.0 Fast VIP" },
-  { value: "api-seedance2.0-vip", label: "api-seedance2.0 VIP" },
-] as const;
-
-export const providerForJimengVideoModel = (modelVersion: string, fallback = "dreamina_cli") =>
-  modelVersion.startsWith("api-") ? "jimeng_api" : fallback === "jimeng_api" ? "dreamina_cli" : fallback;
 
 export const JIMENG_VIDEO_RATIOS = ["1:1", "3:4", "16:9", "4:3", "9:16", "21:9"] as const;
 export const JIMENG_VIDEO_DURATION_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 4);
