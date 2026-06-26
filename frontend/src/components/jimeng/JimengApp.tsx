@@ -37,7 +37,7 @@ import { jimengApi } from "@/lib/jimengApi";
 import type { JimengCliResult, JimengPageMode, JimengRuntimeInfo, JimengVersionStatus } from "@/lib/jimengApi";
 import { useJimengStore } from "@/store/jimengStore";
 
-type ThemeMode = "dark" | "light";
+type ThemeMode = "dark" | "light" | "cyber";
 
 interface JimengPageConfig {
   id: JimengPageMode;
@@ -58,6 +58,7 @@ interface JimengNavItem {
 }
 
 const THEME_STORAGE_KEY = "dreamina_cli_theme";
+const THEME_DEFAULT_VERSION_KEY = "dreamina_cli_theme_default_v100060";
 const LOGIN_CACHE_KEY = "dreamina_cli_login_snapshot";
 const ONBOARDING_STORAGE_KEY = "dreamina_cli_onboarding_seen_v1";
 const APP_DISPLAY_NAME = "即梦cli自动排队助手";
@@ -156,8 +157,14 @@ const getInitialTheme = (): ThemeMode => {
   if (typeof window === "undefined") {
     return "dark";
   }
+  const defaultApplied = window.localStorage.getItem(THEME_DEFAULT_VERSION_KEY) === "done";
+  if (!defaultApplied) {
+    window.localStorage.setItem(THEME_DEFAULT_VERSION_KEY, "done");
+    window.localStorage.setItem(THEME_STORAGE_KEY, "cyber");
+    return "cyber";
+  }
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === "light" ? "light" : "dark";
+  return stored === "dark" || stored === "light" || stored === "cyber" ? stored : "cyber";
 };
 
 const getShellRoute = (): "launcher" | "app" => {
@@ -258,7 +265,7 @@ export default function JimengApp() {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove("dark", "light");
+    root.classList.remove("dark", "light", "cyber");
     root.classList.add(theme);
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
@@ -439,7 +446,7 @@ export default function JimengApp() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden p-3 sm:p-4">
+    <div className={clsx("h-screen w-screen overflow-hidden p-3 sm:p-4", theme === "cyber" && "cyber-app-shell")}>
       <div className="grid h-full w-full gap-3 lg:grid-cols-[230px_minmax(0,1fr)]">
         <aside className="hidden min-h-0 overflow-hidden rounded-2xl border border-glass-border bg-panel-bg/80 p-4 shadow-xl backdrop-blur-xl lg:flex lg:flex-col">
           <div className="grid h-20 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-center">
@@ -594,6 +601,18 @@ export default function JimengApp() {
               >
                 <Sun size={14} />
                 浅色
+              </button>
+              <button
+                type="button"
+                aria-pressed={theme === "cyber"}
+                onClick={() => setTheme("cyber")}
+                className={clsx(
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors",
+                  theme === "cyber" ? "bg-primary/15 text-primary" : "text-text-secondary hover:bg-hover-bg hover:text-foreground",
+                )}
+              >
+                <Sparkles size={14} />
+                赛博
               </button>
             </div>
             <div className="rounded-lg border border-glass-border bg-glass px-4 py-2 text-sm text-text-secondary backdrop-blur-xl">

@@ -25,9 +25,9 @@ const config: Config = {
         "text-muted": "var(--color-text-muted)",
         overlay: "var(--color-overlay)",
         "surface-inset": "var(--color-bg-inset)",
-        primary: "#646cff",
-        secondary: "#535bf2",
-        accent: "#ff0080",
+        primary: "rgb(var(--color-primary-rgb) / <alpha-value>)",
+        secondary: "rgb(var(--color-secondary-rgb) / <alpha-value>)",
+        accent: "rgb(var(--color-accent-rgb) / <alpha-value>)",
         // Storyboard R2V workbench status semantic tokens. Replaces
         // 30+ scattered amber/emerald/red/blue arbitrary tints. Each
         // status carries -fg / -border / -bg variants; starred also

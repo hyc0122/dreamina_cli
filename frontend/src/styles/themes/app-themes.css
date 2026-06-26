@@ -1,0 +1,305 @@
+/* 全局主题集中管理：深色、浅色、赛博朋克皮肤都放在这里。业务模块只使用语义变量和通用 class。 */
+
+/* ─── Theme: Semantic Color Tokens ─── */
+
+:root,
+html.dark {
+  --color-bg-base: #050508;
+  --color-bg-surface: rgba(0, 0, 0, 0.4);
+  --color-bg-elevated: #1a1a1a;
+  --color-bg-input: rgba(0, 0, 0, 0.3);
+  --color-bg-hover: rgba(255, 255, 255, 0.05);
+  --color-glass: rgba(255, 255, 255, 0.05);
+  --color-border-default: rgba(255, 255, 255, 0.1);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-text-primary: #ededed;
+  --color-text-secondary: #9ca3af;
+  --color-text-muted: #6b7280;
+  --color-overlay: rgba(0, 0, 0, 0.8);
+  --color-bg-inset: rgba(255, 255, 255, 0.03);
+  --foreground-rgb: 237, 237, 237;
+  --background-start-rgb: 5, 5, 8;
+  --background-end-rgb: 5, 5, 8;
+  --font-inter: 'Inter', sans-serif;
+  --font-jetbrains-mono: 'JetBrains Mono', monospace;
+  --font-space-grotesk: 'Space Grotesk', sans-serif;
+  --color-primary: #646cff;
+  --color-secondary: #535bf2;
+  --color-accent: #ff0080;
+
+  /* ─── Storyboard R2V workbench: status semantic tokens ─── */
+  /* OKLCH base hue + per-role bg/border/fg triplets. Replaces the
+     30+ scattered amber-* / emerald-* / red-* / blue-* tints that
+     used to encode the same 5 states inconsistently. */
+  --color-status-pending-fg:    oklch(0.85 0.13 230);
+  --color-status-pending-border: oklch(0.75 0.16 230 / 0.45);
+  --color-status-pending-bg:    oklch(0.75 0.16 230 / 0.10);
+
+  --color-status-processing-fg:    oklch(0.88 0.16 80);
+  --color-status-processing-border: oklch(0.78 0.18 80 / 0.45);
+  --color-status-processing-bg:    oklch(0.78 0.18 80 / 0.10);
+
+  --color-status-completed-fg:    oklch(0.88 0.16 155);
+  --color-status-completed-border: oklch(0.78 0.18 155 / 0.45);
+  --color-status-completed-bg:    oklch(0.78 0.18 155 / 0.10);
+
+  --color-status-failed-fg:    oklch(0.78 0.20 25);
+  --color-status-failed-border: oklch(0.68 0.21 25 / 0.45);
+  --color-status-failed-bg:    oklch(0.68 0.21 25 / 0.10);
+
+  --color-status-starred-fg:    oklch(0.90 0.15 90);
+  --color-status-starred-border: oklch(0.85 0.16 90 / 0.55);
+  --color-status-starred-bg:    oklch(0.85 0.16 90 / 0.18);
+  --color-status-starred-solid: oklch(0.85 0.16 90);
+
+  /* "On-warm" foreground for text laid over saturated warm chips
+     (amber/gold). Replaces the hard-coded #141416 sprinkled across
+     TaskQueueButton / CompareModal / CandidateThumb / CandidatesSection
+     so the pattern theme-flips. */
+  --color-on-warm: oklch(0.18 0.01 280);
+}
+
+html.light {
+  --color-bg-base: #f8f9fa;
+  --color-bg-surface: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-input: #f1f3f5;
+  --color-bg-hover: rgba(0, 0, 0, 0.04);
+  --color-glass: rgba(0, 0, 0, 0.03);
+  --color-border-default: rgba(0, 0, 0, 0.1);
+  --color-border-subtle: rgba(0, 0, 0, 0.06);
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+  --color-overlay: rgba(0, 0, 0, 0.2);
+  --color-bg-inset: rgba(0, 0, 0, 0.02);
+  --foreground-rgb: 26, 26, 26;
+  --background-start-rgb: 248, 249, 250;
+  --background-end-rgb: 248, 249, 250;
+  --color-primary: #4f46e5;
+  --color-secondary: #7c3aed;
+  --color-accent: #db2777;
+
+  /* Light theme: same hues, slightly higher chroma + darker lightness
+     so chips read with enough weight against a white surface. */
+  --color-status-pending-fg:    oklch(0.45 0.18 230);
+  --color-status-pending-border: oklch(0.65 0.17 230 / 0.50);
+  --color-status-pending-bg:    oklch(0.85 0.10 230 / 0.40);
+
+  --color-status-processing-fg:    oklch(0.50 0.18 80);
+  --color-status-processing-border: oklch(0.65 0.18 80 / 0.50);
+  --color-status-processing-bg:    oklch(0.88 0.10 80 / 0.45);
+
+  --color-status-completed-fg:    oklch(0.45 0.18 155);
+  --color-status-completed-border: oklch(0.62 0.18 155 / 0.50);
+  --color-status-completed-bg:    oklch(0.88 0.10 155 / 0.45);
+
+  --color-status-failed-fg:    oklch(0.45 0.21 25);
+  --color-status-failed-border: oklch(0.60 0.21 25 / 0.55);
+  --color-status-failed-bg:    oklch(0.88 0.10 25 / 0.40);
+
+  --color-status-starred-fg:    oklch(0.45 0.16 80);
+  --color-status-starred-border: oklch(0.65 0.17 85 / 0.60);
+  --color-status-starred-bg:    oklch(0.88 0.12 88 / 0.55);
+  --color-status-starred-solid: oklch(0.75 0.16 88);
+
+  /* Same on-warm token: dark-on-warm-chip works in both themes. */
+  --color-on-warm: oklch(0.20 0.02 280);
+}
+
+
+html.cyber {
+  --color-bg-base: #020712;
+  --color-bg-surface: rgba(4, 16, 38, 0.74);
+  --color-bg-elevated: rgba(5, 18, 43, 0.94);
+  --color-bg-input: rgba(3, 13, 31, 0.78);
+  --color-bg-hover: rgba(0, 229, 255, 0.12);
+  --color-glass: rgba(0, 229, 255, 0.08);
+  --color-border-default: rgba(0, 229, 255, 0.36);
+  --color-border-subtle: rgba(185, 69, 255, 0.24);
+  --color-text-primary: #e9f7ff;
+  --color-text-secondary: #a4c3e8;
+  --color-text-muted: #7192ba;
+  --color-overlay: rgba(1, 6, 18, 0.88);
+  --color-bg-inset: rgba(0, 229, 255, 0.06);
+  --foreground-rgb: 233, 247, 255;
+  --background-start-rgb: 2, 7, 18;
+  --background-end-rgb: 2, 7, 18;
+  --color-primary: #00e5ff;
+  --color-secondary: #b945ff;
+  --color-accent: #ff3df2;
+
+  --color-status-pending-fg: #7dd3fc;
+  --color-status-pending-border: rgba(0, 229, 255, 0.48);
+  --color-status-pending-bg: rgba(0, 229, 255, 0.12);
+  --color-status-processing-fg: #f7d75d;
+  --color-status-processing-border: rgba(255, 209, 102, 0.52);
+  --color-status-processing-bg: rgba(255, 209, 102, 0.13);
+  --color-status-completed-fg: #54f2bd;
+  --color-status-completed-border: rgba(84, 242, 189, 0.52);
+  --color-status-completed-bg: rgba(84, 242, 189, 0.13);
+  --color-status-failed-fg: #ff8aa3;
+  --color-status-failed-border: rgba(255, 75, 124, 0.52);
+  --color-status-failed-bg: rgba(255, 75, 124, 0.13);
+  --color-status-starred-fg: #ffe66d;
+  --color-status-starred-border: rgba(255, 230, 109, 0.58);
+  --color-status-starred-bg: rgba(255, 230, 109, 0.16);
+  --color-status-starred-solid: #ffe66d;
+  --color-on-warm: #07101f;
+}
+
+html.cyber
+
+html.cyber body {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(185, 69, 255, 0.28), transparent 28rem),
+    radial-gradient(circle at 88% 12%, rgba(0, 229, 255, 0.22), transparent 32rem),
+    linear-gradient(rgba(0, 229, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.04) 1px, transparent 1px),
+    #020712;
+  background-size: auto, auto, 42px 42px, 42px 42px, auto;
+}
+
+html.cyber #root {
+  position: relative;
+  isolation: isolate;
+}
+
+html.cyber #root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0 30%, rgba(0, 229, 255, 0.08) 31%, transparent 32% 68%, rgba(255, 61, 242, 0.08) 69%, transparent 70%),
+    radial-gradient(circle at 50% 100%, rgba(0, 64, 255, 0.16), transparent 42rem);
+  opacity: 0.95;
+}
+
+html.cyber .cyber-app-shell,
+html.cyber .glass-panel,
+html.cyber .modal-panel,
+html.cyber aside,
+html.cyber header,
+html.cyber section,
+html.cyber article {
+  background-image:
+    linear-gradient(135deg, rgba(0, 229, 255, 0.06), transparent 24%, rgba(185, 69, 255, 0.055) 70%, transparent),
+    linear-gradient(rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+}
+
+html.cyber .glass-panel,
+html.cyber .modal-panel,
+html.cyber aside,
+html.cyber header,
+html.cyber .bg-panel-bg,
+html.cyber .bg-app-bg\/70,
+html.cyber .bg-panel-bg\/80 {
+  border-color: rgba(0, 229, 255, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(185, 69, 255, 0.16),
+    0 0 24px rgba(0, 229, 255, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+html.cyber button,
+html.cyber a,
+html.cyber select,
+html.cyber input,
+html.cyber textarea {
+  border-color: rgba(0, 229, 255, 0.30);
+}
+
+html.cyber button:hover,
+html.cyber a:hover {
+  border-color: rgba(0, 229, 255, 0.72);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.18), 0 0 22px rgba(185, 69, 255, 0.12);
+}
+
+html.cyber input:focus,
+html.cyber textarea:focus,
+html.cyber select:focus,
+html.cyber .glass-input:focus {
+  border-color: rgba(0, 229, 255, 0.90);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.34), 0 0 22px rgba(0, 229, 255, 0.16);
+}
+
+html.cyber .glass-button,
+html.cyber .glass-input {
+  background-color: rgba(3, 14, 34, 0.72);
+}
+
+html.cyber table thead,
+html.cyber thead tr,
+html.cyber th {
+  background-color: rgba(0, 229, 255, 0.07);
+  color: var(--color-text-primary);
+}
+
+html.cyber tbody tr {
+  border-color: rgba(0, 229, 255, 0.18);
+}
+
+html.cyber ::selection {
+  color: #020712;
+  background: #00e5ff;
+}
+
+html.cyber ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.cyber ::-webkit-scrollbar-track {
+  background: rgba(3, 13, 31, 0.85);
+}
+
+html.cyber ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.85), rgba(185, 69, 255, 0.85));
+  border: 2px solid rgba(3, 13, 31, 0.85);
+  border-radius: 999px;
+}
+
+html.cyber .font-display,
+html.cyber h1,
+html.cyber h2,
+html.cyber h3 {
+  text-shadow: 0 0 14px rgba(0, 229, 255, 0.22);
+}
+
+html.cyber .border-primary\/20,
+html.cyber .border-primary\/25,
+html.cyber .border-primary\/30,
+html.cyber .border-primary\/35,
+html.cyber .border-primary\/40 {
+  border-color: rgba(0, 229, 255, 0.52);
+}
+
+html.cyber .bg-primary\/10,
+html.cyber .bg-primary\/15 {
+  background-color: rgba(0, 229, 255, 0.12);
+}
+
+html.cyber .text-primary {
+  color: #00e5ff;
+}
+html.light .bg-black\/20,
+html.light .bg-black\/30,
+html.light .bg-black\/40 {
+  background-color: rgba(255, 255, 255, 0.72);
+}
+
+html.light .bg-white\/5,
+html.light .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+html.light .text-white,
+html.light .text-red-200,
+html.light .text-emerald-200,
+html.light .text-blue-200,
+html.light .text-amber-200 {
+  color: var(--color-text-primary);
+}
+
