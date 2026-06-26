@@ -175,6 +175,10 @@ function ProjectCard({
         <span className="text-xs text-text-muted">更新 {formatUpdatedAt(project.updated_at)}</span>
         {editing ? (
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => onDelete(project)} disabled={saving || deleting || entering} className="inline-flex items-center gap-1.5 rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/15 disabled:cursor-wait disabled:opacity-60">
+              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              删除
+            </button>
             <button type="button" onClick={cancelEditing} disabled={saving} className="inline-flex items-center gap-1.5 rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-wait disabled:opacity-60">
               <X size={14} />
               取消
@@ -186,10 +190,6 @@ function ProjectCard({
           </div>
         ) : (
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => onDelete(project)} disabled={deleting || entering} className="inline-flex items-center gap-1.5 rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/15 disabled:cursor-wait disabled:opacity-60">
-              {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              删除
-            </button>
             <button type="button" onClick={() => setEditing(true)} disabled={deleting || entering} className="inline-flex items-center gap-1.5 rounded-md border border-glass-border bg-surface-inset px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground disabled:cursor-wait disabled:opacity-60">
               <Edit3 size={14} />
               编辑
