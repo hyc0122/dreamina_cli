@@ -73,6 +73,12 @@ class LlmGeneratedImage:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
+
+@dataclass
+class LlmChatCompletion:
+    content: str
+    raw: dict[str, Any] = field(default_factory=dict)
+
 @dataclass
 class LlmImageTaskStart:
     raw: dict[str, Any] = field(default_factory=dict)

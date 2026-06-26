@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from .models import LlmGeneratedImage, LlmImageTaskStart, LlmImageTaskStatus, LlmProviderSetting
+from .models import LlmChatCompletion, LlmGeneratedImage, LlmImageTaskStart, LlmImageTaskStatus, LlmProviderSetting
 
 JIASU_MEDIA_HOSTS = {"api.lk888.ai", "api.lk666.ai"}
 DEFAULT_JIASU_BASE_URL = "https://api.lk888.ai"
@@ -471,3 +471,86 @@ def poll_text_to_image_task(settings: LlmProviderSetting, task_id: object) -> Ll
     if not _is_jiasu_provider(settings):
         raise ValueError("当前供应商不支持通过 task_id 查询图片任务")
     return _poll_jiasu_media_status(settings, task_id)
+
+
+def _openai_chat_endpoint(base_url: str) -> str:
+    value = str(base_url or "").strip().rstrip("/")
+    if value.endswith("/v1/chat/completions"):
+        return value
+    if value.endswith("/v1"):
+        return _join_url(value, "chat/completions")
+    return _join_url(value, "/v1/chat/completions")
+
+
+def _openai_chat_body(
+    messages: list[dict[str, str]],
+    model_id: str,
+    temperature: float,
+    max_tokens: int,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "model": model_id,
+        "messages": messages,
+        "temperature": temperature,
+    }
+    if max_tokens > 0:
+        body["max_tokens"] = max_tokens
+    return body
+
+
+def _extract_chat_content(payload: dict[str, Any]) -> str:
+    choices = payload.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, dict):
+            message = first.get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, list):
+                    parts: list[str] = []
+                    for item in content:
+                        if isinstance(item, dict) and isinstance(item.get("text"), str):
+                            parts.append(item["text"])
+                    if parts:
+                        return "".join(parts)
+            text = first.get("text")
+            if isinstance(text, str):
+                return text
+    for key in ("content", "text", "response", "output_text"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            return value
+    raise ValueError("大模型文本接口未返回可识别的内容")
+
+
+def call_chat_completion(
+    settings: LlmProviderSetting,
+    messages: list[dict[str, str]],
+    model_id: str,
+    *,
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    timeout: int = 180,
+) -> LlmChatCompletion:
+    if settings.kind != "openai_compatible":
+        raise ValueError("当前仅支持 OpenAI 兼容文本接口")
+    if not _normalized_api_key(settings.api_key):
+        raise ValueError("大模型供应商缺少 API Key")
+    clean_messages = [
+        {"role": str(item.get("role") or "user"), "content": str(item.get("content") or "")}
+        for item in messages
+        if str(item.get("content") or "").strip()
+    ]
+    if not clean_messages:
+        raise ValueError("文本聊天请求缺少消息内容")
+    request = urllib.request.Request(
+        _openai_chat_endpoint(settings.base_url),
+        data=json.dumps(_openai_chat_body(clean_messages, model_id, temperature, max_tokens), ensure_ascii=False).encode("utf-8"),
+        headers=_auth_headers(settings),
+        method="POST",
+    )
+    payload = _urlopen_json(request, timeout=max(1, int(timeout or 180)))
+    _raise_jiasu_api_error(payload)
+    return LlmChatCompletion(content=_extract_chat_content(payload), raw=payload)
