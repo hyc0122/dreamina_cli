@@ -7,23 +7,27 @@ import OperationOverlay from "@/components/jimeng/OperationOverlay";
 import { useModalDismiss } from "@/components/jimeng/useModalDismiss";
 import { jimengApi, type JimengShotImportFormat } from "@/lib/jimengApi";
 
-const PLAIN_EXAMPLE = `# 1
-承接：无 -> 当前分镜救援队从山里抬出白布担架
-场景：山路悬崖
-人物：沈云禾（年轻时期）、陆怀川、工作人员
-道具：白布担架、断裂竹篮
-环境描述：傍晚，暴雨后，山中悬崖边
+const PLAIN_EXAMPLE = `小节1：
+场景：黑屏字卡。
+人物：无
+人物站位：无
+时间：一个月后，距离冬至仅剩两天
+氛围光影：黑底白字，低沉压迫，时间跳跃，赌约临近
 
-▲俯拍，缓慢下压，全景，24mm，广角，冷灰色调。
-音频：
-- 动作音：泥水被膝盖压开的黏滑声
+镜号1：【黑屏】画面完全漆黑，风雪声由远及近，像从冰层深处压来；
+镜号2：【白字浮现】黑屏中央缓缓出现字卡：一个月后 距离冬至仅剩两天；
+镜号3：【音效过渡】远处传来寒风拍打窗纸、柴火微弱爆响、饥饿咀嚼声，黑屏逐渐被昏暗土屋吞没；
 
-# 2
-承接：上一分镜白布被风掀起
-场景：山路悬崖
-人物：沈云禾（年轻时期）
-环境描述：冷雨将停，山风持续
-▲正面低机位，快速前推，近景，50mm。`;
+小节2：
+场景：靠山屯某村民家日。
+人物：村民
+人物站位：几个村民瑟缩在土炕中央，破木桌位于画面前景，窗户位于背景左侧
+时间：白天
+氛围光影：昏暗冷灰光，屋内阴冷，饥荒感、寒酸、全村困顿
+
+镜号1：【室内广角缓推】昏暗土炕上，几个穿着破旧棉袄的村民瑟缩成一团，屋内冷气凝在窗纸边缘；
+镜号2：【手部特写】村民冻裂的手捧着发黑发酸的烂红薯干，指缝里全是黑泥和冻疮；
+镜号3：【咀嚼近景】一个村民艰难啃咬红薯干，牙齿咬得发涩，脸上满是麻木和饥饿；`;
 
 const CSV_EXAMPLE = `场景,人物,道具,分镜提示词
 山路悬崖,"沈云禾（年轻时期）,陆怀川,工作人员","白布担架,断裂竹篮","承接：无 -> 当前分镜救援队从山里抬出白布担架
@@ -168,7 +172,7 @@ export default function ImportShotsModal({ open, projectId, onClose, onImported 
               <p className="mb-2 text-sm font-medium text-text-secondary">格式示例</p>
               <pre className="max-h-[420px] overflow-auto rounded-md border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-secondary">{sample}</pre>
               <div className="mt-3 rounded-md border border-glass-border bg-surface-inset p-3 text-xs leading-5 text-text-muted">
-                <p>TXT：用 `# 1`、`# 2` 分隔分镜，场景/人物/道具行会完整保留在提示词里，同时用于关键词绑定。</p>
+                <p>TXT：支持用 `小节1：`、`小节2：` 或 `# 1`、`# 2` 分隔分镜，场景/人物/道具行会完整保留在提示词里，同时用于关键词绑定。</p>
                 <p>CSV：表头建议为 `场景,人物,道具,分镜提示词`，多行分镜提示词请放在同一个单元格中。</p>
               </div>
             </div>

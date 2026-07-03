@@ -56,7 +56,7 @@ _STRUCTURED_FIELD_PATTERNS = {
     JimengAssetType.scene: re.compile(r"(?m)^\s*场景\s*[：:]\s*(.*)$"),
     JimengAssetType.prop: re.compile(r"(?m)^\s*道具\s*[：:]\s*(.*)$"),
 }
-_SHOT_MARKER_PATTERN = re.compile(r"(?m)^\s*#\s*\d+\s*$")
+_SHOT_MARKER_PATTERN = re.compile(r"(?m)^\s*(?:#\s*\d+|小节\s*(?:\d+|[一二三四五六七八九十百千万]+))\s*[：:]?\s*$")
 _NAME_SPLIT_PATTERN = re.compile(r"[、;,，；]")
 _BRACKET_TRANSLATION = str.maketrans({"[": "(", "【": "(", "（": "(", "［": "(", "]": ")", "】": ")", "）": ")", "］": ")"})
 _NAME_QUOTE_CHARS = "\"'“”‘’「」『』《》"
