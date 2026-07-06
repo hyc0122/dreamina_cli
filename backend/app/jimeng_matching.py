@@ -61,6 +61,27 @@ _NAME_SPLIT_PATTERN = re.compile(r"[、;,，；]")
 _BRACKET_TRANSLATION = str.maketrans({"[": "(", "【": "(", "（": "(", "［": "(", "]": ")", "】": ")", "）": ")", "］": ")"})
 _NAME_QUOTE_CHARS = "\"'“”‘’「」『』《》"
 _BRACKET_OPEN_CHARS = "([（【［"
+_SCENE_CONTEXT_TOKENS = {
+    "日",
+    "夜",
+    "白天",
+    "黑夜",
+    "夜晚",
+    "晚上",
+    "清晨",
+    "早晨",
+    "上午",
+    "中午",
+    "下午",
+    "傍晚",
+    "黄昏",
+    "深夜",
+    "凌晨",
+    "雨天",
+    "雪天",
+    "阴天",
+    "晴天",
+}
 _ASSET_TYPE_PRIORITY = {
     JimengAssetType.character: 0,
     JimengAssetType.scene: 1,
@@ -284,10 +305,15 @@ def _clean_structured_token(
         return [_StructuredToken(text=token_text, match_text=token_text, start=token_start, end=token_end)]
 
     scene_match_text = _strip_bracket_qualification(token_text)
-    if not scene_match_text:
+    if not scene_match_text or _is_scene_context_token(scene_match_text):
         return []
     scene_end = token_start + len(scene_match_text)
     return [_StructuredToken(text=token_text, match_text=scene_match_text, start=token_start, end=scene_end)]
+
+
+def _is_scene_context_token(value: str) -> bool:
+    normalized_tokens = {_normalize_name_for_match(token) for token in _SCENE_CONTEXT_TOKENS}
+    return _normalize_name_for_match(value) in normalized_tokens
 
 
 def _strip_bracket_qualification(value: str) -> str:

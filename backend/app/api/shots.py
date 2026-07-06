@@ -32,6 +32,7 @@ from ..jimeng_matching import calculate_highlights, match_assets_for_prompt, par
 
 router = APIRouter(prefix="/jimeng", tags=["jimeng-shots"])
 DEFAULT_DURATION_WHEN_UNDETECTED = 15
+MATCH_ASSET_BATCH_SIZE = 5
 VOICE_MARKERS = (
     "对话",
     "对白",
@@ -96,6 +97,13 @@ def batch_replace_shots(project_id: str, request: BatchReplaceRequest):
     return _call(replace)
 
 
+def _iter_batches(items: list[Any], size: int):
+    if size <= 0:
+        raise ValueError("batch size must be positive")
+    for index in range(0, len(items), size):
+        yield items[index : index + size]
+
+
 @router.post("/projects/{project_id}/shots/match_assets")
 def match_assets(project_id: str, request: ShotAssetMatchRequest | None = None):
     def match_target_shots():
@@ -103,27 +111,28 @@ def match_assets(project_id: str, request: ShotAssetMatchRequest | None = None):
         assets = get_store().list_assets(project_id)
         shots = _target_shots(project_id, match_request.shot_ids)
         results = []
-        for shot in shots:
-            if match_request.clear_existing_auto:
-                _delete_auto_bindings(project_id, shot.id)
-            existing = {(binding.asset_id, binding.asset_type) for binding in get_store().list_bindings(project_id, shot.id)}
-            bindings = []
-            matches = match_assets_for_prompt(shot.prompt, assets)
-            for match in matches:
-                key = (match.asset_id, match.asset_type)
-                if key in existing:
-                    continue
-                binding = get_store().create_binding(project_id, shot.id, match.asset_id, match.asset_type, source="auto")
-                bindings.append(binding)
-                existing.add(key)
-            results.append(
-                {
-                    "shot_id": shot.id,
-                    "bindings": _dump(bindings),
-                    "matches": _dump(matches),
-                    "highlights": _dump(calculate_highlights(shot.prompt, assets)),
-                }
-            )
+        for shot_batch in _iter_batches(shots, MATCH_ASSET_BATCH_SIZE):
+            for shot in shot_batch:
+                if match_request.clear_existing_auto:
+                    _delete_auto_bindings(project_id, shot.id)
+                existing = {(binding.asset_id, binding.asset_type) for binding in get_store().list_bindings(project_id, shot.id)}
+                bindings = []
+                matches = match_assets_for_prompt(shot.prompt, assets)
+                for match in matches:
+                    key = (match.asset_id, match.asset_type)
+                    if key in existing:
+                        continue
+                    binding = get_store().create_binding(project_id, shot.id, match.asset_id, match.asset_type, source="auto")
+                    bindings.append(binding)
+                    existing.add(key)
+                results.append(
+                    {
+                        "shot_id": shot.id,
+                        "bindings": _dump(bindings),
+                        "matches": _dump(matches),
+                        "highlights": _dump(calculate_highlights(shot.prompt, assets)),
+                    }
+                )
         return {"shots": results}
 
     return _call(match_target_shots)
@@ -198,16 +207,11 @@ def disable_silent_character_audio(project_id: str, request: ShotVoiceAnalysisRe
 
 
 def _target_shots(project_id: str, shot_ids: list[str] | None):
-    all_shots = get_store().list_shots(project_id)
     if not shot_ids:
-        return all_shots
+        return get_store().list_shots(project_id)
 
     ordered_ids = list(dict.fromkeys(shot_ids))
-    shot_by_id = {shot.id: shot for shot in all_shots}
-    missing = [shot_id for shot_id in ordered_ids if shot_id not in shot_by_id]
-    if missing:
-        raise ValueError("selected shot does not belong to project")
-    return [shot_by_id[shot_id] for shot_id in ordered_ids]
+    return get_store().list_shots_by_ids(project_id, ordered_ids)
 
 
 def _delete_auto_bindings(project_id: str, shot_id: str) -> list[str]:

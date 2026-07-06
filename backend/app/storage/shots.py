@@ -58,6 +58,24 @@ def list_shots(store: Any, project_id: str) -> list[JimengShot]:
     return [shot_from_row(row) for row in rows]
 
 
+def list_shots_by_ids(store: Any, project_id: str, shot_ids: list[str]) -> list[JimengShot]:
+    ordered_ids = list(dict.fromkeys(shot_id for shot_id in shot_ids if shot_id))
+    if not ordered_ids:
+        return []
+    placeholders = ", ".join("?" for _ in ordered_ids)
+    with store._connect() as conn:
+        store._validate_project_membership(conn, project_id=project_id)
+        rows = conn.execute(
+            f"SELECT * FROM shots WHERE project_id = ? AND id IN ({placeholders})",
+            (project_id, *ordered_ids),
+        ).fetchall()
+    shots_by_id = {row["id"]: shot_from_row(row) for row in rows}
+    missing = [shot_id for shot_id in ordered_ids if shot_id not in shots_by_id]
+    if missing:
+        raise ValueError("selected shot does not belong to project")
+    return [shots_by_id[shot_id] for shot_id in ordered_ids]
+
+
 def update_shot(store: Any, shot_id: str, **updates: Any) -> JimengShot:
     allowed = {
         "prompt",

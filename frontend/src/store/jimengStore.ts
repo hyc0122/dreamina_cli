@@ -113,6 +113,16 @@ const errorMessageFrom = (error: unknown): string => {
   return "Jimeng request failed";
 };
 
+const MATCH_ASSET_BATCH_SIZE = 5;
+
+const chunkItems = <T,>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+};
+
 const buildBindingsByShotId = async (projectId: string, shots: JimengShot[]): Promise<Record<string, JimengAssetBinding[]>> => {
   if (shots.length === 0) {
     return {};
@@ -384,10 +394,18 @@ export const useJimengStore = create<JimengStore>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const matchResponse = await jimengApi.matchAssets(projectId, {
-        shot_ids: targetShotIds,
-        clear_existing_auto: options?.clearExistingAuto ?? false,
-      });
+      const batchedResponses: JimengMatchAssetsResponse[] = [];
+      for (const batchShotIds of chunkItems(targetShotIds, MATCH_ASSET_BATCH_SIZE)) {
+        batchedResponses.push(
+          await jimengApi.matchAssets(projectId, {
+            shot_ids: batchShotIds,
+            clear_existing_auto: options?.clearExistingAuto ?? false,
+          }),
+        );
+      }
+      const matchResponse: JimengMatchAssetsResponse = {
+        shots: batchedResponses.flatMap((response) => response.shots),
+      };
       const fullBindingsResponse = await jimengApi.listBindingsByShotIds(projectId, targetShotIds);
       const fullBindingsByShotId = Object.fromEntries(targetShotIds.map((shotId) => [shotId, fullBindingsResponse.bindings_by_shot_id[shotId] ?? []]));
       set((state) => ({

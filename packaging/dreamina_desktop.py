@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import atexit
+import faulthandler
 import os
 import json
 import logging
+import signal
 import socket
 import sys
 import threading
@@ -19,6 +22,8 @@ APP_DISPLAY_NAME = "即梦cli自动排队助手"
 HELP_URL = "https://my.feishu.cn/docx/AfO9d2Gd0ovLpLxpeN2cjm1xnF2?from=from_copylink"
 FEEDBACK_URL = "https://my.feishu.cn/share/base/form/shrcneH6UB1riprQBXtvMLycffc"
 CUSTOMER_SERVICE = "微信客服：jmqh888"
+_DIAGNOSTICS_INSTALLED = False
+_FAULT_LOG_FILE = None
 
 
 def _repair_mojibake_path(path: Path) -> Path:
@@ -63,7 +68,95 @@ def _setup_logging(data_dir: Path) -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
         encoding="utf-8",
+        force=True,
     )
+
+
+def _flush_log_handlers() -> None:
+    for handler in logging.getLogger().handlers:
+        try:
+            handler.flush()
+        except Exception:
+            pass
+
+
+def _install_exit_diagnostics(data_dir: Path) -> None:
+    global _DIAGNOSTICS_INSTALLED, _FAULT_LOG_FILE
+    if _DIAGNOSTICS_INSTALLED:
+        return
+    _DIAGNOSTICS_INSTALLED = True
+
+    logs_dir = data_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    fault_log = logs_dir / "desktop-faults.log"
+    try:
+        _FAULT_LOG_FILE = fault_log.open("a", encoding="utf-8")
+        faulthandler.enable(file=_FAULT_LOG_FILE, all_threads=True)
+    except Exception:
+        logging.exception("Failed to enable faulthandler diagnostics")
+
+    original_excepthook = sys.excepthook
+
+    def log_main_exception(exc_type, exc_value, exc_traceback) -> None:
+        logging.critical("Uncaught main thread exception", exc_info=(exc_type, exc_value, exc_traceback))
+        _flush_log_handlers()
+        if original_excepthook and sys.stderr is not None:
+            original_excepthook(exc_type, exc_value, exc_traceback)
+
+    sys.excepthook = log_main_exception
+
+    original_threading_excepthook = getattr(threading, "excepthook", None)
+
+    def log_thread_exception(args) -> None:
+        thread_name = getattr(args.thread, "name", "unknown") if args.thread else "unknown"
+        logging.critical(
+            "Uncaught thread exception thread=%s",
+            thread_name,
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+        _flush_log_handlers()
+        if original_threading_excepthook:
+            try:
+                original_threading_excepthook(args)
+            except Exception:
+                logging.exception("Original threading excepthook failed")
+
+    threading.excepthook = log_thread_exception
+
+    def log_process_exit() -> None:
+        logging.warning("Desktop process exiting via normal interpreter shutdown pid=%s", os.getpid())
+        _flush_log_handlers()
+
+    atexit.register(log_process_exit)
+
+    def log_signal(signum, frame) -> None:
+        logging.warning("Desktop process received signal signum=%s pid=%s", signum, os.getpid())
+        _flush_log_handlers()
+        raise SystemExit(128 + int(signum))
+
+    for signum in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGINT", None)):
+        if signum is None:
+            continue
+        try:
+            signal.signal(signum, log_signal)
+        except (OSError, ValueError):
+            pass
+
+    heartbeat_seconds = float(os.getenv("DREAMINA_HEARTBEAT_SECONDS", "30") or "30")
+
+    def heartbeat() -> None:
+        while True:
+            logging.info(
+                "Desktop heartbeat pid=%s threads=%s data_dir=%s",
+                os.getpid(),
+                len(threading.enumerate()),
+                data_dir,
+            )
+            _flush_log_handlers()
+            time.sleep(max(5.0, heartbeat_seconds))
+
+    threading.Thread(target=heartbeat, name="desktop-diagnostic-heartbeat", daemon=True).start()
+    logging.info("Desktop diagnostics installed fault_log=%s", fault_log)
 
 
 def _mount_frontend(resource_root: Path):
@@ -183,6 +276,13 @@ def _show_native_launcher(host: str, port: int, project_dir: Path, data_dir: Pat
     from tkinter import messagebox
 
     root = tk.Tk()
+    logging.info(
+        "Native launcher window created host=%s port=%s project_dir=%s data_dir=%s",
+        host,
+        port,
+        project_dir,
+        data_dir,
+    )
     root.title(f"{APP_DISPLAY_NAME} 启动管理器")
     root.geometry("760x520")
     root.minsize(680, 460)
@@ -259,9 +359,17 @@ def _show_native_launcher(host: str, port: int, project_dir: Path, data_dir: Pat
     def shutdown() -> None:
         if not messagebox.askyesno("关闭服务", f"确定关闭当前{APP_DISPLAY_NAME}服务吗？"):
             return
+        logging.warning("Shutdown requested from native launcher button")
+        _flush_log_handlers()
         _post_json(f"http://{host}:{port}/runtime/shutdown")
         status.set("关闭指令已发送。")
         root.after(500, root.destroy)
+
+    def on_close() -> None:
+        logging.warning("Native launcher close button pressed; minimizing instead of exiting")
+        status.set("为防止服务掉线，关闭按钮已改为最小化。需要退出请点“关闭服务”。")
+        root.iconify()
+        _flush_log_handlers()
 
     button_frame = tk.Frame(root, bg="#080b16")
     button_frame.pack(fill="x", padx=24, pady=(0, 18))
@@ -289,7 +397,11 @@ def _show_native_launcher(host: str, port: int, project_dir: Path, data_dir: Pat
 
     scan_ports()
     _refresh_version_status(open_update_on_required=True)
+    root.protocol("WM_DELETE_WINDOW", on_close)
+    logging.info("Native launcher mainloop started")
     root.mainloop()
+    logging.warning("Native launcher mainloop returned")
+    _flush_log_handlers()
 
 
 def _fetch_instance_health(host: str, port: int, timeout: float = 0.15) -> dict | None:
@@ -343,6 +455,13 @@ def main() -> None:
     try:
         resource_root, data_dir = _prepare_environment()
         _setup_logging(data_dir)
+        _install_exit_diagnostics(data_dir)
+        logging.info(
+            "Desktop process bootstrap pid=%s argv=%s frozen=%s",
+            os.getpid(),
+            sys.argv,
+            bool(getattr(sys, "frozen", False)),
+        )
         if os.getenv("DREAMINA_QUEUE_WORKER", "").lower() in {"1", "true", "yes"}:
             logging.info("%s queue worker starting", APP_DISPLAY_NAME)
             _safe_print(f"{APP_DISPLAY_NAME} queue worker")

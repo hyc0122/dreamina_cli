@@ -5,6 +5,7 @@
 
 import os
 import re
+import threading
 from collections.abc import Callable
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ from ..jimeng_storage import JimengStore
 
 
 _store: JimengStore | None = None
+_store_lock = threading.Lock()
 _DEFAULT_RUNTIME_SETTINGS: dict[str, Any] = {
     "dreamina_executable": "dreamina",
     "generation_provider": "dreamina_cli",
@@ -65,21 +67,25 @@ def normalize_optional_video_duration_seconds(value: Any) -> int | None:
 def get_store() -> JimengStore:
     global _store
     if _store is None:
-        base_dir = Path(__file__).resolve().parents[2]
-        project_dir = base_dir.parent
-        data_dir = Path(os.getenv("DREAMINA_CLI_DATA_DIR", project_dir / "runtime_data")).resolve()
-        _store = JimengStore(db_path=data_dir / "jimeng.sqlite3", output_root=data_dir / "output")
+        with _store_lock:
+            if _store is None:
+                base_dir = Path(__file__).resolve().parents[2]
+                project_dir = base_dir.parent
+                data_dir = Path(os.getenv("DREAMINA_CLI_DATA_DIR", project_dir / "runtime_data")).resolve()
+                _store = JimengStore(db_path=data_dir / "jimeng.sqlite3", output_root=data_dir / "output")
     return _store
 
 
 def set_jimeng_store_for_tests(store: JimengStore) -> None:
     global _store
-    _store = store
+    with _store_lock:
+        _store = store
 
 
 def reset_jimeng_store_for_tests() -> None:
     global _store
-    _store = None
+    with _store_lock:
+        _store = None
 
 
 def now_iso() -> str:

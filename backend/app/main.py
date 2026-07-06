@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import threading
 import time
 import urllib.error
@@ -68,8 +69,11 @@ def runtime_instances(start: int = DEFAULT_SCAN_START, end: int = DEFAULT_SCAN_E
 
 
 @app.post("/runtime/shutdown")
-def runtime_shutdown():
-    _schedule_shutdown()
+def runtime_shutdown(request: Request):
+    client_host = request.client.host if request.client else "unknown"
+    origin = request.headers.get("origin") or request.headers.get("referer") or ""
+    logging.warning("Runtime shutdown requested by %s origin=%s", client_host, origin)
+    _schedule_shutdown(reason=f"api request from {client_host}")
     return {"ok": True, "message": "shutdown scheduled"}
 
 
@@ -130,9 +134,17 @@ def _discover_other_instances(host: str = RUNTIME_HOST, start: int = DEFAULT_SCA
     return sorted(found, key=lambda item: int(item.get("port") or 0))
 
 
-def _schedule_shutdown(delay: float = 0.4) -> None:
+def _schedule_shutdown(reason: str, delay: float = 0.4) -> None:
+    logging.warning("Runtime shutdown scheduled reason=%s delay=%s", reason, delay)
+
     def shutdown_later() -> None:
         time.sleep(delay)
+        logging.warning("Runtime shutdown executing os._exit reason=%s", reason)
+        for handler in logging.getLogger().handlers:
+            try:
+                handler.flush()
+            except Exception:
+                pass
         os._exit(0)
 
     threading.Thread(target=shutdown_later, daemon=True).start()

@@ -92,7 +92,12 @@ class JimengStore:
         }
         for name, definition in columns.items():
             if name not in existing_columns:
-                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+                try:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+                except sqlite3.OperationalError as exc:
+                    if "duplicate column name" not in str(exc).lower():
+                        raise
+                existing_columns.add(name)
 
     def init_schema(self):
         with self._connect() as conn:
@@ -408,6 +413,9 @@ class JimengStore:
 
     def list_shots(self, project_id: str) -> list[JimengShot]:
         return shot_storage.list_shots(self, project_id)
+
+    def list_shots_by_ids(self, project_id: str, shot_ids: list[str]) -> list[JimengShot]:
+        return shot_storage.list_shots_by_ids(self, project_id, shot_ids)
 
     def update_shot(self, shot_id: str, **updates: Any) -> JimengShot:
         return shot_storage.update_shot(self, shot_id, **updates)

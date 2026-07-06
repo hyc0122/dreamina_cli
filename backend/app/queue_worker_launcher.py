@@ -29,6 +29,10 @@ def _worker_command(frozen: bool) -> list[str]:
 
 
 def _launch_direct(project_dir: Path, data_dir: Path, frozen: bool) -> dict[str, Any]:
+    logs_dir = data_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_log = logs_dir / "queue-worker.stdout.log"
+    stderr_log = logs_dir / "queue-worker.stderr.log"
     env = os.environ.copy()
     env.update(
         {
@@ -37,21 +41,29 @@ def _launch_direct(project_dir: Path, data_dir: Path, frozen: bool) -> dict[str,
             "DREAMINA_QUEUE_WORKER": "1",
         }
     )
-    process = subprocess.Popen(
-        _worker_command(frozen),
-        cwd=str(project_dir),
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+    stdout_file = stdout_log.open("a", encoding="utf-8")
+    stderr_file = stderr_log.open("a", encoding="utf-8")
+    try:
+        process = subprocess.Popen(
+            _worker_command(frozen),
+            cwd=str(project_dir),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    finally:
+        stdout_file.close()
+        stderr_file.close()
     return {
         "ok": True,
         "mode": "direct",
         "worker_pid": process.pid,
         "script_path": None,
         "data_dir": str(data_dir),
+        "stdout_log": str(stdout_log),
+        "stderr_log": str(stderr_log),
     }
 
 
