@@ -62,6 +62,10 @@ _BRACKET_TRANSLATION = str.maketrans({"[": "(", "【": "(", "（": "(", "［": "
 _NAME_QUOTE_CHARS = "\"'“”‘’「」『』《》"
 _BRACKET_OPEN_CHARS = "([（【［"
 _SCENE_CONTEXT_TOKENS = {
+    "内",
+    "外",
+    "内景",
+    "外景",
     "日",
     "夜",
     "白天",
@@ -304,11 +308,32 @@ def _clean_structured_token(
     if asset_type != JimengAssetType.scene:
         return [_StructuredToken(text=token_text, match_text=token_text, start=token_start, end=token_end)]
 
-    scene_match_text = _strip_bracket_qualification(token_text)
-    if not scene_match_text or _is_scene_context_token(scene_match_text):
-        return []
-    scene_end = token_start + len(scene_match_text)
-    return [_StructuredToken(text=token_text, match_text=scene_match_text, start=token_start, end=scene_end)]
+    return _scene_structured_tokens(token_text, token_start)
+
+
+def _scene_structured_tokens(token_text: str, token_start: int) -> list[_StructuredToken]:
+    tokens: list[_StructuredToken] = []
+    seen_spans: set[tuple[int, int, str]] = set()
+
+    def append_token(text: str, start: int) -> None:
+        match_text = _strip_bracket_qualification(text)
+        if not match_text or _is_scene_context_token(match_text):
+            return
+        end = start + len(match_text)
+        identity = (start, end, _normalize_name_for_match(match_text))
+        if identity in seen_spans:
+            return
+        seen_spans.add(identity)
+        tokens.append(_StructuredToken(text=text, match_text=match_text, start=start, end=end))
+
+    append_token(token_text, token_start)
+
+    # 场景字段常写成“外 场景名 冬至上午”，空格两侧是环境说明，
+    # 只把完整分段作为候选，避免把“大门”误匹配到更长的场景名中。
+    for part in re.finditer(r"\S+", token_text):
+        append_token(part.group(0), token_start + part.start())
+
+    return tokens
 
 
 def _is_scene_context_token(value: str) -> bool:
