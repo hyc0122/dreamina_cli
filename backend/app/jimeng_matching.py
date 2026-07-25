@@ -29,8 +29,10 @@ class AssetMatch:
 class HighlightSpan:
     text: str
     asset_type: JimengAssetType
+    asset_id: str
     start: int
     end: int
+    bound: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -151,14 +153,20 @@ def match_assets_for_prompt(prompt: str, assets: list[JimengAsset]) -> list[Asse
     ]
 
 
-def calculate_highlights(prompt: str, assets: list[JimengAsset]) -> list[HighlightSpan]:
+def calculate_highlights(
+    prompt: str,
+    assets: list[JimengAsset],
+    bound_asset_ids: set[str] | None = None,
+) -> list[HighlightSpan]:
     selected = sorted(_select_non_overlapping_asset_spans(prompt, assets, structured_only=False), key=lambda span: span.start)
     return [
         HighlightSpan(
             text=prompt[span.start : span.end],
             asset_type=span.asset.type,
+            asset_id=span.asset.id,
             start=span.start,
             end=span.end,
+            bound=span.asset.id in bound_asset_ids if bound_asset_ids is not None else None,
         )
         for span in selected
     ]

@@ -524,6 +524,13 @@ class JimengStore:
     ) -> JimengAssetBinding:
         return binding_storage.create_binding(self, project_id, shot_id, asset_id, asset_type, source, locked, slot_order)
 
+    def create_bindings_bulk(
+        self,
+        project_id: str,
+        bindings: list[dict[str, Any]],
+    ) -> list[JimengAssetBinding]:
+        return binding_storage.create_bindings_bulk(self, project_id, bindings)
+
     def list_bindings(self, project_id: str, shot_id: str | None = None) -> list[JimengAssetBinding]:
         return binding_storage.list_bindings(self, project_id, shot_id)
 
@@ -533,6 +540,13 @@ class JimengStore:
         shot_ids: list[str] | None = None,
     ) -> dict[str, list[JimengAssetBinding]]:
         return binding_storage.list_bindings_for_shots(self, project_id, shot_ids)
+
+    def delete_auto_bindings_for_shots(
+        self,
+        project_id: str,
+        shot_ids: list[str],
+    ) -> dict[str, list[str]]:
+        return binding_storage.delete_auto_bindings_for_shots(self, project_id, shot_ids)
 
     def update_binding(self, binding_id: str, **updates: Any) -> JimengAssetBinding:
         return binding_storage.update_binding(self, binding_id, **updates)

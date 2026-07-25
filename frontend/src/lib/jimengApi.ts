@@ -392,6 +392,7 @@ export interface JimengAssetMatch {
 export interface JimengMatchAssetsShotResult {
   shot_id: string;
   bindings: JimengAssetBinding[];
+  all_bindings: JimengAssetBinding[];
   matches: JimengAssetMatch[];
   highlights: JimengHighlightSpan[];
 }

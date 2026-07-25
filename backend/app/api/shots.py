@@ -108,29 +108,64 @@ def _iter_batches(items: list[Any], size: int):
 def match_assets(project_id: str, request: ShotAssetMatchRequest | None = None):
     def match_target_shots():
         match_request = request or ShotAssetMatchRequest()
-        assets = get_store().list_assets(project_id)
-        shots = _target_shots(project_id, match_request.shot_ids)
+        if not match_request.shot_ids:
+            raise ValueError("请选择要匹配资产的分镜")
+
+        store = get_store()
+        assets = store.list_assets(project_id)
+        ordered_shot_ids = list(dict.fromkeys(shot_id for shot_id in match_request.shot_ids if shot_id))
         results = []
-        for shot_batch in _iter_batches(shots, MATCH_ASSET_BATCH_SIZE):
+        for shot_id_batch in _iter_batches(ordered_shot_ids, MATCH_ASSET_BATCH_SIZE):
+            # 每批只读取五条分镜和对应绑定，避免一次性构建全部 Pydantic 对象。
+            shot_batch = store.list_shots_by_ids(project_id, shot_id_batch)
+            bindings_by_shot = store.list_bindings_for_shots(project_id, shot_id_batch)
+            if match_request.clear_existing_auto:
+                store.delete_auto_bindings_for_shots(project_id, shot_id_batch)
+                bindings_by_shot = {
+                    shot_id: [binding for binding in bindings_by_shot.get(shot_id, []) if binding.source != "auto"]
+                    for shot_id in shot_id_batch
+                }
+
+            matches_by_shot: dict[str, list[Any]] = {}
+            pending_bindings: list[dict[str, Any]] = []
             for shot in shot_batch:
-                if match_request.clear_existing_auto:
-                    _delete_auto_bindings(project_id, shot.id)
-                existing = {(binding.asset_id, binding.asset_type) for binding in get_store().list_bindings(project_id, shot.id)}
-                bindings = []
                 matches = match_assets_for_prompt(shot.prompt, assets)
+                matches_by_shot[shot.id] = matches
+                existing = {
+                    (binding.asset_id, binding.asset_type)
+                    for binding in bindings_by_shot.get(shot.id, [])
+                }
                 for match in matches:
                     key = (match.asset_id, match.asset_type)
                     if key in existing:
                         continue
-                    binding = get_store().create_binding(project_id, shot.id, match.asset_id, match.asset_type, source="auto")
-                    bindings.append(binding)
+                    pending_bindings.append(
+                        {
+                            "shot_id": shot.id,
+                            "asset_id": match.asset_id,
+                            "asset_type": match.asset_type,
+                            "source": "auto",
+                        }
+                    )
                     existing.add(key)
+
+            # 当前批次一次事务写入，避免一个资产绑定打开两次 SQLite 连接。
+            created_bindings = store.create_bindings_bulk(project_id, pending_bindings)
+            created_by_shot: dict[str, list[Any]] = {shot_id: [] for shot_id in shot_id_batch}
+            for binding in created_bindings:
+                created_by_shot.setdefault(binding.shot_id, []).append(binding)
+
+            for shot in shot_batch:
+                bindings = created_by_shot.get(shot.id, [])
+                all_bindings = [*bindings_by_shot.get(shot.id, []), *bindings]
+                bound_asset_ids = {binding.asset_id for binding in all_bindings}
                 results.append(
                     {
                         "shot_id": shot.id,
                         "bindings": _dump(bindings),
-                        "matches": _dump(matches),
-                        "highlights": _dump(calculate_highlights(shot.prompt, assets)),
+                        "all_bindings": _dump(all_bindings),
+                        "matches": _dump(matches_by_shot.get(shot.id, [])),
+                        "highlights": _dump(calculate_highlights(shot.prompt, assets, bound_asset_ids)),
                     }
                 )
         return {"shots": results}

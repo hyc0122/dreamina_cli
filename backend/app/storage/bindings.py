@@ -67,6 +67,132 @@ def create_binding(
     return get_binding(store, binding_id)
 
 
+def create_bindings_bulk(
+    store: Any,
+    project_id: str,
+    bindings: list[dict[str, Any]],
+) -> list[JimengAssetBinding]:
+    if not bindings:
+        return []
+
+    stamp = _now()
+    normalized: list[dict[str, Any]] = []
+    shot_ids = list(dict.fromkeys(str(item["shot_id"]) for item in bindings))
+    asset_ids = list(dict.fromkeys(str(item["asset_id"]) for item in bindings))
+    conn = store._connect()
+    try:
+        with conn:
+            store._validate_project_membership(conn, project_id=project_id)
+
+            # 一次校验当前批次的分镜和资产，避免每个绑定重复打开 SQLite 连接。
+            shot_placeholders = ", ".join("?" for _ in shot_ids)
+            known_shots = {
+                row["id"]
+                for row in conn.execute(
+                    f"SELECT id FROM shots WHERE project_id = ? AND id IN ({shot_placeholders})",
+                    (project_id, *shot_ids),
+                ).fetchall()
+            }
+            if len(known_shots) != len(shot_ids):
+                raise ValueError("selected shot does not belong to project")
+
+            asset_placeholders = ", ".join("?" for _ in asset_ids)
+            asset_types = {
+                row["id"]: row["type"]
+                for row in conn.execute(
+                    f"SELECT id, type FROM assets WHERE project_id = ? AND id IN ({asset_placeholders})",
+                    (project_id, *asset_ids),
+                ).fetchall()
+            }
+            if len(asset_types) != len(asset_ids):
+                raise ValueError("selected asset does not belong to project")
+
+            next_orders = {
+                row["shot_id"]: int(row["next_order"])
+                for row in conn.execute(
+                    f"""
+                    SELECT shot_id, COALESCE(MAX(slot_order), 0) + 1 AS next_order
+                    FROM asset_bindings
+                    WHERE project_id = ? AND shot_id IN ({shot_placeholders})
+                    GROUP BY shot_id
+                    """,
+                    (project_id, *shot_ids),
+                ).fetchall()
+            }
+
+            for item in bindings:
+                shot_id = str(item["shot_id"])
+                asset_id = str(item["asset_id"])
+                asset_type = JimengAssetType(item["asset_type"])
+                if asset_types[asset_id] != asset_type.value:
+                    raise ValueError("asset type does not match asset")
+
+                slot_order = item.get("slot_order")
+                if slot_order is None:
+                    slot_order = next_orders.get(shot_id, 1)
+                    next_orders[shot_id] = int(slot_order) + 1
+
+                normalized.append(
+                    {
+                        "id": _id("jimeng_binding"),
+                        "shot_id": shot_id,
+                        "asset_id": asset_id,
+                        "asset_type": asset_type,
+                        "source": str(item.get("source") or "auto"),
+                        "locked": bool(item.get("locked", False)),
+                        "voice_enabled": bool(item.get("voice_enabled", True)),
+                        "slot_order": int(slot_order),
+                    }
+                )
+
+            # 当前五条分镜的所有新绑定在同一个事务中写入。
+            conn.executemany(
+                """
+                INSERT INTO asset_bindings (
+                    id, project_id, shot_id, asset_id, asset_type, source, locked,
+                    voice_enabled, slot_order, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        item["id"],
+                        project_id,
+                        item["shot_id"],
+                        item["asset_id"],
+                        item["asset_type"].value,
+                        item["source"],
+                        int(item["locked"]),
+                        int(item["voice_enabled"]),
+                        item["slot_order"],
+                        stamp,
+                        stamp,
+                    )
+                    for item in normalized
+                ],
+            )
+    finally:
+        # sqlite3.Connection 的 with 只提交事务，不会关闭连接，必须显式关闭。
+        conn.close()
+
+    return [
+        JimengAssetBinding(
+            id=item["id"],
+            project_id=project_id,
+            shot_id=item["shot_id"],
+            asset_id=item["asset_id"],
+            asset_type=item["asset_type"],
+            source=item["source"],
+            locked=item["locked"],
+            voice_enabled=item["voice_enabled"],
+            slot_order=item["slot_order"],
+            created_at=stamp,
+            updated_at=stamp,
+        )
+        for item in normalized
+    ]
+
+
 def list_bindings(store: Any, project_id: str, shot_id: str | None = None) -> list[JimengAssetBinding]:
     if shot_id is None:
         shot_id = project_id
@@ -95,41 +221,92 @@ def list_bindings_for_shots(
     shot_ids: list[str] | None = None,
 ) -> dict[str, list[JimengAssetBinding]]:
     ordered_ids = list(dict.fromkeys(shot_id for shot_id in (shot_ids or []) if shot_id))
-    with store._connect() as conn:
-        store._validate_project_membership(conn, project_id=project_id)
-        if ordered_ids:
-            placeholders = ", ".join("?" for _ in ordered_ids)
-            rows = conn.execute(
-                f"""
-                SELECT * FROM asset_bindings
-                WHERE project_id = ? AND shot_id IN ({placeholders})
-                ORDER BY shot_id ASC, slot_order ASC
-                """,
-                (project_id, *ordered_ids),
-            ).fetchall()
-            known_rows = conn.execute(
-                f"SELECT id FROM shots WHERE project_id = ? AND id IN ({placeholders})",
-                (project_id, *ordered_ids),
-            ).fetchall()
-            known_ids = {row["id"] for row in known_rows}
-            missing_ids = [shot_id for shot_id in ordered_ids if shot_id not in known_ids]
-            if missing_ids:
-                raise ValueError("selected shot does not belong to project")
-            result = {shot_id: [] for shot_id in ordered_ids}
-        else:
-            rows = conn.execute(
-                """
-                SELECT * FROM asset_bindings
-                WHERE project_id = ?
-                ORDER BY shot_id ASC, slot_order ASC
-                """,
-                (project_id,),
-            ).fetchall()
-            result = {}
+    conn = store._connect()
+    try:
+        with conn:
+            store._validate_project_membership(conn, project_id=project_id)
+            if ordered_ids:
+                placeholders = ", ".join("?" for _ in ordered_ids)
+                rows = conn.execute(
+                    f"""
+                    SELECT * FROM asset_bindings
+                    WHERE project_id = ? AND shot_id IN ({placeholders})
+                    ORDER BY shot_id ASC, slot_order ASC
+                    """,
+                    (project_id, *ordered_ids),
+                ).fetchall()
+                known_rows = conn.execute(
+                    f"SELECT id FROM shots WHERE project_id = ? AND id IN ({placeholders})",
+                    (project_id, *ordered_ids),
+                ).fetchall()
+                known_ids = {row["id"] for row in known_rows}
+                missing_ids = [shot_id for shot_id in ordered_ids if shot_id not in known_ids]
+                if missing_ids:
+                    raise ValueError("selected shot does not belong to project")
+                result = {shot_id: [] for shot_id in ordered_ids}
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM asset_bindings
+                    WHERE project_id = ?
+                    ORDER BY shot_id ASC, slot_order ASC
+                    """,
+                    (project_id,),
+                ).fetchall()
+                result = {}
+    finally:
+        conn.close()
     for row in rows:
         binding = binding_from_row(row)
         result.setdefault(binding.shot_id, []).append(binding)
     return result
+
+
+def delete_auto_bindings_for_shots(
+    store: Any,
+    project_id: str,
+    shot_ids: list[str],
+) -> dict[str, list[str]]:
+    ordered_ids = list(dict.fromkeys(shot_id for shot_id in shot_ids if shot_id))
+    if not ordered_ids:
+        return {}
+
+    placeholders = ", ".join("?" for _ in ordered_ids)
+    conn = store._connect()
+    try:
+        with conn:
+            store._validate_project_membership(conn, project_id=project_id)
+            known_ids = {
+                row["id"]
+                for row in conn.execute(
+                    f"SELECT id FROM shots WHERE project_id = ? AND id IN ({placeholders})",
+                    (project_id, *ordered_ids),
+                ).fetchall()
+            }
+            if len(known_ids) != len(ordered_ids):
+                raise ValueError("selected shot does not belong to project")
+
+            rows = conn.execute(
+                f"""
+                SELECT id, shot_id FROM asset_bindings
+                WHERE project_id = ? AND shot_id IN ({placeholders}) AND source = 'auto'
+                """,
+                (project_id, *ordered_ids),
+            ).fetchall()
+            conn.execute(
+                f"""
+                DELETE FROM asset_bindings
+                WHERE project_id = ? AND shot_id IN ({placeholders}) AND source = 'auto'
+                """,
+                (project_id, *ordered_ids),
+            )
+    finally:
+        conn.close()
+
+    deleted = {shot_id: [] for shot_id in ordered_ids}
+    for row in rows:
+        deleted[row["shot_id"]].append(row["id"])
+    return deleted
 
 
 def update_binding(store: Any, binding_id: str, **updates: Any) -> JimengAssetBinding:

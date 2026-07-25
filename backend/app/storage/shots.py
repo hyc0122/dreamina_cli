@@ -63,12 +63,17 @@ def list_shots_by_ids(store: Any, project_id: str, shot_ids: list[str]) -> list[
     if not ordered_ids:
         return []
     placeholders = ", ".join("?" for _ in ordered_ids)
-    with store._connect() as conn:
-        store._validate_project_membership(conn, project_id=project_id)
-        rows = conn.execute(
-            f"SELECT * FROM shots WHERE project_id = ? AND id IN ({placeholders})",
-            (project_id, *ordered_ids),
-        ).fetchall()
+    conn = store._connect()
+    try:
+        with conn:
+            store._validate_project_membership(conn, project_id=project_id)
+            rows = conn.execute(
+                f"SELECT * FROM shots WHERE project_id = ? AND id IN ({placeholders})",
+                (project_id, *ordered_ids),
+            ).fetchall()
+    finally:
+        # 批量匹配会频繁调用此函数，事务结束后立即关闭连接，避免等待 GC 回收。
+        conn.close()
     shots_by_id = {row["id"]: shot_from_row(row) for row in rows}
     missing = [shot_id for shot_id in ordered_ids if shot_id not in shots_by_id]
     if missing:
