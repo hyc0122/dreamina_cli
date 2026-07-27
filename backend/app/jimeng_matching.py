@@ -52,16 +52,21 @@ class _StructuredToken:
 
 
 _FIELD_PATTERN = re.compile(r"^\s*(场景|人物|道具|分镜提示词)\s*[：:]\s*(.*)$")
-_CHARACTER_FIELD_PATTERN = re.compile(r"(?m)^\s*人物\s*[：:]\s*(.*)$")
-_STRUCTURED_FIELD_PATTERNS = {
-    JimengAssetType.character: re.compile(r"(?m)^\s*人物\s*[：:]\s*(.*)$"),
-    JimengAssetType.scene: re.compile(r"(?m)^\s*场景\s*[：:]\s*(.*)$"),
-    JimengAssetType.prop: re.compile(r"(?m)^\s*道具\s*[：:]\s*(.*)$"),
+_STRUCTURED_FIELD_NAMES = {
+    JimengAssetType.character: "人物",
+    JimengAssetType.scene: "场景",
+    JimengAssetType.prop: "道具",
 }
+_STRUCTURED_FIELD_MARKER_PATTERN = re.compile(
+    r"(?m)(?:^|(?<=[。！？!?；;]))[ \t]*"
+    r"(人物站位|氛围光影|预估时长|推荐时长|总时长|分镜提示词|场景|人物|道具|时间|分镜|镜号\s*\d+)"
+    r"\s*[：:][ \t]*"
+)
 _SHOT_MARKER_PATTERN = re.compile(r"(?m)^\s*(?:#\s*\d+|小节\s*(?:\d+|[一二三四五六七八九十百千万]+))\s*[：:]?\s*$")
 _NAME_SPLIT_PATTERN = re.compile(r"[、;,，；]")
 _BRACKET_TRANSLATION = str.maketrans({"[": "(", "【": "(", "（": "(", "［": "(", "]": ")", "】": ")", "）": ")", "］": ")"})
 _NAME_QUOTE_CHARS = "\"'“”‘’「」『』《》"
+_NAME_EDGE_PUNCTUATION = "。！？!?:："
 _BRACKET_OPEN_CHARS = "([（【［"
 _SCENE_CONTEXT_TOKENS = {
     "内",
@@ -132,8 +137,20 @@ def parse_csv_shots(csv_text: str) -> list[ImportedJimengShot]:
 
 
 def match_assets_for_prompt(prompt: str, assets: list[JimengAsset]) -> list[AssetMatch]:
+    selected = _select_non_overlapping_asset_spans(prompt, assets, for_binding=True)
+
+    # 一个分镜只绑定一个场景；候选已经按完整名称长度排序，因此保留最具体的场景。
+    filtered: list[_CandidateSpan] = []
+    scene_selected = False
+    for span in selected:
+        if span.asset.type == JimengAssetType.scene:
+            if scene_selected:
+                continue
+            scene_selected = True
+        filtered.append(span)
+
     selected = sorted(
-        _select_non_overlapping_asset_spans(prompt, assets, structured_only=True),
+        filtered,
         key=lambda span: (
             _ASSET_TYPE_PRIORITY.get(span.asset.type, 99),
             -(span.end - span.start),
@@ -158,7 +175,7 @@ def calculate_highlights(
     assets: list[JimengAsset],
     bound_asset_ids: set[str] | None = None,
 ) -> list[HighlightSpan]:
-    selected = sorted(_select_non_overlapping_asset_spans(prompt, assets, structured_only=False), key=lambda span: span.start)
+    selected = sorted(_select_non_overlapping_asset_spans(prompt, assets, for_binding=False), key=lambda span: span.start)
     return [
         HighlightSpan(
             text=prompt[span.start : span.end],
@@ -232,10 +249,15 @@ def _split_names(value: str) -> list[str]:
     return [part.strip() for part in _NAME_SPLIT_PATTERN.split(value) if part.strip()]
 
 
-def _select_non_overlapping_asset_spans(prompt: str, assets: list[JimengAsset], *, structured_only: bool) -> list[_CandidateSpan]:
+def _select_non_overlapping_asset_spans(
+    prompt: str,
+    assets: list[JimengAsset],
+    *,
+    for_binding: bool,
+) -> list[_CandidateSpan]:
     candidates = (
-        list(_iter_structured_candidate_spans(prompt, assets))
-        if structured_only
+        list(_iter_full_prompt_binding_candidate_spans(prompt, assets))
+        if for_binding
         else list(_iter_candidate_spans(prompt, assets))
     )
     candidates.sort(
@@ -249,11 +271,15 @@ def _select_non_overlapping_asset_spans(prompt: str, assets: list[JimengAsset], 
 
     selected: list[_CandidateSpan] = []
     selected_asset_ids: set[str] = set()
-    occupied: list[tuple[int, int]] = []
+    occupied_by_type: dict[JimengAssetType | None, list[tuple[int, int]]] = {}
 
     for candidate in candidates:
         if candidate.asset.id in selected_asset_ids:
             continue
+        # 绑定时角色库和场景库独立查找，同名文本可分别绑定为不同资产类型；
+        # 高亮展示仍共用一组占位，避免同一段文字产生重叠标签。
+        occupied_key = candidate.asset.type if for_binding else None
+        occupied = occupied_by_type.setdefault(occupied_key, [])
         if any(_overlaps(candidate.start, candidate.end, start, end) for start, end in occupied):
             continue
 
@@ -262,6 +288,24 @@ def _select_non_overlapping_asset_spans(prompt: str, assets: list[JimengAsset], 
         occupied.append((candidate.start, candidate.end))
 
     return selected
+
+
+def _iter_full_prompt_binding_candidate_spans(
+    prompt: str, assets: Iterable[JimengAsset]
+) -> Iterable[_CandidateSpan]:
+    assets = list(assets)
+    for asset in assets:
+        if asset.type not in (JimengAssetType.character, JimengAssetType.scene):
+            continue
+        for keyword in _asset_keywords(asset):
+            yield from _iter_normalized_keyword_spans(prompt, asset, keyword)
+
+    # 道具继续遵循“道具：”结构化列表，避免普通叙述里的常用物品被误绑定。
+    for span in _iter_structured_candidate_spans(
+        prompt,
+        [asset for asset in assets if asset.type == JimengAssetType.prop],
+    ):
+        yield span
 
 
 def _iter_structured_candidate_spans(prompt: str, assets: Iterable[JimengAsset]) -> Iterable[_CandidateSpan]:
@@ -289,17 +333,32 @@ def _iter_structured_candidate_spans(prompt: str, assets: Iterable[JimengAsset])
 
 
 def _structured_tokens(prompt: str, asset_type: JimengAssetType) -> list[_StructuredToken]:
-    pattern = _STRUCTURED_FIELD_PATTERNS[asset_type]
     tokens: list[_StructuredToken] = []
-    for match in pattern.finditer(prompt):
-        value = match.group(1)
-        value_start = match.start(1)
+    for value, value_start in _structured_field_values(prompt, _STRUCTURED_FIELD_NAMES[asset_type]):
         token_start = 0
         for separator in _NAME_SPLIT_PATTERN.finditer(value):
             tokens.extend(_clean_structured_token(value, value_start, token_start, separator.start(), asset_type))
             token_start = separator.end()
         tokens.extend(_clean_structured_token(value, value_start, token_start, len(value), asset_type))
     return tokens
+
+
+def _structured_field_values(prompt: str, field_name: str) -> Iterable[tuple[str, int]]:
+    markers = list(_STRUCTURED_FIELD_MARKER_PATTERN.finditer(prompt))
+    for index, marker in enumerate(markers):
+        if marker.group(1) != field_name:
+            continue
+
+        value_start = marker.end()
+        line_end = prompt.find("\n", value_start)
+        if line_end == -1:
+            line_end = len(prompt)
+
+        # 同一物理行里可能连续出现“场景：...。人物：...”，
+        # 当前字段必须在下一个结构化字段前结束，不能吞掉后续人物或站位信息。
+        next_marker_start = markers[index + 1].start() if index + 1 < len(markers) else len(prompt)
+        value_end = min(line_end, next_marker_start)
+        yield prompt[value_start:value_end], value_start
 
 
 def _clean_structured_token(
@@ -399,9 +458,7 @@ def _iter_character_candidate_spans(
 
 def _prompt_character_name_spans(prompt: str) -> list[tuple[str, int, int]]:
     spans: list[tuple[str, int, int]] = []
-    for match in _CHARACTER_FIELD_PATTERN.finditer(prompt):
-        value = match.group(1)
-        value_start = match.start(1)
+    for value, value_start in _structured_field_values(prompt, "人物"):
         token_start = 0
         for separator in _NAME_SPLIT_PATTERN.finditer(value):
             spans.extend(_clean_name_token_span(value, value_start, token_start, separator.start()))
@@ -411,9 +468,10 @@ def _prompt_character_name_spans(prompt: str) -> list[tuple[str, int, int]]:
 
 
 def _clean_name_token_span(value: str, value_start: int, start: int, end: int) -> list[tuple[str, int, int]]:
-    while start < end and (value[start].isspace() or value[start] in _NAME_QUOTE_CHARS):
+    edge_chars = _NAME_QUOTE_CHARS + _NAME_EDGE_PUNCTUATION
+    while start < end and (value[start].isspace() or value[start] in edge_chars):
         start += 1
-    while end > start and (value[end - 1].isspace() or value[end - 1] in _NAME_QUOTE_CHARS):
+    while end > start and (value[end - 1].isspace() or value[end - 1] in edge_chars):
         end -= 1
     if start >= end:
         return []
@@ -435,7 +493,7 @@ def _iter_normalized_keyword_spans(prompt: str, asset: JimengAsset, keyword: str
         normalized_end = normalized_start + len(normalized_keyword)
         start = offsets[normalized_start]
         end = offsets[normalized_end - 1] + 1
-        if _is_valid_character_fallback_span(prompt, start, end):
+        if asset.type != JimengAssetType.character or _is_valid_character_fallback_span(prompt, start, end):
             yield _CandidateSpan(asset=asset, text=prompt[start:end], start=start, end=end)
         normalized_start = normalized_prompt.find(normalized_keyword, normalized_start + 1)
 
